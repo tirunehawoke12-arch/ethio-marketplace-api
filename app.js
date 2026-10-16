@@ -6,7 +6,7 @@ require('dotenv').config();
 
 const app = express();
 app.disable('x-powered-by');
-app.use(express.json({ limit: '64kb' }));
+app.use(express.json({ limit: '1mb' }));
 
 const PORT = Number(process.env.PORT || 3000);
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
@@ -25,7 +25,13 @@ function loadDB() {
 }
 let db = loadDB();
 let saveTimer;
+const DATABASE_URL = process.env.DATABASE_URL || '';
+let pool = null;
+if (DATABASE_URL) { const { Pool } = require('pg'); pool = new Pool({ connectionString: DATABASE_URL, ssl: /localhost|127\.0\.0\.1/.test(DATABASE_URL) ? false : { rejectUnauthorized: false }, max: 3 }); pool.on('error', e => console.error('pg', e.message)); }
+const pgUpsert = (p, id, data) => pool.query('INSERT INTO kv(path,id,data) VALUES($1,$2,$3) ON CONFLICT(path,id) DO UPDATE SET data=EXCLUDED.data', [p, id, JSON.stringify(data)]);
+const pgDelete = (p, id) => pool.query('DELETE FROM kv WHERE path=$1 AND id=$2', [p, id]);
 function saveDB() {
+  if (pool) { clearTimeout(saveTimer); saveTimer = setTimeout(() => pgUpsert('_sys', 'otpdb', db).catch(e => console.error('otp save failed', e.message)), 300); return; }
   // Atomic replacement helps avoid a partially written JSON database.
   const tmp = DB_FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(db, null, 2), { mode: 0o600 });
@@ -192,7 +198,131 @@ async function configureWebhook() {
   }
 }
 
+
+/* ================= የጋራ ዳታቤዝ (በሁሉም መሣሪያ ተመሳሳይ ውሂብ) ================= */
+const STORE_FILE = process.env.STORE_FILE || path.join(__dirname, 'market-data.json');
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+const TOKEN_SECRET = process.env.TOKEN_SECRET || (()=>{ // ካልተዘጋጀ በፋይል ውስጥ አንድ ጊዜ ይፈጠራል
+  const f = path.join(__dirname, '.token-secret');
+  try { return fs.readFileSync(f, 'utf8').trim(); } catch { const v = crypto.randomBytes(32).toString('hex'); try { fs.writeFileSync(f, v, { mode: 0o600 }); } catch {} return v; }
+})();
+const ADMIN_ONLY_WRITE = new Set(['settings','approved','done','ads','rates','ledger']);
+const ANON_READ = new Set(['settings','reg']);
+let store = { docs: {}, rev: {}, idx: {} };           // docs[path][id]=doc, rev[path]=n, idx['e:mail']=uid
+try { const d = JSON.parse(fs.readFileSync(STORE_FILE, 'utf8')); store = { docs: d.docs || {}, rev: d.rev || {}, idx: d.idx || {} }; } catch {}
+let storeTimer;
+function persist() {
+  if (pool) return;
+  clearTimeout(storeTimer);
+  storeTimer = setTimeout(() => { try { const t = STORE_FILE + '.tmp'; fs.writeFileSync(t, JSON.stringify(store), { mode: 0o600 }); fs.renameSync(t, STORE_FILE); } catch (e) { console.error('persist failed', e.message); } }, 400);
+}
+const b64u = b => Buffer.from(b).toString('base64url');
+function sign(p) { const body = b64u(JSON.stringify(p)); return body + '.' + crypto.createHmac('sha256', TOKEN_SECRET).update(body).digest('base64url'); }
+function readTok(req) {
+  const t = (req.get('authorization') || '').replace(/^Bearer /, ''); const [body, sig] = t.split('.');
+  if (!body || !sig) return null;
+  const ok = crypto.createHmac('sha256', TOKEN_SECRET).update(body).digest('base64url');
+  if (sig.length !== ok.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(ok))) return null;
+  try { const p = JSON.parse(Buffer.from(body, 'base64url').toString()); return p.x > Date.now() ? p : null; } catch { return null; }
+}
+const normPhone = p => { p = String(p || '').replace(/[\s-]/g, ''); if (/^\+?251/.test(p)) p = '0' + p.replace(/^\+?251/, ''); return p; };
+const hits = {}; // ቀላል የፍጥነት ገደብ
+function limit(key, max, ms) { const n = Date.now(); const a = (hits[key] = (hits[key] || []).filter(t => n - t < ms)); if (a.length >= max) return false; a.push(n); return true; }
+const ip = req => req.ip || req.socket.remoteAddress || '?';
+const col = p => store.docs[p] || (store.docs[p] = {});
+const REV0 = Date.now();
+const bump = p => { store.rev[p] = (store.rev[p] || REV0) + 1; persist(); };
+const validPath = p => typeof p === 'string' && p.length < 200 && /^[\w@+.:~\/-]+$/.test(p) && !p.includes('..');
+function can(tok, p, write, id) {
+  if (tok && tok.k === 'admin') return true;
+  const m = /^data\/users\/([\w-]+)$/.exec(p);
+  if (m) return !!tok && tok.u === m[1];                       // የግል ውሂብ፦ ባለቤት ብቻ
+  if (!tok) return false;
+  const top = p.split('/')[0];
+  if (write) return !ADMIN_ONLY_WRITE.has(top);
+  return tok.k !== 'anon' || ANON_READ.has(top);
+}
+const tokFor = (u, k) => sign({ u, k, x: Date.now() + 90 * 864e5 });
+
+app.post('/api/session/anon', (req, res) => {
+  if (!limit('anon' + ip(req), 30, 3600e3)) return res.status(429).json({ ok: false });
+  const u = crypto.randomBytes(12).toString('hex'); res.json({ ok: true, uid: u, token: tokFor(u, 'anon') });
+});
+function findUid(id) { id = String(id || '').trim(); const k = id.includes('@') ? 'e:' + id.toLowerCase() : 'p:' + normPhone(id); return store.idx[k] || null; }
+app.post('/api/account/lookup', (req, res) => {
+  if (!limit('lk' + ip(req), 60, 600e3)) return res.status(429).json({ ok: false });
+  const u = findUid(req.body.id); if (!u) return res.json({ ok: true, found: false });
+  const a = (store.docs['data/users/' + u] || {}).acct; res.json({ ok: true, found: !!a, uid: u, salt: a && a.salt });
+});
+app.post('/api/account/login', (req, res) => {
+  const id = String(req.body.id || ''), u = findUid(id), a = u && (store.docs['data/users/' + u] || {}).acct;
+  if (!limit('lg' + id.toLowerCase(), 5, 900e3) || !limit('lgi' + ip(req), 40, 900e3)) return res.status(429).json({ ok: false, error: 'too_many_attempts' });
+  const proof = String(req.body.proof || '');
+  if (!a || proof.length !== String(a.h).length || !crypto.timingSafeEqual(Buffer.from(proof), Buffer.from(String(a.h)))) return res.status(401).json({ ok: false, error: 'invalid' });
+  res.json({ ok: true, uid: u, token: tokFor(u, 'user') });
+});
+app.post('/api/admin/login', (req, res) => {
+  if (!ADMIN_PASSWORD) return res.status(503).json({ ok: false, error: 'admin_not_configured' });
+  if (!limit('ad' + ip(req), 5, 900e3)) return res.status(429).json({ ok: false, error: 'too_many_attempts' });
+  const a = Buffer.from(String(req.body.password || '')), b = Buffer.from(ADMIN_PASSWORD);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return res.status(401).json({ ok: false, error: 'invalid' });
+  res.json({ ok: true, uid: 'admin', token: tokFor('admin', 'admin') });
+});
+app.get('/api/db/doc', (req, res) => {
+  const t = readTok(req), p = String(req.query.p || ''), id = String(req.query.id || '');
+  if (!validPath(p) || !can(t, p, false, id)) return res.status(403).json({ ok: false });
+  const d = (col(p))[id]; res.json({ ok: true, exists: d !== undefined, data: d });
+});
+app.get('/api/db/col', (req, res) => {
+  const t = readTok(req), p = String(req.query.p || '');
+  if (!validPath(p) || !can(t, p, false)) return res.status(403).json({ ok: false });
+  res.json({ ok: true, rev: store.rev[p] || 0, docs: col(p) });
+});
+app.post('/api/db/poll', (req, res) => {            // የተቀየሩ ስብስቦችን ብቻ ይመልሳል (አንድ ጥያቄ ለሁሉም)
+  const t = readTok(req), want = req.body.paths || {}, out = {};
+  Object.keys(want).slice(0, 60).forEach(p => { if (validPath(p) && can(t, p, false) && (store.rev[p] || 0) !== want[p]) out[p] = { rev: store.rev[p] || 0, docs: col(p) }; });
+  res.json({ ok: true, changed: out });
+});
+function indexAcct(u, d, res) {
+  const keys = []; if (d.email) keys.push('e:' + String(d.email).toLowerCase()); if (d.phone) keys.push('p:' + normPhone(d.phone));
+  for (const k of keys) if (store.idx[k] && store.idx[k] !== u) { res.status(409).json({ ok: false, error: 'taken' }); return false; }
+  keys.forEach(k => store.idx[k] = u); if (pool) pgUpsert('_sys', 'idx', store.idx).catch(e => console.error('idx save failed', e.message)); return true;
+}
+app.put('/api/db/doc', (req, res) => {
+  const t = readTok(req), { p, id, data, merge } = req.body || {};
+  if (!validPath(p) || typeof id !== 'string' || !id || id.length > 120 || !data || typeof data !== 'object' || !can(t, p, true, id)) return res.status(403).json({ ok: false });
+  if (!limit('w' + (t ? t.u : ip(req)), 300, 60e3)) return res.status(429).json({ ok: false });
+  const next = merge ? { ...(col(p)[id] || {}), ...data } : data;
+  const m = /^data\/users\/([\w-]+)$/.exec(p);
+  if (m && id === 'acct' && !indexAcct(m[1], next, res)) return;
+  const prev = col(p)[id]; col(p)[id] = next;
+  const done = () => { bump(p); res.json({ ok: true }); };
+  if (!pool) return done();
+  pgUpsert(p, id, next).then(done).catch(e => { if (prev === undefined) delete col(p)[id]; else col(p)[id] = prev; console.error('write failed', e.message); res.status(503).json({ ok: false, error: 'storage' }); });
+});
+app.delete('/api/db/doc', (req, res) => {
+  const t = readTok(req), p = String(req.query.p || ''), id = String(req.query.id || '');
+  if (!validPath(p) || !can(t, p, true, id)) return res.status(403).json({ ok: false });
+  const prev = col(p)[id]; delete col(p)[id];
+  if (!pool) { bump(p); return res.json({ ok: true }); }
+  pgDelete(p, id).then(() => { bump(p); res.json({ ok: true }); }).catch(e => { if (prev !== undefined) col(p)[id] = prev; res.status(503).json({ ok: false, error: 'storage' }); });
+});
+
+
+async function initStorage() {
+  if (!pool) return;
+  await pool.query('CREATE TABLE IF NOT EXISTS kv (path text NOT NULL, id text NOT NULL, data jsonb NOT NULL, PRIMARY KEY (path, id))');
+  const r = await pool.query('SELECT path,id,data FROM kv');
+  store = { docs: {}, rev: {}, idx: {} };
+  for (const row of r.rows) {
+    if (row.path === '_sys') { if (row.id === 'idx') store.idx = row.data; if (row.id === 'otpdb') db = { links: row.data.links || {}, pending: row.data.pending || {}, accounts: row.data.accounts || {} }; }
+    else (store.docs[row.path] = store.docs[row.path] || {})[row.id] = row.data;
+  }
+  console.log('Postgres storage ready:', r.rows.length, 'records');
+}
+initStorage().then(() => {
 app.listen(PORT, () => {
   console.log(`Etio Digital Market server listening on port ${PORT}`);
   configureWebhook();
 });
+}).catch(e => { console.error('Storage init failed:', e.message); process.exit(1); });

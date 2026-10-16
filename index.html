@@ -306,10 +306,55 @@ const user={id:async()=>"local-owner",canEdit:()=>true,isOwner:()=>true};
 const dl={save:async({filename,data})=>{const b=data instanceof Blob?data:new Blob([data]),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=filename;document.body.appendChild(a);a.click();a.remove()}};
 const as={upload:async f=>{const url=await new Promise(r=>{const x=new FileReader;x.onload=()=>r(x.result);x.readAsDataURL(f)});return{id:"a"+Date.now(),url}}};
 window.addEventListener("storage",e=>{if(e.key==K){try{D=JSON.parse(e.newValue||"{}")}catch(x){}Object.keys(L).forEach(fire)}});
-window.claude={use:async n=>n=="user"?user:n=="db"?dbo:n=="downloads"?dl:n=="assets"?as:null};
+window.__localClaude={use:async n=>n=="user"?user:n=="db"?dbo:n=="downloads"?dl:n=="assets"?as:null};
 document.addEventListener("DOMContentLoaded",()=>{const b=document.createElement("div");b.style.cssText="position:fixed;left:8px;top:8px;z-index:99;font-size:.7rem;background:#f2b705;color:#222;border-radius:8px;padding:2px 8px;opacity:.9";b.textContent="🧪 የአካባቢ ሁነታ (Chrome)";document.body.appendChild(b)});
 })();
+</script><script>
+/* ===== የጋራ ዳታቤዝ ደንበኛ፦ በሁሉም መሣሪያ ተመሳሳይ ውሂብ (ሰርቨር ላይ ይቀመጣል) ===== */
+(function(){if(window.claude&&typeof window.claude.use=="function")return;
+const LS={g:k=>{try{return localStorage.getItem(k)}catch(e){return null}},s:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}},r:k=>{try{localStorage.removeItem(k)}catch(e){}}};
+let mode=null;const C={},L={};
+const tok=()=>LS.g("etm_tok"),uidv=()=>LS.g("etm_uid");
+const claims=()=>{try{const b=tok().split(".")[0].replace(/-/g,"+").replace(/_/g,"/");return JSON.parse(atob(b+"=".repeat((4-b.length%4)%4)))}catch(e){return{}}};
+async function api(m,u,b){const r=await fetch(u,{method:m,headers:{"content-type":"application/json",authorization:"Bearer "+(tok()||"")},body:b?JSON.stringify(b):undefined});let d={};try{d=await r.json()}catch(e){}d.status=r.status;return d}
+async function newAnon(){const r=await api("POST","/api/session/anon");if(r.ok){LS.s("etm_tok",r.token);LS.s("etm_uid",r.uid)}return r.ok}
+async function boot(){if(mode!==null)return mode;try{const h=await fetch("/api/health");if(!h.ok)throw 0;
+ if(!tok()||!uidv()){if(!await newAnon())throw 0}
+ else{const p=await api("GET","/api/db/doc?p=data/users/"+uidv()+"&id=_ping");if(p.status==403||p.status==401){if(!await newAnon())throw 0}}
+ mode="remote";startPoll()}catch(e){mode="local"}return mode}
+const snap=(p,id,o)=>({id,exists:o!==undefined,data:()=>o===undefined?undefined:JSON.parse(JSON.stringify(o)),ref:docRef(p,id)});
+const fire=p=>(L[p]||[]).slice().forEach(f=>{try{f()}catch(e){console.warn(e)}});
+async function loadCol(p){const r=await api("GET","/api/db/col?p="+encodeURIComponent(p));if(r.ok){C[p]={rev:r.rev,docs:r.docs||{}};return C[p]}return null}
+function docRef(p,id){return{id,
+ get:async()=>{const r=await api("GET","/api/db/doc?p="+encodeURIComponent(p)+"&id="+encodeURIComponent(id));return snap(p,id,r.ok&&r.exists?r.data:undefined)},
+ set:async(v,o)=>{const r=await api("PUT","/api/db/doc",{p,id,data:v,merge:!!(o&&o.merge)});if(!r.ok)throw new Error(r.error||("HTTP "+r.status));if(C[p])C[p].docs[id]=o&&o.merge?{...C[p].docs[id],...v}:JSON.parse(JSON.stringify(v));fire(p)},
+ update:async v=>docRef(p,id).set(v,{merge:true}),
+ delete:async()=>{const r=await api("DELETE","/api/db/doc?p="+encodeURIComponent(p)+"&id="+encodeURIComponent(id));if(!r.ok)throw new Error("HTTP "+r.status);if(C[p])delete C[p].docs[id];fire(p)},
+ onSnapshot:(f,e)=>{const g=()=>f(snap(p,id,(C[p]&&C[p].docs||{})[id]));(L[p]=L[p]||[]).push(g);loadCol(p).then(c=>{if(c)g();else if(e)e(new Error("denied"))});return()=>{L[p]=L[p].filter(x=>x!==g)}}}}
+function colRef(p,q){q=q||{w:[],o:null,l:0};
+ const run=()=>{const dd=(C[p]&&C[p].docs)||{};let a=Object.keys(dd).map(id=>snap(p,id,dd[id]));
+  q.w.forEach(([f,op,v])=>{a=a.filter(d=>{const x=d.data()[f];return op=="=="?x==v:op=="!="?x!=v:op==">"?x>v:op=="<"?x<v:op==">="?x>=v:op=="<="?x<=v:op=="array-contains"?(x||[]).includes(v):op=="in"?v.includes(x):true})});
+  if(q.o)a.sort((x,y)=>{const m=x.data()[q.o[0]],n=y.data()[q.o[0]];return(m>n?1:m<n?-1:0)*(q.o[1]=="desc"?-1:1)});
+  if(q.l)a=a.slice(0,q.l);return{docs:a,size:a.length,empty:!a.length,forEach:f=>a.forEach(f)}};
+ const rid=()=>"d"+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+ return{doc:id=>docRef(p,id||rid()),add:async v=>{const id=rid();await docRef(p,id).set(v);return docRef(p,id)},
+  get:async()=>{await loadCol(p);return run()},where:(f,o,v)=>colRef(p,{...q,w:[...q.w,[f,o,v]]}),orderBy:(f,d)=>colRef(p,{...q,o:[f,d||"asc"]}),limit:n=>colRef(p,{...q,l:n}),
+  onSnapshot:(f,e)=>{const g=()=>f(run());(L[p]=L[p]||[]).push(g);loadCol(p).then(c=>{if(c)g();else if(e)e(new Error("denied"))});return()=>{L[p]=L[p].filter(x=>x!==g)}}}}
+let pt=0;async function poll(){if(document.hidden||mode!=="remote")return;const ps=Object.keys(L).filter(p=>L[p]&&L[p].length);if(!ps.length)return;const want={};ps.forEach(p=>want[p]=C[p]?C[p].rev:-1);
+ const r=await api("POST","/api/db/poll",{paths:want});if(r.ok)Object.keys(r.changed||{}).forEach(p=>{C[p]=r.changed[p];fire(p)})}
+function startPoll(){if(pt)return;pt=setInterval(()=>poll().catch(()=>{}),2500);document.addEventListener("visibilitychange",()=>{if(!document.hidden)poll().catch(()=>{})})}
+const remote={
+ user:{id:async()=>uidv(),canEdit:()=>claims().k=="admin",isOwner:()=>claims().k=="admin"},
+ db:{collection:p=>colRef(String(p).replace(/\/+$/,""))}};
+window.__etm={mode:()=>mode,uid:uidv,
+ lookup:async id=>{if(await boot()!="remote")return{found:false};return api("POST","/api/account/lookup",{id})},
+ login:async(id,proof)=>{const r=await api("POST","/api/account/login",{id,proof});if(!r.ok)return null;LS.s("etm_tok",r.token);LS.s("etm_uid",r.uid);return r},
+ adminLogin:async pw=>{const r=await api("POST","/api/admin/login",{password:pw});if(!r.ok)throw new Error(r.error||"admin");LS.s("etm_tok",r.token);return r},
+ clear:()=>{LS.r("etm_tok");LS.r("etm_uid")}};
+window.claude={use:async n=>{const m=await boot();if(m=="remote")return n=="user"?remote.user:n=="db"?remote.db:null;return window.__localClaude?window.__localClaude.use(n):null}};
+})();
 </script>
+
 <script>
 try{const t0=localStorage.getItem("etm_th");if(t0)document.documentElement.dataset.theme=t0}catch(e){}
 function tt(){const r=document.documentElement,d=getComputedStyle(r).getPropertyValue("--bg").trim().toLowerCase()=="#101913";r.dataset.theme=d?"light":"dark";try{localStorage.setItem("etm_th",r.dataset.theme)}catch(e){}}
@@ -782,7 +827,7 @@ const tgV=await ETM_Telegram_Register(e,ph);
 try{await fetch((window.ETM_TELEGRAM_API||"").replace(/\/$/,"")+"/api/telegram/bind",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({requestId:tgV.requestId,email:e,phone:ph})});}catch(err){alert("Telegram ማሰሪያ አልተሳካም።");return 0}
 const salt=await b64(crypto.getRandomValues(new Uint8Array(16))),h=await hp(p,salt);
 const a0={email:e,phone:ph,salt,h,ts:Date.now()};try{if(db&&uid)await db.collection("data/users/"+uid).doc("acct").set(a0);else localStorage.setItem("etm_acct",JSON.stringify(a0))}catch(x){return alert("አካውንት አልተከፈተም: "+((x&&(x.code||x.message))||x))}acct=a0;ok=1;gm=null;nav();sync();go(myPM?"home":"pay")}
-async function login0(){const raw=($("#ge").value||"").trim(),e0=raw.toLowerCase();
+async function login0(){if(window.__lh&&(await window.__lh())===false)return;const raw=($("#ge").value||"").trim(),e0=raw.toLowerCase();
 if(e0==ADM.e){const p=$("#gp").value;if(!p)return gerr("የይለፍ ቃል ያስገቡ");if(fails>=5)return gerr("ብዙ ሙከራ፤ ገጹን አድሰው ይሞክሩ");if(await hp(p,ADM.s)!=ADM.h){fails++;return gerr("ኢሜይል ወይም የይለፍ ቃል ትክክል አይደለም")}
 if(!adm){try{const u2=await claude.use("user");U=u2||U;if(u2){adm=!!(u2.canEdit()||u2.isOwner())}else{return gerr("ገጹ የclaude.ai ተጠቃሚ መረጃ አላገኘም (user=null)። ገጹን በራሱ tab በclaude.ai/artifact አድራሻ ከፍተው፣ በባለቤቱ መለያ ገብተው፣ ፈቃድ ሲጠየቅ ፈቅደው ያድሱ")}}catch(e){return gerr("የባለቤትነት ማረጋገጫ አልተሳካም: "+(e&&e.message||e))}if(!adm)return gerr("የአድሚን የይለፍ ቃል ትክክል ነው፤ ነገር ግን ይህ መለያ የገጹ ባለቤት/Editor አይደለም። ገጹን ያሳተሙበት claude.ai መለያ ይግቡ")}AL=1;ok=1;fails=0;gm=null;nav();return go("admin")}
 if(!acct){const rg=db&&uid&&raw&&await exists(raw);return gerr(rg?"ይህ መለያ በሌላ የclaude.ai መለያ ተመዝግቧል፤ በዚያ መለያ ይግቡ":"አካውንት አልተገኘም — አዲስ ከሆኑ ይመዝገቡ")}if(fails>=5)return gerr("ብዙ ሙከራ፤ ገጹን አድሰው ይሞክሩ");const p=$("#gp").value;if(!raw||!p)return gerr("ኢሜይል ወይም ስልክ እና የይለፍ ቃል ያስገቡ");const isE=raw.includes("@"),hit=isE?e0==String(acct.email).toLowerCase():nph(raw)==nph(acct.phone);if(!hit||await hp(p,acct.salt)!=acct.h){fails++;return gerr("መረጃው ወይም የይለፍ ቃሉ ትክክል አይደለም"+(fails>=3?` (${5-fails} ሙከራ ቀርቷል)`:""))}try{await ETM_Telegram_Login(acct.email,acct.phone)}catch(err){return gerr("Telegram OTP ማረጋገጫ አልተሳካም። "+(err.message||""))}ok=1;fails=0;gm=null;GID="";GMSG="";nav();claimReg();sync();go(myPM?"home":"pay")}
@@ -3588,4 +3633,20 @@ window.ETM_TELEGRAM_API = window.ETM_TELEGRAM_API || ''; // Same-origin API: htt
 #etmTGBox{position:fixed;inset:0;z-index:999999}.etm-tg-back{min-height:100%;display:grid;place-items:center;background:rgba(3,15,25,.72);padding:18px}.etm-tg-card{width:min(520px,100%);background:#fff;border-radius:24px;padding:26px;box-shadow:0 24px 80px rgba(0,0,0,.3);font-family:inherit}.etm-tg-logo{font-size:44px;text-align:center}.etm-tg-card h2{text-align:center;margin:8px 0}.etm-tg-card p{line-height:1.7;color:#52606b}.etm-tg-steps{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:center;background:#f5f8fa;border-radius:16px;padding:14px;margin:14px 0}.etm-tg-steps>b{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#168bd0;color:#fff}.etm-tg-open{display:block;text-align:center;text-decoration:none;background:#168bd0;color:#fff;padding:14px;border-radius:14px;font-weight:900}.etm-tg-state{margin:14px 0;padding:12px;border-radius:12px;background:#f3f6f8;font-weight:800}.etm-tg-code{display:flex;gap:8px}.etm-tg-code input{flex:1;padding:13px;border:1px solid #ccd6dc;border-radius:12px;font-size:20px;letter-spacing:5px;text-align:center}.etm-tg-code button{border:0;border-radius:12px;background:#0b8f5b;color:#fff;padding:0 16px;font-weight:900}.etm-tg-cancel{margin-top:12px;width:100%;padding:11px;border:0;background:#edf0f2;border-radius:12px;font-weight:800}
 </style>
 
+<script>
+/* ===== መግቢያን ከጋራ ሰርቨር ጋር ማገናኘት (ከሌላ መሣሪያ መግባት) ===== */
+(function(){const X=window.__etm;if(!X)return;
+const E0=window.exists;if(typeof E0=="function")window.exists=async function(v){try{const r=await X.lookup(v);if(r&&r.found)return 1}catch(e){}return E0.apply(this,arguments)};
+window.__lh=async function(){
+ try{const raw=(document.querySelector("#ge")||{value:""}).value.trim(),p=(document.querySelector("#gp")||{value:""}).value;
+  if(X.mode()!="remote"||!raw||!p)return true;
+  if(raw.toLowerCase()==ADM.e){try{await X.adminLogin(p)}catch(e){gerr("ኢሜይል ወይም የይለፍ ቃል ትክክል አይደለም (ወይም አድሚን በሰርቨሩ አልተዘጋጀም)");return false}return true}
+  const r=await X.lookup(raw);
+  if(r&&r.found&&r.uid!==X.uid()){const proof=await hp(p,r.salt),s=await X.login(raw,proof);if(!s){gerr("መረጃው ወይም የይለፍ ቃሉ ትክክል አይደለም");return false}
+   uid=s.uid;const d=(await db.collection("data/users/"+uid).doc("acct").get()).data();acct=d||null}
+ }catch(e){console.warn("login-sync",e)}
+ return true};
+const G=window.go;if(typeof G=="function")window.go=function(k){const r=G.apply(this,arguments);if(k=="out"||String(k).split(":")[0]=="out"){X.clear();setTimeout(()=>location.reload(),150)}return r};
+})();
+</script>
 </body></html>

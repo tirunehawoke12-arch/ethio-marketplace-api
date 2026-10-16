@@ -3,3 +3,7 @@ node_modules/
 telegram-otp-data.json
 telegram-otp-data.json.tmp
 npm-debug.log*
+
+market-data.json
+market-data.json.tmp
+.token-secret

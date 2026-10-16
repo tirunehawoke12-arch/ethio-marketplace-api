@@ -34,3 +34,22 @@
 - Node.js በLinux Bronze መለያህ ላይ ካልተፈቀደ፣ የHosting አቅራቢው ማስኬድ አይችልም።
 - OTP/account linking መረጃ `telegram-otp-data.json` ውስጥ ይቀመጣል። የHosting ማሻሻያ ወይም የፋይል ገደብ ከመጣ የውሂብ መጥፋት እንዳይኖር በደህና ባክአፕ አድርግ።
 - የEscrow/payment ገጾቹ የክፍያ እይታ ናቸው፤ እውነተኛ የTelebirr/CBE ክፍያ በራስ-ሰር እንዲፈጸም የተፈቀደ Payment API እና የሰርቨር ማረጋገጫ ያስፈልጋል።
+
+---
+## 🔁 የጋራ ዳታቤዝ (በሁሉም መሣሪያ ተመሳሳይ ውሂብ) — አዲስ
+ውሂቡ (አካውንቶች፣ ዝርዝሮች፣ ትዕዛዞች፣ ውይይቶች) አሁን በአሳሽ ሳይሆን በሰርቨሩ ላይ በ `market-data.json` ውስጥ ይቀመጣል። ከማንኛውም ስልክ ወይም ኮምፒዩተር በተመሳሳይ ኢሜይል/ስልክ እና የይለፍ ቃል ሲገቡ ተመሳሳይ መረጃ ይታያል።
+
+**በ Plesk ተጨማሪ Environment variables፦**
+- `ADMIN_PASSWORD` = አሁን የሚጠቀሙት የአድሚን የይለፍ ቃል (በ `index.html` ከተቀመጠው ሃሽ ጋር አንድ ዓይነት መሆን አለበት)። ካልተሞላ አድሚን መግባት አይችልም።
+- `TOKEN_SECRET` = ረጅም ምስጢራዊ ጽሑፍ (አማራጭ)።
+
+**ማወቅ ያለብዎት**
+- `market-data.json` እና `.token-secret` በይፋ ከሚታይ አቃፊ (httpdocs) ውጭ መሆን አለባቸው፤ በየጊዜው ቅጂ ያስቀምጡ (backup)።
+- ሰርቨሩ ካልተገኘ (ለምሳሌ ፋይሉን በቀጥታ ከከፈቱ) ድረ-ገጹ በራሱ ወደ «የአካባቢ ሁነታ» ይመለሳል፤ ያኔ ውሂቡ በዚያ አሳሽ ብቻ ይሆናል።
+- ብዙ ሺህ ተጠቃሚ ሲደርሱ ከJSON ፋይል ወደ እውነተኛ ዳታቤዝ (MySQL/SQLite) መሸጋገር ያስፈልጋል።
+
+---
+## ☁️ Render (ነጻ ዕቅድ) + Neon ቋሚ ዳታቤዝ
+Render ነጻ ዕቅድ ፋይሎችን በእያንዳንዱ ዳግም ማስነሳት ያጠፋል። ስለዚህ `DATABASE_URL` (Neon Postgres) ያስፈልጋል። ሲዘጋጅ ሁሉም ውሂብ (አካውንቶች፣ ዝርዝሮች፣ ትዕዛዞች፣ የ Telegram ግንኙነቶች) በዚያ ይቀመጣል፤ `market-data.json` አያስፈልግም።
+Render Environment፦ `DATABASE_URL`, `ADMIN_PASSWORD`, `TOKEN_SECRET` (ግዴታ፣ ካልተሞላ በእያንዳንዱ ዲፕሎይ ሁሉም ይወጣል)፣ `PUBLIC_BASE_URL`, `TELEGRAM_*`።
+ሰርቨሩ እንዳይተኛ UptimeRobot (ነጻ) በየ5 ደቂቃ `https://ethiodigitalmarket.pro.et/api/health` ይጥራ።
