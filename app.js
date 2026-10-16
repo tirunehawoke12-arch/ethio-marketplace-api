@@ -78,8 +78,19 @@ app.post('/api/telegram/webhook', async (req,res) => {
   } catch (e) { console.error('Telegram webhook update failed:', e.message); }
 });
 
-app.get('/', (req,res)=>res.sendFile(path.join(__dirname,'index.html')));
-app.get('/index.html', (req,res)=>res.sendFile(path.join(__dirname,'index.html')));
+const SITE_URL = (process.env.SITE_URL || PUBLIC_BASE_URL).replace(/\/+$/, '');
+let HTML_CACHE = null;
+function sendHome(req, res) {
+  try { if (!HTML_CACHE) HTML_CACHE = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8').split('https://ethiodigitalmarket.pro.et').join(SITE_URL); }
+  catch (e) { return res.status(500).send('index missing'); }
+  res.set({ 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=300' }).send(HTML_CACHE);
+}
+app.get('/', sendHome);
+app.get('/index.html', (req, res) => res.redirect(301, '/'));
+app.get('/google423971619482a954.html', (req, res) => res.type('text/html').send('google-site-verification: google423971619482a954.html'));
+app.get('/robots.txt', (req, res) => res.type('text/plain').send(`User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${SITE_URL}/sitemap.xml\n`));
+app.get('/sitemap.xml', (req, res) => res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${SITE_URL}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url></urlset>\n`));
+app.get('/og.png', (req, res) => { const f = path.join(__dirname, 'og.png'); fs.existsSync(f) ? res.set('Cache-Control', 'public, max-age=86400').sendFile(f) : res.sendStatus(404); });
 // Do not expose the application directory via express.static: it contains server code and OTP data.
 
 app.post('/api/telegram/start', (req,res)=>{
