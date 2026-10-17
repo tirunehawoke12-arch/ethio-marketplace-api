@@ -195,6 +195,7 @@ async function handleContact(msg) {
   await tg('sendMessage', { chat_id: chatId, text: `🇪🇹 Etio Digital Market\n\n✅ ስልክ ቁጥርዎ ተረጋግጧል።\nየማረጋገጫ ኮድዎ፦ ${r.otp}\n\nወደ ድረ-ገጹ ተመልሰው ኮዱን ያስገቡ።\n⏱ በ5 ደቂቃ ውስጥ ያበቃል።`, reply_markup: { remove_keyboard: true } });
 }
 async function handleStart(text, chat) {
+  if (/^\/myid\b/.test(text || '')) return tg('sendMessage', { chat_id: chat.id, text: `🆔 የእርስዎ Telegram Chat ID፦ ${chat.id}\n\n(አድሚን ከሆኑ ይህን በ Render ውስጥ ADMIN_TELEGRAM_CHAT_ID ላይ ያስገቡ።)` });
   const m=/^\/start(?:\s+(.+))?$/.exec(text||'');
   if(!m) return;
   const requestId=m[1];
@@ -381,7 +382,11 @@ app.delete('/api/admin/account/:uid', needAdmin, async (req, res) => {
   } catch (e) { res.status(503).json({ ok: false }); }
 });
 
-require('./market')({ app, col, bump, pool, pgUpsert, persist, readTok, limit });
+const ADMIN_CHAT = process.env.ADMIN_TELEGRAM_CHAT_ID || '';
+function sendTg(chatId, text) { if (!TOKEN || !chatId) return; tg('sendMessage', { chat_id: chatId, text: String(text).slice(0, 3800), disable_web_page_preview: true }).catch(e => console.warn('notify failed:', e.message)); }
+function notifyUser(uid, text) { try { const a = (store.docs['data/users/' + uid] || {}).acct; if (!a) return; const l = db.accounts[accKey(a)]; if (l && l.chatId) sendTg(l.chatId, `🇪🇹 Etio Digital Market\n\n${text}\n\n🔗 ${PUBLIC_BASE_URL}`); } catch (e) { console.warn('notifyUser', e.message); } }
+function notifyAdmin(text) { sendTg(ADMIN_CHAT, `🛡️ አድሚን\n\n${text}\n\n🔗 ${PUBLIC_BASE_URL}`); }
+require('./market')({ app, col, bump, pool, pgUpsert, persist, readTok, limit, notifyUser, notifyAdmin });
 app.get('/market.js', (req, res) => { const f = path.join(__dirname, 'market-ui.js'); fs.existsSync(f) ? res.set({ 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-cache' }).sendFile(f) : res.sendStatus(404); });
 
 async function initStorage() {

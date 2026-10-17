@@ -5,8 +5,10 @@
 const crypto = require('crypto');
 module.exports = function market(ctx) {
   const { app, col, bump, pool, pgUpsert, persist, readTok, limit } = ctx;
+  const tell = (uid, t) => { try { ctx.notifyUser && ctx.notifyUser(uid, t); } catch (e) { } }, tellAdmin = t => { try { ctx.notifyAdmin && ctx.notifyAdmin(t); } catch (e) { } };
+  const short = o => '#' + o.id.slice(0, 6), money = n => Number(n).toLocaleString('en-US') + ' ብር';
   const COMM = Number(process.env.COMMISSION_PCT) || 5;
-  const CATS = ['ምግብ እና መጠጥ', 'ልብስ እና ጫማ', 'ኤሌክትሮኒክስ', 'ሞባይል እና መለዋወጫ', 'የቤት ዕቃ', 'ግንባታ እና ሃርድዌር', 'ግብርና', 'ውበት እና ጤና', 'መጻሕፍት እና ትምህርት', 'አገልግሎት', 'ሌላ'];
+  const CATS = ['ምግብ እና መጠጥ', 'ልብስ እና ጫማ', 'ኤሌክትሮኒክስ', 'ሞባይል እና መለዋወጫ', 'የቤት ዕቃ', 'ግንባታ እና ሃርድዌር', 'ግብርና', 'ውበት እና ጤና', 'መጻሕፍት እና ትምህርት', 'ሆቴል እና ማረፊያ', 'ሙያተኛ አገልግሎት', 'አገልግሎት', 'ሌላ'];
   const P = { shops: 'mk/shops', products: 'mk/products', orders: 'mk/orders', reviews: 'mk/reviews', img: '_img', cfg: 'mk/config' };
   const nid = () => crypto.randomBytes(9).toString('hex');
   const bad = (res, c, e) => res.status(c).json({ ok: false, error: e });
@@ -104,7 +106,7 @@ module.exports = function market(ctx) {
     Object.assign(s, { name, about: S(b.about, 600), category: S(b.category, 40), region: S(b.region, 40), city: S(b.city, 60), address: S(b.address, 160), hours: S(b.hours, 80), phone, showPhone: !!b.showPhone, logo: S(b.logo, 24) || s.logo || '', cover: S(b.cover, 24) || s.cover || '', delivery: { pickup: b.delivery ? !!b.delivery.pickup : true, local: !!(b.delivery && b.delivery.local), fee: Math.max(0, Math.min(5000, N(b.delivery && b.delivery.fee) || 0)), areas: S(b.delivery && b.delivery.areas, 120) }, payout: { method: S(pay.method, 20), account: S(pay.account, 40), holder: S(pay.holder, 60) }, upd: Date.now() });
     if (!isNew && s.status === 'rejected') { s.status = 'pending'; s.note = ''; }
     col(P.shops)[s.id] = s;
-    try { await saveMany([[P.shops, s.id]]); res.json({ ok: true, id: s.id, status: s.status }); } catch (e) { bad(res, 503, 'storage'); }
+    try { await saveMany([[P.shops, s.id]]); if (s.status === 'pending') tellAdmin(`🏪 አዲስ ሱቅ ለማጽደቅ፦ «${s.name}» (${s.city})`); res.json({ ok: true, id: s.id, status: s.status }); } catch (e) { bad(res, 503, 'storage'); }
   });
   app.post('/api/market/product', async (req, res) => {
     const u = who(req, res); if (!u) return; const s = shopOf(u.uid); if (!s) return bad(res, 400, 'open_shop_first'); const b = req.body || {};
@@ -143,7 +145,7 @@ module.exports = function market(ctx) {
       const subtotal = Math.round(its.reduce((a, i) => a + i.price * i.qty, 0) * 100) / 100, fee = type === 'delivery' ? s.delivery.fee : 0, commission = Math.round(subtotal * pct) / 100;
       const o = { id: nid(), buyerUid: u.uid, shopId: sid, shopName: s.name, items: its, subtotal, fee, total: Math.round((subtotal + fee) * 100) / 100, commission, sellerNet: Math.round((subtotal - commission + fee) * 100) / 100, delivery: { type, address, phone, note: S(d.note, 200) }, history: [], ts: Date.now() };
       push(o, 'placed', 'buyer', ''); col(P.orders)[o.id] = o; ids.push(o.id); ch.push([P.orders, o.id]); groups[sid].forEach(p => { p.stock -= want[p.id]; ch.push([P.products, p.id]); }); }
-    try { await saveMany(ch); res.json({ ok: true, orders: ids }); } catch (e) { bad(res, 503, 'storage'); }
+    try { await saveMany(ch); ids.forEach(id => { const o = col(P.orders)[id], s = col(P.shops)[o.shopId]; tell(s.uid, `🛒 አዲስ ትዕዛዝ ${short(o)} — ${o.items.map(i => i.title + '×' + i.qty).join('፣ ')} (${money(o.total)})።\nገዥው ክፍያ እስኪፈጽም እና አድሚን እስኪያረጋግጥ ይጠብቁ።`); tell(u.uid, `✅ ትዕዛዝዎ ${short(o)} ተመዝግቧል (${money(o.total)})።\n💳 ክፍያ ይፈጽሙ እና የማጣቀሻ ቁጥር በድረ-ገጹ ያስገቡ።`); }); res.json({ ok: true, orders: ids }); } catch (e) { bad(res, 503, 'storage'); }
   });
   app.get('/api/market/my/orders', async (req, res) => { const u = who(req, res); if (!u) return; await expire(); res.json({ ok: true, orders: Object.values(col(P.orders)).filter(o => o.buyerUid === u.uid).sort((a, b) => b.ts - a.ts).map(o => orderView(o, 'buyer')) }); });
   app.get('/api/market/seller/orders', async (req, res) => { const u = who(req, res); if (!u) return; await expire(); const s = shopOf(u.uid); res.json({ ok: true, orders: s ? Object.values(col(P.orders)).filter(o => o.shopId === s.id).sort((a, b) => b.ts - a.ts).map(o => orderView(o, 'seller')) : [] }); });
@@ -164,14 +166,14 @@ module.exports = function market(ctx) {
     if (req.params.act === 'dispute') { if (S(b.reason, 400).length < 5) return bad(res, 400, 'reason_required'); o.dispute = { reason: S(b.reason, 400), ts: Date.now() }; }
     if (t.restock) { restock(o); o.items.forEach(i => col(P.products)[i.pid] && ch.push([P.products, i.pid])); }
     push(o, t.to, t.role, S(b.note, 200));
-    try { await saveMany(ch); res.json({ ok: true, status: o.status }); } catch (e) { bad(res, 503, 'storage'); }
+    try { await saveMany(ch); const a = req.params.act, sh = s; const N = { pay: () => tellAdmin(`💳 ክፍያ ለማረጋገጥ ${short(o)} — ${money(o.total)} · ${o.payment.method} · ማጣቀሻ ${o.payment.ref}`), cancel: () => tell(sh.uid, `✕ ትዕዛዝ ${short(o)} በገዥው ተሰርዟል።`), accept: () => tell(o.buyerUid, `📦 ሻጩ ትዕዛዝዎን ${short(o)} እያዘጋጀ ነው።`), decline: () => { tell(o.buyerUid, `↩️ ሻጩ ትዕዛዝዎን ${short(o)} መቀበል አልቻለም፤ ገንዘብዎ ይመለሳል።`); tellAdmin(`↩️ ተመላሽ ለማድረግ ${short(o)} — ${money(o.total)}`); }, ship: () => tell(o.buyerUid, `🚚 ትዕዛዝዎ ${short(o)} ተልኳል${o.tracking ? '፦ ' + o.tracking : ''}። ሲደርስ በድረ-ገጹ «ደረሰኝ» ይጫኑ።`), receive: () => { tell(sh.uid, `🤝 ገዥው ትዕዛዝ ${short(o)} ተቀብሏል — አድሚን ክፍያዎን በቅርቡ ይልካል (${money(o.sellerNet)})።`); tellAdmin(`💰 ለሻጭ ለመክፈል ${short(o)} — ${money(o.sellerNet)} → ${sh.payout.method} ${sh.payout.account}`); }, dispute: () => { tellAdmin(`⚖️ ክርክር ${short(o)}፦ ${o.dispute.reason}`); tell(sh.uid, `⚖️ ገዥው በትዕዛዝ ${short(o)} ላይ ክርክር ከፍቷል። አድሚን ይመለከተዋል።`); } }; N[a] && N[a](); res.json({ ok: true, status: o.status }); } catch (e) { bad(res, 503, 'storage'); }
   });
   app.post('/api/market/review', async (req, res) => {
     const u = who(req, res); if (!u) return; const o = col(P.orders)[S(req.body.orderId, 24)], r = parseInt(req.body.rating);
     if (!o || o.buyerUid !== u.uid) return bad(res, 404, 'not_found'); if (!['delivered', 'settled'].includes(o.status)) return bad(res, 409, 'not_delivered');
     if (o.reviewed) return bad(res, 409, 'already_reviewed'); if (!(r >= 1 && r <= 5)) return bad(res, 400, 'bad_rating');
     const id = nid(); col(P.reviews)[id] = { id, orderId: o.id, shopId: o.shopId, buyerUid: u.uid, rating: r, text: S(req.body.text, 400), ts: Date.now() }; o.reviewed = true;
-    try { await saveMany([[P.reviews, id], [P.orders, o.id]]); res.json({ ok: true }); } catch (e) { bad(res, 503, 'storage'); }
+    try { await saveMany([[P.reviews, id], [P.orders, o.id]]); const sh = col(P.shops)[o.shopId]; sh && tell(sh.uid, `⭐ አዲስ ግምገማ (${r}/5)${S(req.body.text, 100) ? '፦ ' + S(req.body.text, 100) : ''}`); res.json({ ok: true }); } catch (e) { bad(res, 503, 'storage'); }
   });
 
   /* ---------- አድሚን ---------- */
@@ -191,7 +193,7 @@ module.exports = function market(ctx) {
   app.post('/api/market/admin/shop/:id/status', async (req, res) => {
     if (!adminOnly(req, res)) return; const s = col(P.shops)[req.params.id]; if (!s) return bad(res, 404, 'not_found');
     if (!['active', 'rejected', 'suspended', 'pending'].includes(req.body.status)) return bad(res, 400, 'bad_status');
-    s.status = req.body.status; s.note = S(req.body.note, 200); try { await saveMany([[P.shops, s.id]]); res.json({ ok: true }); } catch (e) { bad(res, 503, 'storage'); }
+    s.status = req.body.status; s.note = S(req.body.note, 200); try { await saveMany([[P.shops, s.id]]); const T2 = { active: `🎉 ሱቅዎ «${s.name}» ጸድቋል — አሁን ለህዝብ ክፍት ነው። ዕቃዎችዎን ይዘርዝሩ!`, rejected: `❌ ሱቅዎ «${s.name}» አልተቀበለም።${s.note ? ' ምክንያት፦ ' + s.note : ''}`, suspended: `⛔ ሱቅዎ «${s.name}» ታግዷል።${s.note ? ' ' + s.note : ''}` }; if (T2[s.status]) tell(s.uid, T2[s.status]); res.json({ ok: true }); } catch (e) { bad(res, 503, 'storage'); }
   });
   const A = { // የአድሚን እርምጃዎች
     'verify-payment': { from: ['payment_submitted'], run: (o, b) => { if (b.ok) { o.payment.verifiedAt = Date.now(); push(o, 'paid', 'admin', S(b.note, 200)); } else { o.payment.rejected = S(b.note, 200) || 'ማስረጃው አልተቀበለም'; push(o, 'placed', 'admin', o.payment.rejected); } } },
@@ -203,6 +205,10 @@ module.exports = function market(ctx) {
     if (!a.from.includes(o.status)) return bad(res, 409, 'wrong_step:' + o.status);
     const ch = [[P.orders, o.id]], err = a.run(o, req.body || {}); if (err) return bad(res, 400, err);
     if (a.restock) { restock(o); o.items.forEach(i => col(P.products)[i.pid] && ch.push([P.products, i.pid])); }
-    try { await saveMany(ch); res.json({ ok: true, status: o.status }); } catch (e) { bad(res, 503, 'storage'); }
+    try { await saveMany(ch); const sh = col(P.shops)[o.shopId], act = req.params.act, b = req.body || {};
+      if (act === 'verify-payment') { if (b.ok) { tell(o.buyerUid, `✅ ክፍያዎ ${short(o)} ተረጋግጧል። ሻጩ ዕቃውን ያዘጋጃል።`); sh && tell(sh.uid, `✅ ትዕዛዝ ${short(o)} ክፍያ ተረጋግጧል — አሁን ተቀብለው ያዘጋጁ (${money(o.total)})።`); } else tell(o.buyerUid, `❌ ክፍያዎ ${short(o)} አልተቀበለም${o.payment && o.payment.rejected ? '፦ ' + o.payment.rejected : ''}። ትክክለኛውን ማጣቀሻ በድረ-ገጹ እንደገና ያስገቡ።`); }
+      if (act === 'settle' || act === 'release') sh && tell(sh.uid, `💰 ለትዕዛዝ ${short(o)} ${money(o.sellerNet)} ተከፍሏል። ማጣቀሻ፦ ${o.settle.ref}`);
+      if (act === 'refund') tell(o.buyerUid, `↩️ ለትዕዛዝ ${short(o)} ${money(o.total)} ተመልሷል። ማጣቀሻ፦ ${o.settle.ref}`);
+      res.json({ ok: true, status: o.status }); } catch (e) { bad(res, 503, 'storage'); }
   });
 };

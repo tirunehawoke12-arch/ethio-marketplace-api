@@ -37,11 +37,15 @@
 #mk13 .next{border-left:4px solid #f5b301;background:#f5b30112;padding:10px 12px;border-radius:10px;margin:10px 0;font-size:.9rem}#mk13 .hero{display:flex;align-items:center;gap:12px}#mk13 .logo{width:58px;height:58px;border-radius:16px;object-fit:cover;background:#e8efe9;flex:none}#mk13 .cover{width:100%;height:120px;object-fit:cover;border-radius:16px;background:linear-gradient(135deg,#0a8a56,#0b6e8f);margin-bottom:10px}
 #mk13 .gal{display:flex;gap:6px;overflow-x:auto;margin-bottom:10px}#mk13 .gal img{width:100%;max-height:340px;object-fit:cover;border-radius:14px;flex:none;min-width:80%}#mk13 .qty{display:flex;align-items:center;gap:8px}#mk13 .qty button{width:36px;height:36px;border-radius:12px;border:1px solid var(--bd,#e3e9e4);background:var(--cd,#fff);color:inherit;font-size:1.1rem}
 #mk13 .msg{padding:10px 12px;border-radius:12px;margin:8px 0;font-size:.88rem;background:#d6454518;color:#b63030;display:none}#mk13 .msg.on{display:block}#mk13 .msg.ok{background:#0a8a5618;color:#0a6b43}#mk13 .st{font-size:1.5rem;color:#f5b301;letter-spacing:2px;cursor:pointer}#mk13 .acc{background:color-mix(in srgb,var(--pr,#0a8a56) 7%,var(--cd,#fff));border-radius:12px;padding:10px;margin:8px 0;font-size:.88rem}
-#mk13 .sec{font-weight:900;margin:16px 2px 8px;display:flex;justify-content:space-between;align-items:center}#mk13 .wiz{display:flex;gap:6px;margin-bottom:12px}#mk13 .wiz span{flex:1;height:6px;border-radius:3px;background:var(--bd,#e3e9e4)}#mk13 .wiz span.d{background:var(--pr,#0a8a56)}`;
+#mk13 .sec{font-weight:900;margin:16px 2px 8px;display:flex;justify-content:space-between;align-items:center}#mk13 .wiz{display:flex;gap:6px;margin-bottom:12px}#mk13 .wiz span{flex:1;height:6px;border-radius:3px;background:var(--bd,#e3e9e4)}#mk13 .wiz span.d{background:var(--pr,#0a8a56)}
+body.mk-main header,body.mk-main main#app,body.mk-main nav#nav,body.mk-main #seo,body.mk-main footer,body.mk-main #up,body.mk-main .fab{display:none!important}
+#dlg,#dlg .dlg{z-index:100002!important}#dr13{z-index:100001!important}
+#mk13 #mkmenu{display:none}#mk13.main #mkmenu{display:inline-block}#mk13.main #mkclose{display:none}
+#mkleg{position:fixed;left:12px;bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:100000;display:none;padding:12px 16px;border-radius:16px;border:0;background:linear-gradient(135deg,#0a8a56,#0b6e8f);color:#fff;font-weight:800;box-shadow:0 10px 30px #0a2a1c55}body.mk-leg #mkleg{display:block}`;
 
   let root;
   function build() { if (root) return; const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
-    root = document.createElement('div'); root.id = 'mk13'; root.innerHTML = '<div class="top"><button class="ib" data-act="close" aria-label="ዝጋ">✕</button><button class="ib" data-act="back" aria-label="ተመለስ" id="mkback" style="display:none">←</button><h2 id="mktitle">🛍️ ገበያ</h2><button class="ib" data-act="tab" data-v="cart" aria-label="ጋሪ">🛒<b id="mkbadge" style="display:none">0</b></button></div><div class="bd" id="mkbody"></div><div class="tabs" id="mktabs"></div>';
+    root = document.createElement('div'); root.id = 'mk13'; root.innerHTML = '<div class="top"><button class="ib" id="mkmenu" data-act="menu" aria-label="ምናሌ">☰</button><button class="ib" id="mkclose" data-act="close" aria-label="ዝጋ">✕</button><button class="ib" data-act="back" aria-label="ተመለስ" id="mkback" style="display:none">←</button><h2 id="mktitle">🛍️ ገበያ</h2><button class="ib" data-act="tab" data-v="cart" aria-label="ጋሪ">🛒<b id="mkbadge" style="display:none">0</b></button></div><div class="bd" id="mkbody"></div><div class="tabs" id="mktabs"></div>';
     document.body.appendChild(root);
     root.addEventListener('click', e => { const t = e.target.closest('[data-act]'); if (!t) return; const h = H[t.dataset.act]; if (h) h(t.dataset, t, e) });
     root.addEventListener('change', e => { if (e.target.dataset && e.target.dataset.up) up(e.target) });
@@ -134,7 +138,7 @@
   const addCart = (p, q) => { const c = cart(), x = c.find(i => i.pid === p.id); if (x) x.qty = Math.min(99, x.qty + q); else c.push({ pid: p.id, qty: q, title: p.title, price: p.price, img: p.imgs[0] || '', shopId: p.shop.id, shopName: p.shop.name }); setCart(c) };
 
   const H = {
-    close() { root.classList.remove('on') }, back() { const p = STK.pop(); if (p) go(p.v, p.arg, false); else go('home', null, false) }, tab(d) { STK = []; go(d.v, null, false) },
+    close() { if (!root.classList.contains('main')) root.classList.remove('on') }, menu() { try { window.dr13 && window.dr13() } catch (e) { } }, back() { const p = STK.pop(); if (p) go(p.v, p.arg, false); else go('home', null, false) }, tab(d) { STK = []; go(d.v, null, false) },
     prod(d) { go('product', d.id) }, shopv(d) { go('shopview', d.id) }, cat(d) { go('list', { cat: d.c }) }, search() { go('list', { q: val('mq') }) },
     filter() { go('list', { ...ST.q, region: val('fr'), sort: val('fs'), min: val('fmin'), max: val('fmax') }, false) }, more() { ST.q = { ...ST.q, page: (ST.q.page || 1) + 1 }; go('list', ST.q, false) },
     q(d) { const e = document.getElementById('qv'); e.textContent = Math.max(1, Math.min(99, +e.textContent + +d.d)) },
@@ -160,8 +164,23 @@
   };
   window.mk13open = function (v) { build(); root.classList.add('on'); badge(); STK = []; go(v || 'home', null, false) };
   window.mk13 = { open: window.mk13open, VIEWS, H, api };
-  function ensure() { const h = document.querySelector('header .hb2'); if (h && !document.getElementById('mk13b')) h.insertAdjacentHTML('afterbegin', '<button id="mk13b" class="cbtn" aria-label="ገበያ" onclick="mk13open()">🛍️</button>');
+  /* ===== የድሮውን ሥርዓት በአዲሱ ገበያ መተካት ===== */
+  let legacy = false;
+  window.mk13legacy = function () { legacy = true; document.body.classList.remove('mk-main'); document.body.classList.add('mk-leg'); if (root) { root.classList.remove('on', 'main') } try { go2('admin') } catch (e) { } };
+  window.mk13back = function () { legacy = false; document.body.classList.remove('mk-leg'); sync(); };
+  const go2 = v => { try { window.go(v) } catch (e) { } };
+  function sync() {
+    const inn = document.body.classList.contains('in13');
+    if (inn && !legacy) { document.body.classList.add('mk-main'); build(); root.classList.add('main'); if (!root.classList.contains('on')) { root.classList.add('on'); badge(); STK = []; go('home', null, false) } }
+    else if (!inn) { document.body.classList.remove('mk-main', 'mk-leg'); legacy = false; if (root && root.classList.contains('main')) root.classList.remove('main', 'on') }
+  }
+  function drawer() { const d = document.querySelector('#dr13 .bd'); if (!d || !document.body.classList.contains('mk-main') || d.querySelector('.mkd')) return;
+    [...d.querySelectorAll(':scope>details')].forEach(x => { const t = (x.querySelector('summary') || {}).textContent || ''; if (/ዋና ገጾች|የአድሚን ምናሌ/.test(t)) x.remove() });
+    const adm = isAdmin(), it = (i, t, js) => `<button class="it" data-js="${js}"><i>${i}</i>${t}</button>`;
+    d.insertAdjacentHTML('afterbegin', `<i class="mkd" hidden></i><details open><summary>🛍️ ገበያ</summary>${it('🏠', 'ዋና ገጽ — ሁሉም ዕቃዎች', "mk13open('home')")}${it('🛒', 'ጋሪዬ', "mk13open('cart')")}${it('📦', 'ትዕዛዞቼ', "mk13open('orders')")}${it('🏪', 'ሱቄ / ዕቃ ዘርዝር', "mk13open('shop')")}</details>` + (adm ? `<details open><summary>🛡️ አድሚን</summary>${it('🛡️', 'የገበያ ቁጥጥር (ሱቆች፣ ክፍያ፣ ክፍያ ለሻጭ)', "mk13open('admin')")}${it('👥', 'አካውንቶች — ሙሉ ቁጥጥር', 'acc13()')}${it('⚙️', 'የድሮ የስርዓት ዳሽቦርድ (ምትኬ፣ ቅንብር)', 'mk13legacy()')}</details>` : '')); }
+  function ensure() {
     const app = document.getElementById('app'); if (app && app.querySelector('#gid') && !app.querySelector('.mkbtn13')) { const c = app.querySelector('.card2,.card') || app.firstElementChild; if (c) c.insertAdjacentHTML('afterend', '<button class="btn mkbtn13" style="width:100%;margin:12px 0" onclick="mk13open()">🛍️ ገበያውን ያለ መግባት ይመልከቱ</button>') }
-    const d = document.querySelector('#dr13 .bd'); if (d && !d.querySelector('.mk13it')) d.insertAdjacentHTML('afterbegin', '<button class="it mk13it" data-js="mk13open()"><i>🛍️</i>ገበያ — ሁሉም ዕቃዎች</button>'); }
-  setInterval(ensure, 1200); ensure();
+    if (!document.getElementById('mkleg')) { const b = document.createElement('button'); b.id = 'mkleg'; b.textContent = '🛍️ ወደ ገበያ ተመለስ'; b.onclick = () => window.mk13back(); document.body.appendChild(b) }
+    sync(); drawer(); }
+  setInterval(ensure, 700); ensure();
 })();
