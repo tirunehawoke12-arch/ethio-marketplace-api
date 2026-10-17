@@ -3610,9 +3610,9 @@ window.ETM_TELEGRAM_API = window.ETM_TELEGRAM_API || ''; // Same-origin API: htt
   function tgClose(){document.getElementById('etmTGBox')?.remove()}
   function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
   async function registerTelegram(email,phone){
-    let session=await api('/api/telegram/start',{});
+    let session=await api('/api/telegram/start',{email,phone});
     return new Promise((resolve,reject)=>{
-      tgBox(`<div class="etm-tg-logo">✈️</div><h2>Telegram ማረጋገጫ</h2><p>አካውንቱን ለመክፈት Telegram እንዲሁም OTP ማረጋገጫ ያስፈልጋል።</p><div class="etm-tg-steps"><b>1</b><span>Telegram Bot ይክፈቱ እና <b>Start</b> ይጫኑ።</span><b>2</b><span>Bot የሚልከውን 6 አሃዝ OTP ይጠብቁ።</span><b>3</b><span>ኮዱን ከታች ያስገቡ።</span></div><a id="etmTGOpen" class="etm-tg-open" href="${escT(session.telegramUrl||'#')}" target="_blank" rel="noopener">✈️ Telegram Bot ክፈት / Start</a><div id="etmTGState" class="etm-tg-state">Bot እስኪጀምር በመጠባበቅ ላይ…</div><div id="etmTGCode" class="etm-tg-code"><input id="etmTGOTP" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 አሃዝ OTP"><button id="etmTGVerify">✅ አረጋግጥ</button></div><button class="etm-tg-cancel" id="etmTGCancel">ሰርዝ</button>`);
+      tgBox(`<div class="etm-tg-logo">✈️</div><h2>Telegram ማረጋገጫ</h2><p>አካውንቱን ለመክፈት Telegram እንዲሁም OTP ማረጋገጫ ያስፈልጋል።</p><div class="etm-tg-steps"><b>1</b><span>Telegram Bot ይክፈቱ እና <b>Start</b> ይጫኑ።</span><b>2</b><span>Bot ውስጥ <b>«📱 ስልኬን አጋራ»</b> ይጫኑ — ቁጥሩ ከተመዘገበው ጋር መመሳሰል አለበት።</span><b>3</b><span>OTP ወደዚያ ቁጥር ብቻ ይላካል፤ ኮዱን ከታች ያስገቡ።</span></div><a id="etmTGOpen" class="etm-tg-open" href="${escT(session.telegramUrl||'#')}" target="_blank" rel="noopener">✈️ Telegram Bot ክፈት / Start</a><div id="etmTGState" class="etm-tg-state">Bot እስኪጀምር በመጠባበቅ ላይ…</div><div id="etmTGCode" class="etm-tg-code"><input id="etmTGOTP" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 አሃዝ OTP"><button id="etmTGVerify">✅ አረጋግጥ</button></div><button class="etm-tg-cancel" id="etmTGCancel">ሰርዝ</button>`);
       document.getElementById('etmTGCancel').onclick=()=>{tgClose();reject(new Error('cancelled'))};
       const state=document.getElementById('etmTGState'),code=document.getElementById('etmTGCode');
       let stopped=false;
@@ -3626,6 +3626,8 @@ window.ETM_TELEGRAM_API = window.ETM_TELEGRAM_API || ''; // Same-origin API: htt
           await sleep(1800);
           try{
             const st=await api('/api/telegram/status',{requestId:session.requestId});
+            if(st.status==='awaiting_contact'){state.textContent='📱 Bot ውስጥ «ስልኬን አጋራ» ይጫኑ — '+phone+' ጋር የሚመሳሰል ቁጥር ብቻ ይፈቀዳል።'}
+            if(st.status==='phone_mismatch'){state.textContent='❌ የ Telegram ስልክ ቁጥር ከተመዘገበው ጋር አይመሳሰልም፤ OTP አልተላከም። ሰርዘው በትክክለኛው ቁጥር ይሞክሩ።';stopped=true;break}
             if(st.status==='otp_sent'){
               code.style.display='flex'; state.textContent='✅ Telegram ተገናኝቷል። OTP ወደ Telegram ተልኳል።';
               stopped=true; document.getElementById('etmTGOTP')?.focus(); break;
@@ -3860,12 +3862,12 @@ let REF=[];
 const split=b=>{const i=b.querySelector("i");const ic=i?i.textContent.trim():(b.textContent.trim().match(/^\S+/)||["•"])[0];let t=[...b.childNodes].filter(n=>n.nodeType===3||(n.nodeType===1&&n.tagName!=="I")).map(n=>n.textContent).join("").trim();if(!i)t=t.replace(/^\S+\s*/,"");return[ic,t.replace(/^\d+\.\s*/,"")]};
 const refItem=b=>{const [ic,t]=split(b);REF.push(b);return`<button class="it" data-r="${REF.length-1}"><i>${E(ic)}</i>${E(t)}</button>`};
 const jsItem=(ic,t,js,cls)=>`<button class="it ${cls||""}" data-js="${E(js)}"><i>${ic}</i>${E(t)}</button>`;
-function tools(){const L=[["🌓","ብርሃን / ጨለማ","tt()",fn("tt")],["🌐","ቋንቋ / ምንዛሪ","document.getElementById('gbtn')&&document.getElementById('gbtn').click()",1],["🧰","መሣሪያዎች","tl9()",fn("tl9")],["👥","ማን ምን ያያል","who11()",fn("who11")],["🔠","ፊደል ትልቅ","fz(1)",fn("fz")],["🔡","ፊደል ትንሽ","fz(-1)",fn("fz")],["📤","አጋራ","shr('ኢትዮ ማዕከልን ይቀላቀሉ')",fn("shr")],["❓","እገዛ","help8()",fn("help8")],["🔑","የይለፍ ቃል ቀይር","pwO()",fn("pwO")],["✏️","መገለጫ አርትዕ","editO()",fn("editO")],["ℹ️","ስለ እኛ (About)","ab13()",fn("ab13")]];return L.filter(x=>x[3]).map(x=>jsItem(x[0],x[1],x[2])).join("")}
+function tools(){const L=[["🌓","ብርሃን / ጨለማ","tt()",fn("tt")],["🌐","ቋንቋ / ምንዛሪ","document.getElementById('gbtn')&&document.getElementById('gbtn').click()",1],["🧰","መሣሪያዎች","tl9()",fn("tl9")],["👥","ማን ምን ያያል","who11()",fn("who11")],["🔠","ፊደል ትልቅ","fz(1)",fn("fz")],["🔡","ፊደል ትንሽ","fz(-1)",fn("fz")],["📤","አጋራ","shr('ኢትዮ ማዕከልን ይቀላቀሉ')",fn("shr")],["❓","እገዛ","help8()",fn("help8")],["🔑","የይለፍ ቃል ቀይር","pwO()",fn("pwO")],["✏️","መገለጫ አርትዕ","editO()",fn("editO")],["🪪","የግል መረጃዬ (ለአድሚን ብቻ)","pv13()",fn("pv13")],["ℹ️","ስለ እኛ (About)","ab13()",fn("ab13")]];return L.filter(x=>x[3]).map(x=>jsItem(x[0],x[1],x[2])).join("")}
 function body(focus){REF=[];const inn=document.body.classList.contains("in13");let h="";
  if(inn){const tabs=[...document.querySelectorAll("#nav button")].filter(b=>!/go\('out'\)/.test(b.getAttribute("onclick")||""));
   h+=`<details open><summary>🏠 ዋና ገጾች <small>${tabs.length}</small></summary>${tabs.map(refItem).join("")}</details>`;
   const ad=[...document.querySelectorAll(".ad13 details")];
-  if(ad.length){h+=`<details ${focus==="admin"?"open":""}><summary>🛡️ የአድሚን ምናሌ <small>${ad.reduce((a,d)=>a+d.querySelectorAll(".b9").length,0)}</small></summary>`+ad.map((d,i)=>{const bs=[...d.querySelectorAll(".b9")];const t=d.querySelector("summary").childNodes[0].textContent.trim();return`<details ${focus==="admin"&&i===0?"open":""}><summary>${E(t)} <small>${bs.length}</small></summary>${bs.map(refItem).join("")}</details>`}).join("")+`</details>`}}
+  if(ad.length){h+=`<details ${focus==="admin"?"open":""}><summary>🛡️ የአድሚን ምናሌ <small>${ad.reduce((a,d)=>a+d.querySelectorAll(".b9").length,0)}</small></summary>`+jsItem("👥","አካውንቶች — ሙሉ ቁጥጥር","acc13()")+ad.map((d,i)=>{const bs=[...d.querySelectorAll(".b9")];const t=d.querySelector("summary").childNodes[0].textContent.trim();return`<details ${focus==="admin"&&i===0?"open":""}><summary>${E(t)} <small>${bs.length}</small></summary>${bs.map(refItem).join("")}</details>`}).join("")+`</details>`}}
  h+=`<details ${inn?"":"open"}><summary>⚙️ መሣሪያዎች እና ቅንብር</summary>${tools()}</details>`;
  if(inn&&fn("go"))h+=`<details open><summary>👤 መለያ</summary>${jsItem("🚪","ውጣ","go('out')","dg")}</details>`;
  return h}
@@ -3878,6 +3880,57 @@ function ensure(){const h=document.querySelector("header");if(h&&!document.getEl
  const app=document.getElementById("app");if(app&&app.querySelector(".ad13")&&!app.querySelector(".adbtn13")){const a=app.querySelector(".ah9");(a||app.querySelector(".ad13")).insertAdjacentHTML("afterend",'<button class="btn adbtn13" onclick="dr13(\'admin\')">☰ የአድሚን ምናሌ ክፈት — ሁሉም ክፍሎች</button>')}}
 const R=window.render;window.render=function(){const r=R.apply(this,arguments);try{ensure()}catch(e){}return r};
 setInterval(ensure,1200);ensure();
+})();
+</script>
+<style id="ds13e">
+.ph13{font-size:.82rem;color:var(--mu);margin:4px 2px 8px;display:flex;gap:6px;align-items:flex-start}
+.ac13 .row{display:grid;gap:6px;padding:12px;border:1px solid var(--bd);border-radius:16px;margin:8px 0;background:var(--cd)}
+.ac13 .row b{word-break:break-all}.ac13 .bt{display:flex;gap:6px;flex-wrap:wrap}.ac13 .bt button{flex:1;min-width:84px;padding:9px 6px;border-radius:12px;border:1px solid var(--bd);background:var(--cd);color:var(--tx);font-weight:700;font-size:.8rem}
+.ac13 .bt .dg{color:#d64545;border-color:#d6454566}.ac13 .st{font-size:.75rem;display:flex;gap:6px;flex-wrap:wrap}.ac13 .st span{padding:2px 9px;border-radius:999px;background:color-mix(in srgb,var(--pr) 12%,transparent);color:var(--pr);font-weight:700}.ac13 .st .bad{background:#d6454522;color:#d64545}
+.ac13 pre{white-space:pre-wrap;word-break:break-word;background:color-mix(in srgb,var(--pr) 6%,var(--cd));padding:10px;border-radius:12px;font-size:.78rem;max-height:34vh;overflow:auto}
+.pv13 label{display:block;font-weight:700;font-size:.85rem;margin:10px 0 4px}.pv13 input,.pv13 textarea{width:100%;box-sizing:border-box}
+</style>
+<script>
+(function(){
+const E=t=>String(t==null?"":t).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const normPh=v=>{const d=String(v||"").replace(/[^\d+]/g,"").replace(/^\+/,"").replace(/^251/,"").replace(/^0/,"");return /^[79]\d{8}$/.test(d)?"0"+d:null};
+/* ስልክ ቁጥር ግዴታ + ትክክለኛ ቅርጸት */
+const S=window.su10;if(typeof S==="function")window.su10=async function(){const el=document.getElementById("s_ph"),p=normPh(el&&el.value);
+ if(!p){const m="ትክክለኛ የኢትዮጵያ ስልክ ቁጥር (09… ወይም 07…) ያስገቡ — OTP የሚላከው ወደዚሁ ቁጥር ብቻ ነው።";if(typeof gerr==="function")gerr(m);else alert(m);return}
+ el.value=p;
+ const email=((document.getElementById("s_e")||{}).value||"").trim();
+ if(email&&window.__etm&&window.__etm.mode()==="remote"&&typeof window.ETM_Telegram_Register==="function"){
+  try{const v=await window.ETM_Telegram_Register(email,p);
+   const r=await fetch("/api/telegram/bind",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({requestId:v.requestId,email,phone:p})});const j=await r.json().catch(()=>({}));if(!j.ok)throw new Error(j.error||"bind")}
+  catch(e){if(e&&e.message==="cancelled")return;const m="ስልክ ቁጥር ማረጋገጥ አልተሳካም ("+(e&&e.message)+")። እንደገና ይሞክሩ።";if(typeof gerr==="function")gerr(m);else alert(m);return}}
+ return S.apply(this,arguments)};
+function hint(){const el=document.getElementById("s_ph");if(el&&!document.querySelector(".ph13")){el.setAttribute("inputmode","tel");el.setAttribute("maxlength","16");el.setAttribute("autocomplete","tel");el.setAttribute("placeholder","09XXXXXXXX");const h=document.createElement("div");h.className="ph13";h.innerHTML="📞 <span>ስልክ ቁጥር ግዴታ ነው። OTP በ Telegram የሚላከው ከዚህ ቁጥር ጋር ለሚመሳሰል የ Telegram አካውንት ብቻ ነው።</span>";(el.closest("label")||el).insertAdjacentElement("afterend",h)}}
+const R=window.render;window.render=function(){const r=R.apply(this,arguments);try{hint()}catch(e){}return r};
+/* አድሚን፦ የአካውንቶች ሙሉ ቁጥጥር */
+const tok=()=>{try{return localStorage.getItem("etm_tok")}catch(e){return null}};
+async function api(m,u,b){const r=await fetch(u,{method:m,headers:{"content-type":"application/json",authorization:"Bearer "+tok()},body:b?JSON.stringify(b):undefined});let d={};try{d=await r.json()}catch(e){}d.status=r.status;return d}
+let ACC=[],armed=null;
+function rows(q){q=(q||"").toLowerCase();return ACC.filter(a=>!q||(a.email+" "+a.phone+" "+a.name).toLowerCase().includes(q)).map(a=>`<div class="row"><div><b>${E(a.name||a.email)}</b><div class="mu">${E(a.email)} · ${E(a.phone)}</div></div><div class="st"><span class="${a.suspended?"bad":""}">${a.suspended?"⛔ ታግዷል":"🟢 ንቁ"}</span><span>${a.telegram?"🔗 Telegram ተገናኝቷል":"○ Telegram የለም"}</span><span>${a.hasPrivate?"🪪 የግል መረጃ አለ":"🪪 የግል መረጃ የለም"}</span></div><div class="bt"><button data-a="view" data-u="${a.uid}">👁 ዝርዝር</button><button data-a="susp" data-u="${a.uid}">${a.suspended?"✅ ፍቀድ":"⛔ እገድ"}</button><button data-a="tg" data-u="${a.uid}">🔌 Telegram አላቅቅ</button><button class="dg" data-a="del" data-u="${a.uid}">🗑 ሰርዝ</button></div></div>`).join("")||'<p class="mu">ምንም አካውንት አልተገኘም</p>'}
+window.acc13=async function(){const r=await api("GET","/api/admin/accounts");
+ if(!r.ok){try{dlgO('<div class="ac13"><h3>👥 አካውንቶች</h3><p class="mu">አድሚን ሆነው ሰርቨሩ ላይ መግባት አለብዎት (ADMIN_PASSWORD)።</p><button class="btn a" style="width:100%" onclick="dc()">ዝጋ</button></div>')}catch(e){}return}
+ ACC=r.accounts;armed=null;try{dlgO(`<div class="ac13"><h3>👥 አካውንቶች (${r.count})</h3><input id="ac13q" placeholder="🔎 በኢሜይል፣ ስልክ ወይም ስም ፈልግ"><div id="ac13l">${rows("")}</div><button class="btn a" style="width:100%;margin-top:8px" onclick="dc()">ዝጋ</button></div>`)}catch(e){}};
+document.addEventListener("input",e=>{if(e.target&&e.target.id==="ac13q"){document.getElementById("ac13l").innerHTML=rows(e.target.value)}});
+document.addEventListener("click",async e=>{const b=e.target.closest&&e.target.closest(".ac13 [data-a]");if(!b)return;const u=b.dataset.u,a=b.dataset.a;
+ if(a==="view"){const d=await api("GET","/api/admin/account/"+u);if(!d.ok)return;const cl=d.docs;try{dlgO(`<div class="ac13"><h3>👁 ዝርዝር</h3><b>መለያ</b><pre>${E(JSON.stringify(cl.acct,null,2))}</pre><b>🪪 የግል መረጃ (ለአድሚን ብቻ)</b><pre>${E(cl.private?JSON.stringify(cl.private,null,2):"— አልተሞላም —")}</pre><b>ሌሎች ሰነዶች፦</b> <span class="mu">${E(Object.keys(cl).filter(k=>k!=="acct"&&k!=="private").join(", ")||"—")}</span><button class="btn a" style="width:100%;margin-top:10px" onclick="acc13()">← ተመለስ</button></div>`)}catch(x){}return}
+ if(armed!==a+u){armed=a+u;const t=b.textContent;b.textContent="❓ እርግጠኛ ነዎት? ደግመው ይጫኑ";setTimeout(()=>{if(armed===a+u){armed=null;b.textContent=t}},4000);return}
+ armed=null;
+ if(a==="susp"){const cur=ACC.find(x=>x.uid===u);await api("POST","/api/admin/account/"+u+"/suspend",{suspend:!(cur&&cur.suspended)})}
+ if(a==="tg")await api("POST","/api/admin/account/"+u+"/unlink-telegram",{});
+ if(a==="del")await api("DELETE","/api/admin/account/"+u);
+ window.acc13()});
+/* የግል መረጃ (ለራሱ እና ለአድሚን ብቻ) */
+const PF=[["fullName","ሙሉ ስም (በመታወቂያ)","text"],["idNo","የመታወቂያ ቁጥር (ብሔራዊ መታወቂያ / ቀበሌ / ፓስፖርት)","text"],["dob","የትውልድ ቀን","date"],["addr","የመኖሪያ አድራሻ (ክልል፣ ከተማ፣ ወረዳ፣ ቀበሌ፣ የቤት ቁጥር)","text"],["tin","የግብር ከፋይ ቁጥር (TIN) — ለንግድ","text"],["emName","የአደጋ ጊዜ ተጠሪ ስም","text"],["emPhone","የአደጋ ጊዜ ተጠሪ ስልክ","tel"]];
+window.pv13=async function(){let cur={};try{const d=await db.collection("data/users/"+uid).doc("private").get();cur=d.data()||{}}catch(e){}
+ try{dlgO(`<div class="pv13"><h3>🪪 የግል መረጃዬ</h3><p class="mu">🔒 ይህ መረጃ ለእርስዎ እና ለአድሚን ብቻ ይታያል — ለሌሎች ሰዎች ወይም ደንበኞች አይታይም። ለማረጋገጫ እና ለደህንነት ያገለግላል።</p>${PF.map(f=>`<label>${f[1]}</label><input id="pv_${f[0]}" type="${f[2]}" value="${E(cur[f[0]]||"")}">`).join("")}<label>ተጨማሪ ማስታወሻ</label><textarea id="pv_note" rows="3">${E(cur.note||"")}</textarea><div id="pv_msg" class="mu" style="margin:8px 0"></div><button class="btn" style="width:100%" onclick="pvS13()">💾 አስቀምጥ</button><button class="btn a" style="width:100%;margin-top:8px" onclick="dc()">ዝጋ</button></div>`)}catch(e){}};
+window.pvS13=async function(){const o={ts:Date.now()};PF.concat([["note"]]).forEach(f=>{const el=document.getElementById("pv_"+f[0]);if(el)o[f[0]]=el.value.trim()});const m=document.getElementById("pv_msg");
+ if(!o.fullName){m.textContent="❌ ሙሉ ስም ያስገቡ";return}
+ try{await db.collection("data/users/"+uid).doc("private").set(o);m.textContent="✅ ተቀምጧል — ለእርስዎ እና ለአድሚን ብቻ ይታያል።"}catch(e){m.textContent="❌ አልተቀመጠም፤ እንደገና ይሞክሩ"}};
+try{render()}catch(e){}
 })();
 </script>
 </body></html>

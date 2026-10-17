@@ -39,8 +39,11 @@ function saveDB() {
 }
 function randDigits(n=6) { return String(crypto.randomInt(0, 10 ** n)).padStart(n, '0'); }
 function id() { return crypto.randomBytes(24).toString('hex'); }
+function normPhoneET(p) { let d = String(p || '').replace(/[^\d+]/g, '').replace(/^\+/, ''); if (d.startsWith('251')) d = d.slice(3); if (d.startsWith('0')) d = d.slice(1); return /^[79]\d{8}$/.test(d) ? '0' + d : null; }
+const maskPhone = p => String(p || '').replace(/^(\d{4})\d{3}(\d{3})$/, '$1***$2');
 function accountKey(email, phone) {
-  return crypto.createHash('sha256').update(`${String(email).trim().toLowerCase()}|${String(phone).replace(/[\s()-]/g,'')}`).digest('hex');
+  const ph = normPhoneET(phone) || String(phone).replace(/[\s()-]/g,'');
+  return crypto.createHash('sha256').update(`${String(email).trim().toLowerCase()}|${ph}`).digest('hex');
 }
 function clean() {
   const now = Date.now();
@@ -49,7 +52,7 @@ function clean() {
 }
 async function tg(method, body) {
   if (!TOKEN) throw new Error('Server setup missing TELEGRAM_BOT_TOKEN.');
-  const r = await fetch(`https://api.telegram.org/bot${TOKEN}/${method}`, {
+  const r = await fetch(`${process.env.TELEGRAM_API_BASE || 'https://api.telegram.org'}/bot${TOKEN}/${method}`, {
     method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify(body || {})
   });
   const j = await r.json();
@@ -74,7 +77,8 @@ app.post('/api/telegram/webhook', async (req,res) => {
   res.sendStatus(200); // acknowledge promptly; process the update below
   try {
     const msg = req.body && req.body.message;
-    if (msg && msg.chat && typeof msg.text === 'string') await handleStart(msg.text, msg.chat);
+    if (msg && msg.chat && msg.contact) await handleContact(msg);
+    else if (msg && msg.chat && typeof msg.text === 'string') await handleStart(msg.text, msg.chat);
   } catch (e) { console.error('Telegram webhook update failed:', e.message); }
 });
 
@@ -96,8 +100,10 @@ app.get('/og.png', (req, res) => { const f = path.join(__dirname, 'og.png'); fs.
 app.post('/api/telegram/start', (req,res)=>{
   clean();
   if (!TOKEN || !BOT_USERNAME) return res.status(503).json({ok:false,error:'telegram_not_configured'});
+  const phone = normPhoneET(req.body.phone);
+  if (!phone) return res.status(400).json({ok:false,error:'invalid_phone'});
   const requestId = id();
-  db.links[requestId] = { requestId, status:'waiting_for_start', createdAt:Date.now(), expiresAt:Date.now()+LINK_TTL };
+  db.links[requestId] = { requestId, phone, email:String(req.body.email||'').trim().toLowerCase(), status:'waiting_for_start', createdAt:Date.now(), expiresAt:Date.now()+LINK_TTL };
   saveDB();
   res.json({ok:true, requestId, botUsername:BOT_USERNAME, telegramUrl:`https://t.me/${BOT_USERNAME}?start=${requestId}`, expiresIn:LINK_TTL});
 });
@@ -135,8 +141,9 @@ app.post('/api/telegram/bind', (req,res)=>{
   const r=db.links[requestId];
   if (!r || r.status!=='verified') return res.status(400).json({ok:false,error:'telegram_not_verified'});
   if (!email || !phone) return res.status(400).json({ok:false,error:'account_identity_required'});
+  if (!normPhoneET(phone) || r.verifiedPhone !== normPhoneET(phone)) return res.status(400).json({ok:false,error:'phone_not_verified'});
   const key=accountKey(email,phone);
-  db.accounts[key]={chatId:r.chatId,username:r.username||null,linkedAt:Date.now()};
+  db.accounts[key]={chatId:r.chatId,phone:normPhoneET(phone),username:r.username||null,linkedAt:Date.now()};
   saveDB();
   res.json({ok:true,linked:true});
 });
@@ -171,6 +178,22 @@ app.post('/api/telegram/login-verify', (req,res)=>{
   res.json({ok:true,verified:true});
 });
 
+const CONTACT_KB = { keyboard: [[{ text: '📱 ስልኬን አጋራ', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true };
+async function handleContact(msg) {
+  const chatId = msg.chat.id;
+  const r = Object.values(db.links).filter(x => x.chatId === chatId && x.status === 'awaiting_contact').sort((a, b) => b.createdAt - a.createdAt)[0];
+  if (!r) return tg('sendMessage', { chat_id: chatId, text: 'ንቁ የማረጋገጫ ጥያቄ አልተገኘም። ከድረ-ገጹ እንደገና ይጀምሩ።', reply_markup: { remove_keyboard: true } });
+  if (Date.now() > r.expiresAt) { delete db.links[r.requestId]; saveDB(); return tg('sendMessage', { chat_id: chatId, text: 'ጊዜው አልፎበታል። እንደገና ይሞክሩ።', reply_markup: { remove_keyboard: true } }); }
+  const c = msg.contact;
+  if (!msg.from || c.user_id !== msg.from.id) return tg('sendMessage', { chat_id: chatId, text: '⚠️ የራስዎን ስልክ ቁጥር ብቻ ማጋራት ይችላሉ። «📱 ስልኬን አጋራ» ቁልፉን ይጠቀሙ።', reply_markup: CONTACT_KB });
+  r.contactTries = (r.contactTries || 0) + 1;
+  if (normPhoneET(c.phone_number) !== r.phone) {
+    if (r.contactTries >= 3) { r.status = 'phone_mismatch'; saveDB(); return tg('sendMessage', { chat_id: chatId, text: '❌ ይህ የ Telegram ስልክ ቁጥር ከተመዘገበው ጋር አይመሳሰልም። OTP አልተላከም። በትክክለኛው ቁጥር እንደገና ይመዝገቡ።', reply_markup: { remove_keyboard: true } }); }
+    saveDB(); return tg('sendMessage', { chat_id: chatId, text: `❌ ይህ ቁጥር ከተመዘገበው (${maskPhone(r.phone)}) ጋር አይመሳሰልም። OTP አልተላከም።`, reply_markup: CONTACT_KB });
+  }
+  r.status = 'otp_sent'; r.verifiedPhone = r.phone; r.otp = randDigits(6); r.otpExpiresAt = Date.now() + OTP_TTL; r.attempts = 0; saveDB();
+  await tg('sendMessage', { chat_id: chatId, text: `🇪🇹 Etio Digital Market\n\n✅ ስልክ ቁጥርዎ ተረጋግጧል።\nየማረጋገጫ ኮድዎ፦ ${r.otp}\n\nወደ ድረ-ገጹ ተመልሰው ኮዱን ያስገቡ።\n⏱ በ5 ደቂቃ ውስጥ ያበቃል።`, reply_markup: { remove_keyboard: true } });
+}
 async function handleStart(text, chat) {
   const m=/^\/start(?:\s+(.+))?$/.exec(text||'');
   if(!m) return;
@@ -182,10 +205,9 @@ async function handleStart(text, chat) {
       await tg('sendMessage',{chat_id:chat.id,text:'ይህ ማረጋገጫ ሊንክ ጊዜው አልፎበታል። ወደ Marketplace ተመልሰው እንደገና ይሞክሩ።'});
       return;
     }
-    r.chatId=chat.id; r.username=chat.username || chat.first_name || ''; r.status='otp_sent';
-    r.otp=randDigits(6); r.otpExpiresAt=Date.now()+OTP_TTL; r.attempts=0;
+    r.chatId=chat.id; r.username=chat.username || chat.first_name || ''; r.status='awaiting_contact'; r.contactTries=0;
     saveDB();
-    await tg('sendMessage',{chat_id:chat.id,text:`🇪🇹 Etio Digital Market\n\nየTelegram ማረጋገጫ ኮድዎ፦ ${r.otp}\n\nወደ Marketplace ተመልሰው ኮዱን ያስገቡ።\n⏱ በ5 ደቂቃ ውስጥ ያበቃል።`});
+    await tg('sendMessage',{chat_id:chat.id,text:`🇪🇹 Etio Digital Market\n\n🔒 ለደህንነትዎ፣ OTP የሚላከው በምዝገባ ወቅት ወደተሰጠው ስልክ ቁጥር ብቻ ነው።\n📞 የተመዘገበ ቁጥር፦ ${maskPhone(r.phone)}\n\nከታች ያለውን «📱 ስልኬን አጋራ» ይጫኑ።`,reply_markup:CONTACT_KB});
     return;
   }
   await tg('sendMessage',{chat_id:chat.id,text:'🇪🇹 እንኳን ወደ Etio Digital Market በደህና መጡ።\n\nየMarketplace ገጹ የሚሰጠውን Telegram Start ሊንክ ይጠቀሙ።'});
@@ -229,12 +251,13 @@ function persist() {
 }
 const b64u = b => Buffer.from(b).toString('base64url');
 function sign(p) { const body = b64u(JSON.stringify(p)); return body + '.' + crypto.createHmac('sha256', TOKEN_SECRET).update(body).digest('base64url'); }
+function isSusp(u) { return !!(((store.docs['_admin'] || {}).susp || {})[u]); }
 function readTok(req) {
   const t = (req.get('authorization') || '').replace(/^Bearer /, ''); const [body, sig] = t.split('.');
   if (!body || !sig) return null;
   const ok = crypto.createHmac('sha256', TOKEN_SECRET).update(body).digest('base64url');
   if (sig.length !== ok.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(ok))) return null;
-  try { const p = JSON.parse(Buffer.from(body, 'base64url').toString()); return p.x > Date.now() ? p : null; } catch { return null; }
+  try { const p = JSON.parse(Buffer.from(body, 'base64url').toString()); if (p.k !== 'admin' && isSusp(p.u)) return null; return p.x > Date.now() ? p : null; } catch { return null; }
 }
 const normPhone = p => { p = String(p || '').replace(/[\s-]/g, ''); if (/^\+?251/.test(p)) p = '0' + p.replace(/^\+?251/, ''); return p; };
 const hits = {}; // ቀላል የፍጥነት ገደብ
@@ -246,6 +269,7 @@ const bump = p => { store.rev[p] = (store.rev[p] || REV0) + 1; persist(); };
 const validPath = p => typeof p === 'string' && p.length < 200 && /^[\w@+.:~\/-]+$/.test(p) && !p.includes('..');
 function can(tok, p, write, id) {
   if (tok && tok.k === 'admin') return true;
+  if (String(p).split('/')[0] === '_admin') return false;
   const m = /^data\/users\/([\w-]+)$/.exec(p);
   if (m) return !!tok && tok.u === m[1];                       // የግል ውሂብ፦ ባለቤት ብቻ
   if (!tok) return false;
@@ -268,6 +292,7 @@ app.post('/api/account/lookup', (req, res) => {
 app.post('/api/account/login', (req, res) => {
   const id = String(req.body.id || ''), u = findUid(id), a = u && (store.docs['data/users/' + u] || {}).acct;
   if (!limit('lg' + id.toLowerCase(), 5, 900e3) || !limit('lgi' + ip(req), 40, 900e3)) return res.status(429).json({ ok: false, error: 'too_many_attempts' });
+  if (u && isSusp(u)) return res.status(403).json({ ok: false, error: 'suspended' });
   const proof = String(req.body.proof || '');
   if (!a || proof.length !== String(a.h).length || !crypto.timingSafeEqual(Buffer.from(proof), Buffer.from(String(a.h)))) return res.status(401).json({ ok: false, error: 'invalid' });
   res.json({ ok: true, uid: u, token: tokFor(u, 'user') });
@@ -319,6 +344,42 @@ app.delete('/api/db/doc', (req, res) => {
   pgDelete(p, id).then(() => { bump(p); res.json({ ok: true }); }).catch(e => { if (prev !== undefined) col(p)[id] = prev; res.status(503).json({ ok: false, error: 'storage' }); });
 });
 
+
+
+/* ===== አድሚን፦ የአካውንቶች ሙሉ ቁጥጥር ===== */
+function needAdmin(req, res, next) { const t = readTok(req); if (!t || t.k !== 'admin') return res.status(403).json({ ok: false }); next(); }
+const usersOf = () => Object.keys(store.docs).filter(p => /^data\/users\/[\w-]+$/.test(p));
+const strip = a => { const { h, salt, ...rest } = a || {}; return rest; };
+const accKey = a => accountKey(a.email, a.phone);
+app.get('/api/admin/accounts', needAdmin, (req, res) => {
+  const list = usersOf().map(p => { const d = store.docs[p], a = d.acct; if (!a) return null; const uid = p.split('/')[2];
+    return { uid, email: a.email, phone: a.phone, name: (d.private && d.private.fullName) || a.name || '', ts: a.ts || null, suspended: isSusp(uid), telegram: !!db.accounts[accKey(a)], hasPrivate: !!d.private, docs: Object.keys(d).length }; }).filter(Boolean).sort((x, y) => (y.ts || 0) - (x.ts || 0));
+  res.json({ ok: true, count: list.length, accounts: list });
+});
+app.get('/api/admin/account/:uid', needAdmin, (req, res) => {
+  const d = store.docs['data/users/' + req.params.uid]; if (!d || !d.acct) return res.status(404).json({ ok: false });
+  const docs = {}; Object.keys(d).forEach(k => docs[k] = k === 'acct' ? strip(d[k]) : d[k]);
+  res.json({ ok: true, uid: req.params.uid, suspended: isSusp(req.params.uid), telegram: !!db.accounts[accKey(d.acct)], docs });
+});
+app.post('/api/admin/account/:uid/suspend', needAdmin, async (req, res) => {
+  const u = req.params.uid; if (!store.docs['data/users/' + u]) return res.status(404).json({ ok: false });
+  const c = col('_admin'); c.susp = { ...(c.susp || {}) }; if (req.body.suspend) c.susp[u] = Date.now(); else delete c.susp[u];
+  try { if (pool) await pgUpsert('_admin', 'susp', c.susp); else persist(); bump('_admin'); res.json({ ok: true, suspended: !!req.body.suspend }); } catch (e) { res.status(503).json({ ok: false }); }
+});
+app.post('/api/admin/account/:uid/unlink-telegram', needAdmin, (req, res) => {
+  const d = store.docs['data/users/' + req.params.uid]; if (!d || !d.acct) return res.status(404).json({ ok: false });
+  delete db.accounts[accKey(d.acct)]; saveDB(); res.json({ ok: true });
+});
+app.delete('/api/admin/account/:uid', needAdmin, async (req, res) => {
+  const u = req.params.uid, p = 'data/users/' + u, d = store.docs[p]; if (!d) return res.status(404).json({ ok: false });
+  try {
+    if (d.acct) delete db.accounts[accKey(d.acct)];
+    Object.keys(store.idx).forEach(k => { if (store.idx[k] === u) delete store.idx[k]; });
+    delete store.docs[p]; const c = col('_admin'); if (c.susp) delete c.susp[u];
+    if (pool) { await pool.query('DELETE FROM kv WHERE path=$1', [p]); await pgUpsert('_sys', 'idx', store.idx); await pgUpsert('_admin', 'susp', c.susp || {}); } else persist();
+    saveDB(); bump(p); res.json({ ok: true });
+  } catch (e) { res.status(503).json({ ok: false }); }
+});
 
 async function initStorage() {
   if (!pool) return;
