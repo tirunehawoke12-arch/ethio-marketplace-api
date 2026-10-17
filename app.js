@@ -269,7 +269,7 @@ const bump = p => { store.rev[p] = (store.rev[p] || REV0) + 1; persist(); };
 const validPath = p => typeof p === 'string' && p.length < 200 && /^[\w@+.:~\/-]+$/.test(p) && !p.includes('..');
 function can(tok, p, write, id) {
   if (tok && tok.k === 'admin') return true;
-  if (String(p).split('/')[0] === '_admin') return false;
+  { const t0 = String(p).split('/')[0]; if (t0 === 'mk' || t0[0] === '_') return false; }   // ገበያ እና ምስል መረጃ በልዩ API ብቻ
   const m = /^data\/users\/([\w-]+)$/.exec(p);
   if (m) return !!tok && tok.u === m[1];                       // የግል ውሂብ፦ ባለቤት ብቻ
   if (!tok) return false;
@@ -380,6 +380,9 @@ app.delete('/api/admin/account/:uid', needAdmin, async (req, res) => {
     saveDB(); bump(p); res.json({ ok: true });
   } catch (e) { res.status(503).json({ ok: false }); }
 });
+
+require('./market')({ app, col, bump, pool, pgUpsert, persist, readTok, limit });
+app.get('/market.js', (req, res) => { const f = path.join(__dirname, 'market-ui.js'); fs.existsSync(f) ? res.set({ 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-cache' }).sendFile(f) : res.sendStatus(404); });
 
 async function initStorage() {
   if (!pool) return;
