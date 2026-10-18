@@ -9,6 +9,7 @@ module.exports = function market(ctx) {
   const short = o => '#' + o.id.slice(0, 6), money = n => Number(n).toLocaleString('en-US') + ' ብር';
   const COMM = Number(process.env.COMMISSION_PCT) || 5;
   const CATS = ['ምግብ እና መጠጥ', 'ልብስ እና ጫማ', 'ኤሌክትሮኒክስ', 'ሞባይል እና መለዋወጫ', 'የቤት ዕቃ', 'ግንባታ እና ሃርድዌር', 'ግብርና', 'ውበት እና ጤና', 'መጻሕፍት እና ትምህርት', 'ሆቴል እና ማረፊያ', 'ሙያተኛ አገልግሎት', 'አገልግሎት', 'ሌላ'];
+  const KINDS = ['ሱቅ', 'ነጋዴ (ግለሰብ)', 'ሆቴል እና ማረፊያ', 'አገልግሎት ሰጪ', 'አምራች / ገበሬ'];
   const P = { shops: 'mk/shops', products: 'mk/products', orders: 'mk/orders', reviews: 'mk/reviews', img: '_img', cfg: 'mk/config' };
   const nid = () => crypto.randomBytes(9).toString('hex');
   const bad = (res, c, e) => res.status(c).json({ ok: false, error: e });
@@ -32,7 +33,7 @@ module.exports = function market(ctx) {
   const shopOf = uid => Object.values(col(P.shops)).find(s => s.uid === uid);
   const cfg = () => { const c = col(P.cfg).main || {}; return { commissionPct: c.commissionPct == null ? COMM : c.commissionPct, accounts: c.accounts || [], note: c.note || '' }; };
   const rate = shopId => { const rs = Object.values(col(P.reviews)).filter(r => r.shopId === shopId); return { avg: rs.length ? Math.round(rs.reduce((a, r) => a + r.rating, 0) / rs.length * 10) / 10 : 0, n: rs.length }; };
-  const pubShop = s => { const r = rate(s.id); return { id: s.id, name: s.name, about: s.about, category: s.category, region: s.region, city: s.city, address: s.address, hours: s.hours, phone: s.showPhone ? s.phone : '', logo: s.logo, cover: s.cover, delivery: s.delivery, rating: r.avg, reviews: r.n, ts: s.ts }; };
+  const pubShop = s => { const r = rate(s.id); return { id: s.id, kind: s.kind || KINDS[0], gallery: s.gallery || [], links: s.links || {}, year: s.year || '', tags: s.tags || [], name: s.name, about: s.about, category: s.category, region: s.region, city: s.city, address: s.address, hours: s.hours, phone: s.showPhone ? s.phone : '', logo: s.logo, cover: s.cover, delivery: s.delivery, rating: r.avg, reviews: r.n, ts: s.ts }; };
   const pubProd = (p, s) => ({ id: p.id, title: p.title, desc: p.desc, price: p.price, unit: p.unit, stock: p.stock, category: p.category, imgs: p.imgs, ts: p.ts, shop: { id: s.id, name: s.name, city: s.city, region: s.region, logo: s.logo, rating: rate(s.id).avg } });
   const live = () => { const sh = col(P.shops); return Object.values(col(P.products)).filter(p => p.status === 'active' && sh[p.shopId] && sh[p.shopId].status === 'active').map(p => [p, sh[p.shopId]]); };
   const push = (o, s, by, note) => { o.status = s; (o.history = o.history || []).push({ s, ts: Date.now(), by, note: note || '' }); };
@@ -53,7 +54,7 @@ module.exports = function market(ctx) {
   };
 
   /* ---------- ህዝባዊ (ሳይገቡ ማየት ይቻላል) ---------- */
-  app.get('/api/market/config', (req, res) => { const c = cfg(); res.json({ ok: true, cats: CATS, commissionPct: c.commissionPct, accounts: c.accounts, note: c.note }); });
+  app.get('/api/market/config', (req, res) => { const c = cfg(); res.json({ ok: true, cats: CATS, kinds: KINDS, commissionPct: c.commissionPct, accounts: c.accounts, note: c.note }); });
   app.get('/api/market/home', (req, res) => {
     const L = live(), cats = CATS.map(c => ({ c, n: L.filter(([p]) => p.category === c).length })).filter(x => x.n);
     res.json({ ok: true, cats, latest: L.sort((a, b) => b[0].ts - a[0].ts).slice(0, 12).map(([p, s]) => pubProd(p, s)), shops: Object.values(col(P.shops)).filter(s => s.status === 'active').sort((a, b) => b.ts - a.ts).slice(0, 8).map(pubShop), total: L.length });
@@ -63,6 +64,11 @@ module.exports = function market(ctx) {
     let L = live().filter(([p, s]) => (!q || (p.title + ' ' + p.desc + ' ' + s.name).toLowerCase().includes(q)) && (!cat || p.category === cat) && (!shop || s.id === shop) && (!reg || s.region === reg) && (isNaN(min) || p.price >= min) && (isNaN(max) || p.price <= max));
     L.sort(sort === 'price_asc' ? (a, b) => a[0].price - b[0].price : sort === 'price_desc' ? (a, b) => b[0].price - a[0].price : (a, b) => b[0].ts - a[0].ts);
     res.json({ ok: true, total: L.length, page, items: L.slice((page - 1) * 24, page * 24).map(([p, s]) => pubProd(p, s)) });
+  });
+  app.get('/api/market/shops', (req, res) => {
+    const q = S(req.query.q, 60).toLowerCase(), kind = S(req.query.kind, 40), reg = S(req.query.region, 40);
+    const L = Object.values(col(P.shops)).filter(s => s.status === 'active' && (!kind || (s.kind || KINDS[0]) === kind) && (!reg || s.region === reg) && (!q || (s.name + ' ' + s.about + ' ' + (s.tags || []).join(' ')).toLowerCase().includes(q))).sort((a, b) => b.ts - a.ts);
+    res.json({ ok: true, total: L.length, items: L.slice(0, 48).map(pubShop) });
   });
   app.get('/api/market/product/:id', (req, res) => {
     const p = col(P.products)[req.params.id], s = p && col(P.shops)[p.shopId];
@@ -94,7 +100,7 @@ module.exports = function market(ctx) {
     const u = who(req, res); if (!u) return; await expire();
     const s = shopOf(u.uid); if (!s) return res.json({ ok: true, shop: null });
     const prods = Object.values(col(P.products)).filter(p => p.shopId === s.id), ords = Object.values(col(P.orders)).filter(o => o.shopId === s.id);
-    res.json({ ok: true, shop: { ...pubShop(s), phone: s.phone, showPhone: !!s.showPhone, payout: s.payout, status: s.status, note: s.note }, products: prods, stats: { products: prods.length, orders: ords.length, toDo: ords.filter(o => ['paid', 'preparing'].includes(o.status)).length, earned: ords.filter(o => o.status === 'settled').reduce((a, o) => a + o.sellerNet, 0) } });
+    res.json({ ok: true, shop: { ...pubShop(s), phone: s.phone, showPhone: !!s.showPhone, payout: s.payout, license: s.license, status: s.status, note: s.note }, products: prods, stats: { products: prods.length, orders: ords.length, toDo: ords.filter(o => ['paid', 'preparing'].includes(o.status)).length, earned: ords.filter(o => o.status === 'settled').reduce((a, o) => a + o.sellerNet, 0) } });
   });
   app.post('/api/market/shop', async (req, res) => {
     const u = who(req, res); if (!u || u.admin) return u && bad(res, 403, 'admin_cannot'); const b = req.body || {};
@@ -103,7 +109,7 @@ module.exports = function market(ctx) {
     const pay = b.payout || {}; if (!S(pay.method, 20) || !S(pay.account, 40) || !S(pay.holder, 60)) return bad(res, 400, 'payout_required');
     let s = shopOf(u.uid); const isNew = !s;
     if (isNew) s = { id: nid(), uid: u.uid, ts: Date.now(), status: 'pending' };
-    Object.assign(s, { name, about: S(b.about, 600), category: S(b.category, 40), region: S(b.region, 40), city: S(b.city, 60), address: S(b.address, 160), hours: S(b.hours, 80), phone, showPhone: !!b.showPhone, logo: S(b.logo, 24) || s.logo || '', cover: S(b.cover, 24) || s.cover || '', delivery: { pickup: b.delivery ? !!b.delivery.pickup : true, local: !!(b.delivery && b.delivery.local), fee: Math.max(0, Math.min(5000, N(b.delivery && b.delivery.fee) || 0)), areas: S(b.delivery && b.delivery.areas, 120) }, payout: { method: S(pay.method, 20), account: S(pay.account, 40), holder: S(pay.holder, 60) }, upd: Date.now() });
+    const L = b.links || {}; Object.assign(s, { kind: KINDS.includes(b.kind) ? b.kind : KINDS[0], gallery: (Array.isArray(b.gallery) ? b.gallery : []).slice(0, 8).map(x => S(x, 24)).filter(x => col(P.img)[x]), links: { telegram: S(L.telegram, 80), facebook: S(L.facebook, 120), tiktok: S(L.tiktok, 120), website: S(L.website, 120) }, year: S(b.year, 4), tags: (Array.isArray(b.tags) ? b.tags : String(b.tags || '').split(/[,،]/)).map(x => S(x, 24)).filter(Boolean).slice(0, 10), license: S(b.license, 40), name, about: S(b.about, 600), category: S(b.category, 40), region: S(b.region, 40), city: S(b.city, 60), address: S(b.address, 160), hours: S(b.hours, 80), phone, showPhone: !!b.showPhone, logo: S(b.logo, 24) || s.logo || '', cover: S(b.cover, 24) || s.cover || '', delivery: { pickup: b.delivery ? !!b.delivery.pickup : true, local: !!(b.delivery && b.delivery.local), fee: Math.max(0, Math.min(5000, N(b.delivery && b.delivery.fee) || 0)), areas: S(b.delivery && b.delivery.areas, 120) }, payout: { method: S(pay.method, 20), account: S(pay.account, 40), holder: S(pay.holder, 60) }, upd: Date.now() });
     if (!isNew && s.status === 'rejected') { s.status = 'pending'; s.note = ''; }
     col(P.shops)[s.id] = s;
     try { await saveMany([[P.shops, s.id]]); if (s.status === 'pending') tellAdmin(`🏪 አዲስ ሱቅ ለማጽደቅ፦ «${s.name}» (${s.city})`); res.json({ ok: true, id: s.id, status: s.status }); } catch (e) { bad(res, 503, 'storage'); }
@@ -180,7 +186,7 @@ module.exports = function market(ctx) {
   app.get('/api/market/admin/overview', async (req, res) => {
     if (!adminOnly(req, res)) return; await expire(); const O = Object.values(col(P.orders)), V = o => orderView(o, 'admin');
     res.json({ ok: true, config: cfg(), counts: { shops: Object.keys(col(P.shops)).length, products: Object.keys(col(P.products)).length, orders: O.length, gmv: O.filter(o => ['paid', 'preparing', 'shipped', 'delivered', 'settled'].includes(o.status)).reduce((a, o) => a + o.total, 0), commission: O.filter(o => o.status === 'settled').reduce((a, o) => a + o.commission, 0) },
-      pendingShops: Object.values(col(P.shops)).filter(s => s.status === 'pending').map(s => ({ ...pubShop(s), phone: s.phone, payout: s.payout, status: s.status, owner: userInfo(s.uid) })),
+      pendingShops: Object.values(col(P.shops)).filter(s => s.status === 'pending').map(s => ({ ...pubShop(s), phone: s.phone, payout: s.payout, license: s.license, status: s.status, owner: userInfo(s.uid) })),
       allShops: Object.values(col(P.shops)).map(s => ({ id: s.id, name: s.name, status: s.status, city: s.city, owner: userInfo(s.uid) })),
       payments: O.filter(o => o.status === 'payment_submitted').map(V), toSettle: O.filter(o => o.status === 'delivered').map(V), refunds: O.filter(o => o.status === 'refund_pending').map(V), disputes: O.filter(o => o.status === 'disputed').map(V),
       recent: O.sort((a, b) => b.ts - a.ts).slice(0, 30).map(V) });
@@ -211,4 +217,5 @@ module.exports = function market(ctx) {
       if (act === 'refund') tell(o.buyerUid, `↩️ ለትዕዛዝ ${short(o)} ${money(o.total)} ተመልሷል። ማጣቀሻ፦ ${o.settle.ref}`);
       res.json({ ok: true, status: o.status }); } catch (e) { bad(res, 503, 'storage'); }
   });
+  return { who, saveMany, bad, S, N, phoneET, adminOnly, nid, userInfo };
 };

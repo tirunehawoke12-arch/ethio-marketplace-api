@@ -270,7 +270,7 @@ const bump = p => { store.rev[p] = (store.rev[p] || REV0) + 1; persist(); };
 const validPath = p => typeof p === 'string' && p.length < 200 && /^[\w@+.:~\/-]+$/.test(p) && !p.includes('..');
 function can(tok, p, write, id) {
   if (tok && tok.k === 'admin') return true;
-  { const t0 = String(p).split('/')[0]; if (t0 === 'mk' || t0[0] === '_') return false; }   // ገበያ እና ምስል መረጃ በልዩ API ብቻ
+  { const t0 = String(p).split('/')[0]; if (t0 === 'mk' || t0 === 'pp' || t0[0] === '_') return false; }   // ገበያ እና ምስል መረጃ በልዩ API ብቻ
   const m = /^data\/users\/([\w-]+)$/.exec(p);
   if (m) return !!tok && tok.u === m[1];                       // የግል ውሂብ፦ ባለቤት ብቻ
   if (!tok) return false;
@@ -386,7 +386,8 @@ const ADMIN_CHAT = process.env.ADMIN_TELEGRAM_CHAT_ID || '';
 function sendTg(chatId, text) { if (!TOKEN || !chatId) return; tg('sendMessage', { chat_id: chatId, text: String(text).slice(0, 3800), disable_web_page_preview: true }).catch(e => console.warn('notify failed:', e.message)); }
 function notifyUser(uid, text) { try { const a = (store.docs['data/users/' + uid] || {}).acct; if (!a) return; const l = db.accounts[accKey(a)]; if (l && l.chatId) sendTg(l.chatId, `🇪🇹 Etio Digital Market\n\n${text}\n\n🔗 ${PUBLIC_BASE_URL}`); } catch (e) { console.warn('notifyUser', e.message); } }
 function notifyAdmin(text) { sendTg(ADMIN_CHAT, `🛡️ አድሚን\n\n${text}\n\n🔗 ${PUBLIC_BASE_URL}`); }
-require('./market')({ app, col, bump, pool, pgUpsert, persist, readTok, limit, notifyUser, notifyAdmin });
+const mkApi = require('./market')({ app, col, bump, pool, pgUpsert, persist, readTok, limit, notifyUser, notifyAdmin });
+require('./people')({ app, col, limit, notifyUser, notifyAdmin, ...mkApi });
 app.get('/market.js', (req, res) => { const f = path.join(__dirname, 'market-ui.js'); fs.existsSync(f) ? res.set({ 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-cache' }).sendFile(f) : res.sendStatus(404); });
 
 async function initStorage() {
