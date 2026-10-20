@@ -1,9 +1,10 @@
-.env
 node_modules/
-telegram-otp-data.json
-telegram-otp-data.json.tmp
-npm-debug.log*
-
+.next/
+.env
+.env.local
 market-data.json
 market-data.json.tmp
+otp-db.json
+telegram-otp-data.json
 .token-secret
+*.log
