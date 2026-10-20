@@ -1,0 +1,26 @@
+name: unpack
+on:
+  push:
+    paths:
+      - '*.zip'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unpack project.zip into the repo
+        run: |
+          set -e
+          ZIP=$(ls -1 *.zip | head -n 1)
+          echo "Unpacking $ZIP"
+          git rm -rf --ignore-unmatch app.js index.html market.js market-ui.js people.js og.png README-DEPLOY-AM.md
+          unzip -o "$ZIP"
+          rm -f ./*.zip
+          git config user.name "unpack-bot"
+          git config user.email "unpack-bot@users.noreply.github.com"
+          git add -A
+          git commit -m "Next.js project (unpacked from zip)" || echo "nothing to commit"
+          git push origin HEAD:"${GITHUB_REF_NAME:-main}"
