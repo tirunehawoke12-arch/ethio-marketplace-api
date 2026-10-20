@@ -9,7 +9,7 @@
     "start": "NODE_ENV=production node server.js"
   },
   "engines": {
-    "node": ">=18.17"
+    "node": "22.x"
   },
   "dependencies": {
     "autoprefixer": "^10.4.20",
