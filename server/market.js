@@ -31,7 +31,11 @@ module.exports = function market(ctx) {
   }
   const adminOnly = (req, res) => { const t = readTok(req); if (!t || t.k !== 'admin') { bad(res, 403, 'admin_only'); return false; } return true; };
   const shopOf = uid => Object.values(col(P.shops)).find(s => s.uid === uid);
-  const cfg = () => { const c = col(P.cfg).main || {}; return { commissionPct: c.commissionPct == null ? COMM : c.commissionPct, accounts: c.accounts || [], note: c.note || '' }; };
+  // ገዥዎች የሚከፍሉባቸው ነባሪ አካውንቶች (አድሚን በቅንብር ካልቀየረ ለሁሉም የተመዘገበ ተጠቃሚ በራስ-ሰር ይታያል)
+  const DEFAULT_ACCOUNTS = process.env.DEFAULT_PAY_ACCOUNTS
+    ? process.env.DEFAULT_PAY_ACCOUNTS.split(';').map(x => x.split('|').map(s => s.trim())).filter(x => x[0] && x[1]).map(x => ({ method: x[0], number: x[1], holder: x[2] || '' }))
+    : [{ method: 'telebirr', number: '0946705941', holder: 'TIRUNEH AWOKE CHANIE' }, { method: 'ንግድ ባንክ (CBE)', number: '1000594431379', holder: 'TIRUNEH AWOKE CHANIE' }];
+  const cfg = () => { const c = col(P.cfg).main || {}; return { commissionPct: c.commissionPct == null ? COMM : c.commissionPct, accounts: c.accounts && c.accounts.length ? c.accounts : DEFAULT_ACCOUNTS, note: c.note || '' }; };
   const rate = shopId => { const rs = Object.values(col(P.reviews)).filter(r => r.shopId === shopId); return { avg: rs.length ? Math.round(rs.reduce((a, r) => a + r.rating, 0) / rs.length * 10) / 10 : 0, n: rs.length }; };
   const pubShop = s => { const r = rate(s.id); return { id: s.id, kind: s.kind || KINDS[0], gallery: s.gallery || [], links: s.links || {}, year: s.year || '', tags: s.tags || [], name: s.name, about: s.about, category: s.category, region: s.region, city: s.city, address: s.address, hours: s.hours, phone: s.showPhone ? s.phone : '', logo: s.logo, cover: s.cover, delivery: s.delivery, rating: r.avg, reviews: r.n, ts: s.ts }; };
   const pubProd = (p, s) => ({ id: p.id, title: p.title, desc: p.desc, price: p.price, unit: p.unit, stock: p.stock, category: p.category, imgs: p.imgs, ts: p.ts, shop: { id: s.id, name: s.name, city: s.city, region: s.region, logo: s.logo, rating: rate(s.id).avg } });
@@ -54,7 +58,7 @@ module.exports = function market(ctx) {
   };
 
   /* ---------- ህዝባዊ (ሳይገቡ ማየት ይቻላል) ---------- */
-  app.get('/api/market/config', (req, res) => { const c = cfg(); res.json({ ok: true, cats: CATS, kinds: KINDS, commissionPct: c.commissionPct, accounts: c.accounts, note: c.note }); });
+  app.get('/api/market/config', (req, res) => { const c = cfg(), t = readTok(req); res.json({ ok: true, cats: CATS, kinds: KINDS, commissionPct: c.commissionPct, accounts: t ? c.accounts : [], note: c.note }); });   // የክፍያ አካውንቶች ለገቡ ተጠቃሚዎች ብቻ
   app.get('/api/market/home', (req, res) => {
     const L = live(), cats = CATS.map(c => ({ c, n: L.filter(([p]) => p.category === c).length })).filter(x => x.n);
     res.json({ ok: true, cats, latest: L.sort((a, b) => b[0].ts - a[0].ts).slice(0, 12).map(([p, s]) => pubProd(p, s)), shops: Object.values(col(P.shops)).filter(s => s.status === 'active').sort((a, b) => b.ts - a.ts).slice(0, 8).map(pubShop), total: L.length });

@@ -8,6 +8,7 @@ import { errText } from '@/lib/consts';
 import { Check, Input, Msg, PageTitle } from '@/components/ui';
 import { WizardBar } from '@/components/Stepper';
 import RequireAuth from '@/components/RequireAuth';
+import PayAccounts from '@/components/PayAccounts';
 
 function Checkout() {
   const { cart, clearCart, user } = useApp(); const router = useRouter();
@@ -27,6 +28,7 @@ function Checkout() {
         {cart.map(i => <div key={i.pid} className="flex justify-between border-b border-line py-2 text-sm"><span>{i.title} × {i.qty}</span><b>{ETB(i.price * i.qty)}</b></div>)}
         <div className="mt-2 flex justify-between"><span>ማድረሻ ክፍያ</span><span className="muted">በሻጩ ተመን ይጨመራል</span></div><div className="mt-1 flex justify-between text-lg"><b>ድምር</b><b className="text-brand">{ETB(total)}+</b></div>
         <p className="mt-3 rounded-2xl bg-brand-light p-3 text-sm">{f.type === 'delivery' ? '🚚 ' + f.address : '🏬 በአካል መውሰድ'}<br />📞 {f.phone}</p>
+        <PayAccounts note="ትዕዛዙን ካስገቡ በኋላ ክፍያ ያደርጋሉ።" />
         <p className="mt-3 rounded-2xl border-l-4 border-gold bg-gold/10 p-3 text-sm">💡 ትዕዛዙ ከገባ በኋላ ክፍያ ይፈጽማሉ። ገንዘቡ በአድሚን እምነት (escrow) ይያዛል፤ ዕቃውን ሲቀበሉ ለሻጭ ይተላለፋል።</p>
         <Msg m={err} /><div className="mt-4 grid grid-cols-2 gap-2"><button className="btn-ghost" onClick={() => setStep(1)}>‹ ተመለስ</button><button className="btn-primary" disabled={busy} onClick={place}>{busy ? '⏳…' : '✅ ትዕዛዝ አስገባ'}</button></div></div>)}
     </div>

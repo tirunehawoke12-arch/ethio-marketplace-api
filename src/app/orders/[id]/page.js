@@ -6,6 +6,7 @@ import { PAY, errText, stepLabel } from '@/lib/consts';
 import { Input, Msg, Select, Spinner, Stars } from '@/components/ui';
 import { OrderStepper } from '@/components/Stepper';
 import RequireAuth from '@/components/RequireAuth';
+import PayAccounts from '@/components/PayAccounts';
 
 function Order({ id }) {
   const [o, setO] = useState(null); const [cfg, setCfg] = useState({ accounts: [] }); const [m, setM] = useState(''); const [f, setF] = useState({ method: PAY[0], ref: '', note: '', reason: '', rate: 0, text: '' });
@@ -24,7 +25,7 @@ function Order({ id }) {
       </div>
 
       {o.status === 'placed' && (<div className="card">{o.payment && o.payment.rejected && <p className="msg-err mb-3">❌ ክፍያዎ አልተቀበለም፦ {o.payment.rejected}</p>}
-        <h2 className="text-lg">💳 ክፍያ</h2><div className="mt-2 rounded-2xl bg-brand-light p-3 text-sm"><b>{ETB(o.total)}</b> ወደዚህ ይክፈሉ፦{cfg.accounts.length ? cfg.accounts.map(a => <div key={a.number}>• <b>{a.method}</b> {a.number} ({a.holder})</div>) : <div>አድሚኑ የክፍያ አካውንት ገና አላስቀመጠም — አድሚኑን ያነጋግሩ።</div>}</div>
+        <h2 className="text-lg">💳 ክፍያ</h2><PayAccounts amount={o.total} />
         <Select label="የከፈሉበት ዘዴ" options={PAY} value={f.method} onChange={set('method')} /><Input label="የግብይት ማጣቀሻ ቁጥር" value={f.ref} onChange={set('ref')} placeholder="ለምሳሌ TB123456789" /><Input label="ማስታወሻ (አማራጭ)" value={f.note} onChange={set('note')} />
         <Msg m={m} /><button className="btn-primary mt-3 w-full" onClick={() => act('pay', { method: f.method, ref: f.ref, note: f.note })}>💳 ክፍያ ፈጽሜያለሁ — አረጋግጥ</button><button className="btn-ghost mt-2 w-full" onClick={() => act('cancel', {})}>✕ ትዕዛዙን ሰርዝ</button></div>)}
 
