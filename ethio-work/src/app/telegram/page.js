@@ -1,0 +1,14 @@
+'use client';
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
+const GROUPS = [
+ {title:'🛍️ ገበያ',items:[['ዕቃዎችን ፈልግ','/market','🔎'],['ሱቆችን አስስ','/shops','🏪'],['የግዢ ጋሪ','/cart','🛒'],['ትዕዛዞቼ','/orders','📦']]},
+ {title:'💼 ሥራና አገልግሎት',items:[['ሥራ ፈልግ','/jobs','💼'],['የእኔ ሙያ መገለጫ','/me/worker','🧰'],['አሰሪ መለያ ፍጠር','/me/employer','🏢']]},
+ {title:'🏪 የእኔ ንግድ',items:[['የእኔ መገለጫ','/me','👤'],['ሱቅ አስተዳድር','/me/shop','🛍️'],['ሥራ አስተዳድር','/me/employer','📋'],['የእኔ ድረ-ገጾች','/me/sites','🌐'],['የሥራ ማመልከቻዎቼ','/me/applications','📨']]},
+ {title:'🔐 መለያ',items:[['ግባ','/login','🔑'],['አዲስ መለያ ፍጠር','/register','✨'],['አድሚን','/admin','🛡️']]},
+];
+export default function TelegramMiniApp(){
+ const [tgUser,setTgUser]=useState(null); const [authState,setAuthState]=useState('checking');
+ useEffect(()=>{const w=window.Telegram?.WebApp;if(!w){setAuthState('browser');return;}w.ready();w.expand();try{w.setHeaderColor('#087f4f');w.setBackgroundColor('#f4f8f5');}catch{}if(w.initData){fetch('/api/telegram/webapp-auth',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({initData:w.initData})}).then(r=>r.json()).then(d=>{if(d.ok){setTgUser(d.user);setAuthState('verified')}else setAuthState('unverified')}).catch(()=>setAuthState('unverified'));}else setAuthState('browser')},[]);
+ return <><div className="mx-auto max-w-3xl space-y-5 pb-8"><section className="relative overflow-hidden rounded-[2rem] bg-brand p-6 text-white shadow-lift sm:p-8"><div className="absolute -right-8 -top-10 h-40 w-40 rounded-full bg-white/10"/><p className="relative text-sm font-bold">🇪🇹 ETHIO DIGITAL MARKET</p><h1 className="relative mt-2 text-3xl font-black">ሁሉም ገበያዎ በTelegram</h1><p className="relative mt-2 text-white/90">ዕቃ ይግዙ፣ ይሽጡ፣ ሥራ ይፈልጉ፣ ሱቅዎን ያስተዳድሩ — በአንድ ቦታ።</p>{authState==='verified'&&tgUser&&<p className="relative mt-4 inline-flex rounded-full bg-white/15 px-3 py-1.5 text-sm">✅ Telegram ተረጋግጧል · {tgUser.first_name||tgUser.username||'ተጠቃሚ'}</p>}{authState==='unverified'&&<p className="relative mt-4 text-sm text-white/90">⚠️ Telegram መረጃ ማረጋገጥ አልተሳካም። ለመግባት የመደበኛውን የመግቢያ ሂደት ይጠቀሙ።</p>}</section>{GROUPS.map(g=><section key={g.title} className="space-y-3"><h2 className="text-lg font-black">{g.title}</h2><div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{g.items.map(([label,href,emoji])=><Link key={href} href={href} className="card flex min-h-24 flex-col justify-center gap-2 transition hover:-translate-y-0.5 hover:border-brand"><span className="text-2xl">{emoji}</span><span className="text-sm font-bold">{label}</span><span className="text-xs text-brand">ክፈት →</span></Link>)}</div></section>)}<p className="rounded-2xl bg-brand-light p-4 text-sm text-brand-dark">🔒 የትዕዛዝ፣ የሻጭና የአድሚን የግል ተግባሮች የመለያ መግቢያ ይፈልጋሉ። ይህ Mini App ከዋናው website ጋር ተመሳሳይ API እና database ይጠቀማል።</p></div></>;
+}

@@ -1,4 +1,5 @@
 import './globals.css';
+import Script from 'next/script';
 import { AppProvider } from '@/lib/app';
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
@@ -27,6 +28,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="am">
       <body>
+        <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(LD) }} />
         <AppProvider>
           <Header />

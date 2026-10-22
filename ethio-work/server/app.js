@@ -66,6 +66,28 @@ function safeOtpMatch(input, expected) {
   return crypto.timingSafeEqual(Buffer.from(input), Buffer.from(expected));
 }
 
+// Verify Telegram Mini App initData using Telegram's documented HMAC scheme.
+app.post('/api/telegram/webapp-auth', (req, res) => {
+  try {
+    if (!TOKEN) return res.status(503).json({ ok:false, error:'telegram_not_configured' });
+    const raw = String(req.body && req.body.initData || '');
+    if (!raw || raw.length > 8192) return res.status(400).json({ ok:false, error:'invalid_init_data' });
+    const params = new URLSearchParams(raw);
+    const hash = params.get('hash');
+    const authDate = Number(params.get('auth_date') || 0);
+    if (!hash || !/^[a-f0-9]{64}$/i.test(hash) || !authDate || Math.abs(Date.now()/1000-authDate) > 86400) return res.status(401).json({ok:false,error:'expired_init_data'});
+    params.delete('hash');
+    const dataCheckString = [...params.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>`${k}=${v}`).join('\n');
+    const secretKey = crypto.createHmac('sha256','WebAppData').update(TOKEN).digest();
+    const calculated = crypto.createHmac('sha256',secretKey).update(dataCheckString).digest();
+    const supplied = Buffer.from(hash,'hex');
+    if (supplied.length !== calculated.length || !crypto.timingSafeEqual(supplied, calculated)) return res.status(401).json({ok:false,error:'invalid_init_data'});
+    let user = {}; try { user = JSON.parse(params.get('user') || '{}'); } catch {}
+    if (!user.id) return res.status(401).json({ok:false,error:'missing_telegram_user'});
+    res.json({ok:true,user:{id:user.id,first_name:String(user.first_name||'').slice(0,80),username:String(user.username||'').slice(0,64)}});
+  } catch(e) { res.status(400).json({ok:false,error:'invalid_init_data'}); }
+});
+
 app.get('/api/health', (req,res)=>res.json({
   ok:true, service:'etio-digital-market-telegram', domain:'ethiodigitalmarket.pro.et',
   botConfigured:!!TOKEN, webhookConfigured:!!WEBHOOK_SECRET
@@ -200,7 +222,7 @@ async function handleStart(text, chat) {
     await tg('sendMessage',{chat_id:chat.id,text:`🇪🇹 Etio Digital Market\n\n🔒 ለደህንነትዎ፣ OTP የሚላከው በምዝገባ ወቅት ወደተሰጠው ስልክ ቁጥር ብቻ ነው።\n📞 የተመዘገበ ቁጥር፦ ${maskPhone(r.phone)}\n\nከታች ያለውን «📱 ስልኬን አጋራ» ይጫኑ።`,reply_markup:CONTACT_KB});
     return;
   }
-  await tg('sendMessage',{chat_id:chat.id,text:'🇪🇹 እንኳን ወደ Etio Digital Market በደህና መጡ።\n\nየMarketplace ገጹ የሚሰጠውን Telegram Start ሊንክ ይጠቀሙ።'});
+  await tg('sendMessage',{chat_id:chat.id,text:'🇪🇹 እንኳን ወደ Etio Digital Market በደህና መጡ!\n\n🛍️ ዕቃዎችን ይፈልጉ፣ ትዕዛዝ ይከታተሉ፣ ሱቅ ይክፈቱ ወይም ሥራ ይፈልጉ።\n\nከታች ያለውን ቁልፍ በመጫን ሙሉ Marketplace ይክፈቱ።', reply_markup:{inline_keyboard:[[{text:'🇪🇹 Marketplace ክፈት',web_app:{url:`${PUBLIC_BASE_URL}/telegram`}}],[{text:'🌐 Website ክፈት',url:PUBLIC_BASE_URL}]]}});
 }
 
 async function configureWebhook() {
@@ -216,6 +238,7 @@ async function configureWebhook() {
       drop_pending_updates: false
     });
     console.log('Telegram webhook configured:', result, `${PUBLIC_BASE_URL}/api/telegram/webhook`);
+    try { await tg('setChatMenuButton', { menu_button: { type:'web_app', text:'Marketplace', web_app:{url:`${PUBLIC_BASE_URL}/telegram`} } }); console.log('Telegram Mini App menu button configured'); } catch(e) { console.warn('Telegram Mini App menu button setup failed:', e.message); }
   } catch (e) {
     console.error('Could not configure Telegram webhook:', e.message);
   }

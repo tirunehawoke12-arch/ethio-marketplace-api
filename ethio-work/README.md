@@ -44,3 +44,10 @@ npm start                # http://localhost:3000
 - የድሮ አካውንቶች (የድሮው ገጽ የፈጠራቸው) በተመሳሳይ ኢሜይል/ስልክ እና የይለፍ ቃል ይገባሉ፤ Telegram ካልተገናኙ አንድ ጊዜ «ስልኬን አጋራ» ያደርጋሉ።
 - የድሮው አጠቃላይ የዳታቤዝ API (`/api/db`፣ `/api/session`፣ `/api/account`) ተዘግቷል (ያለ OTP አካውንት መፍጠር እንዳይቻል)።
 - Google Search Console ማረጋገጫ ፋይል (`public/google423971619482a954.html`) ተካትቷል።
+
+## Telegram Mini App (አዲስ)
+- የMini App መግቢያ፦ `${PUBLIC_BASE_URL}/telegram` (በTelegram ውስጥ ይከፈታል፤ ከwebsite ጋር ተመሳሳይ API/database ይጠቀማል)።
+- `/start` ሲላክ Bot የMarketplace Mini App ቁልፍ ይልካል፤ webhook ሲዘጋጅ `setChatMenuButton` የBot menu ቁልፉንም ያዘጋጃል።
+- `/api/telegram/webapp-auth` Telegram Mini App `initData` ፊርማን በBot Token ያረጋግጣል። ይህ ማረጋገጫ ብቻውን የwebsite መለያ መግቢያን አይተካም፤ የግል ገጾች አሁንም የአፕሊኬሽኑን login/session ይጠቀማሉ።
+- Render `PUBLIC_BASE_URL` እና `SITE_URL` ትክክለኛውን HTTPS የሚሰራ የwebsite አድራሻ እንዲያመለክቱ ያረጋግጡ። `TELEGRAM_WEBHOOK_SECRET` በA-Z, a-z, 0-9, `_`, `-` ብቻ የተሠራ ይሁን። `TELEGRAM_BOT_TOKEN` እና `TELEGRAM_BOT_USERNAME` በRender Environment ውስጥ መሞላት አለባቸው።
+- ለቋሚ መረጃ ማከማቻ `DATABASE_URL` (Neon Postgres) ይጠቀሙ፤ በRender የአካባቢ ፋይል ብቻ ላይ መተማመን አይመከርም።
