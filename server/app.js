@@ -218,7 +218,7 @@ async function configureWebhook() {
       allowed_updates: ['message', 'callback_query'],
       drop_pending_updates: false
     });
-    tg('setMyCommands', { commands: [{ command: 'menu', description: 'ዋና ማውጫ' }, { command: 'cancel', description: 'የጀመሩትን ሰርዝ' }, { command: 'help', description: 'እገዛ' }, { command: 'myid', description: 'Chat ID' }] }).catch(() => { });
+    tg('setMyCommands', { commands: [{ command: 'menu', description: 'ዋና ማውጫ' }, { command: 'account', description: 'አካውንቴ' }, { command: 'logout', description: 'ውጣ' }, { command: 'login', description: 'ግባ / ተመዝገብ' }, { command: 'cancel', description: 'የጀመሩትን ሰርዝ' }, { command: 'help', description: 'እገዛ' }, { command: 'myid', description: 'Chat ID' }] }).catch(() => { });
     console.log('Telegram webhook configured:', result, `${PUBLIC_BASE_URL}/api/telegram/webhook`);
   } catch (e) {
     console.error('Could not configure Telegram webhook:', e.message);
@@ -386,7 +386,8 @@ async function sendTg(chatId, text, btn) {   // btn = { url, label } → በመ�
     await tg('sendMessage', base);
   } catch (e) { console.warn('notify failed:', e.message); }
 }
-function notifyUser(uid, text, btn) { try { const a = (store.docs['data/users/' + uid] || {}).acct; if (!a) return; const l = db.accounts[accKey(a)]; if (l && l.chatId) sendTg(l.chatId, `🇪🇹 Etio Digital Market\n\n${text}${btn && btn.url ? '\n\n🧾 ' + btn.url : ''}\n\n🔗 ${PUBLIC_BASE_URL}`, btn); } catch (e) { console.warn('notifyUser', e.message); } }
+function notifyUser(uid, text, btn) { try { const d = store.docs['data/users/' + uid] || {}, a = d.acct; if (!a) return; if (!btn && d.prefs && d.prefs.mute) return;   // ድምጸ-ከል፦ ቁልፍ የሌላቸው (መረጃ ብቻ) መልዕክቶች አይላኩም
+    const l = db.accounts[accKey(a)]; if (l && l.chatId) sendTg(l.chatId, `🇪🇹 Etio Digital Market\n\n${text}${btn && btn.url ? '\n\n🧾 ' + btn.url : ''}\n\n🔗 ${PUBLIC_BASE_URL}`, btn); } catch (e) { console.warn('notifyUser', e.message); } }
 function notifyAdmin(text, btn) { sendTg(ADMIN_CHAT, `🛡️ አድሚን\n\n${text}\n\n🔗 ${PUBLIC_BASE_URL}`, btn); }
 const receipts = require('./receipt')({ app, col, secret: TOKEN_SECRET, baseUrl: PUBLIC_BASE_URL });
 const mkApi = require('./market')({ app, col, bump, pool, pgUpsert, persist, readTok, limit, notifyUser, notifyAdmin, receipts });

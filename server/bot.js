@@ -148,17 +148,27 @@ module.exports = function bot(c) {
     const ct = msg.contact; if (!msg.from || ct.user_id !== msg.from.id) return send(chat, '⚠️ የራስዎን ስልክ ቁጥር ብቻ ማጋራት ይችላሉ። «📱 ስልኬን አጋራ» ቁልፉን ይጠቀሙ።', CONTACT_KB);
     const phone = normPhoneET(ct.phone_number); if (!phone) return send(chat, '❌ ይህ የኢትዮጵያ ስልክ ቁጥር አይደለም (09… / 07…)። ለመመዝገብ የኢትዮጵያ ቁጥር ያስፈልጋል።');
     const username = msg.from.username || msg.from.first_name || '', exist = findUid(phone), s = ses(chat);
+    if (s.auth && s.auth.stage === 'chphone') {                                       // ስልክ መቀየር — በ Telegram የተረጋገጠ አዲስ ቁጥር
+      const e = await authApi.changeIdentity(s.auth.uid, { phone }, chat, username); s.auth = null; save(); rebuild();
+      return e ? send(chat, bad({ error: e }), menuKb(chat)) : home(chat, `✅ ስልክዎ ወደ ${H(phone)} ተቀይሯል።`);
+    }
     if (exist) {
       if (isSusp(exist)) return send(chat, '⛔ አካውንትዎ ታግዷል — አድሚኑን ያነጋግሩ።');
       s.auth = { stage: 'pw', phone, uid: exist, username }; save();
-      return send(chat, '🔑 ከዚህ ስልክ ጋር የተመዘገበ አካውንት አለ።\nየድረ-ገጽ <b>የይለፍ ቃልዎን</b> ይጻፉ — መልዕክቱ ወዲያው ይሰረዛል።', { remove_keyboard: true });
+      await send(chat, '🔑 ከዚህ ስልክ ጋር የተመዘገበ አካውንት አለ።', { remove_keyboard: true });
+      return send(chat, 'የድረ-ገጽ <b>የይለፍ ቃልዎን</b> ይጻፉ — መልዕክቱ ወዲያው ይሰረዛል።', ik([[b('🆘 የይለፍ ቃል ረሳሁ', 'rst')]]));
     }
     s.auth = { stage: 'email', phone, username }; save();
     return send(chat, '🆕 አዲስ አካውንት እንክፈት።\n\n📧 <b>ኢሜይልዎን</b> ይጻፉ፦', { remove_keyboard: true });
   }
   async function authText(chat, text, msg) {
     const s = ses(chat), a = s.auth, t = String(text || '').trim();
-    if (a.stage === 'contact') return send(chat, '📱 ከታች «ስልኬን አጋራ» ይጫኑ።', CONTACT_KB);
+    if (a.stage === 'contact' || a.stage === 'chphone') return send(chat, '📱 ከታች «ስልኬን አጋራ» ይጫኑ (ወይም /cancel)።', CONTACT_KB);
+    if (a.stage === 'resetpw') {
+      tg('deleteMessage', { chat_id: chat, message_id: msg.message_id }).catch(() => { }); if (t.length < 8) return send(chat, '❌ ቢያንስ 8 ቁምፊ ይሁን።');
+      const e = await authApi.setPassword(a.uid, t); if (e) return send(chat, bad({ error: e }));
+      authApi.linkChat(a.uid, chat, a.username); rebuild(); s.auth = null; save(); return home(chat, '✅ አዲስ የይለፍ ቃል ተቀምጧል — ገብተዋል!');
+    }
     const wipe = () => tg('deleteMessage', { chat_id: chat, message_id: msg.message_id }).catch(() => { });
     if (a.stage === 'pw') {
       wipe(); const ok = await authApi.verifyPassword(a.uid, t);
@@ -264,7 +274,7 @@ module.exports = function bot(c) {
 
   /* ================= የእኔ ገጾች (ማዕከል) ================= */
   const hub = (chat, uid) => send(chat, `👤 <b>ገጾቼ</b> — ${H(userOf(uid).name || '')}\n📞 ${H(userOf(uid).phone || '')}`, ik([
-    [b('🌐 የራሴ ገጾች (ድረ-ገጽ)', 'mpg')], [b('🏪 ሱቄ / ሆቴሌ / ንግዴ', 'ms')], [b('🧑‍🔧 ሠራተኛ ገጽ', 'mw'), b('🏢 አሰሪ ገጽ', 'mem')], [b('📢 ሥራዎቼ', 'mj'), b('📄 ማመልከቻዎቼ', 'mapps')], [b('🪪 የግል መረጃ', 'prv'), b('🔑 የይለፍ ቃል', 'pw')], [u('🖥 ድረ-ገጹን ክፈት', web('/me'))]]));
+    [b('🌐 የራሴ ገጾች (ድረ-ገጽ)', 'mpg')], [b('🏪 ሱቄ / ሆቴሌ / ንግዴ', 'ms')], [b('🧑‍🔧 ሠራተኛ ገጽ', 'mw'), b('🏢 አሰሪ ገጽ', 'mem')], [b('📢 ሥራዎቼ', 'mj'), b('📄 ማመልከቻዎቼ', 'mapps')], [b('🪪 የግል መረጃ', 'prv'), b('⚙️ አካውንቴ', 'acc')], [u('🖥 ድረ-ገጹን ክፈት', web('/me'))]]));
   const dv = x => (x === undefined || x === null || x === '' || (Array.isArray(x) && !x.length) ? undefined : x);
   const yn = x => (x ? 'yes' : 'no');
 
@@ -461,7 +471,30 @@ module.exports = function bot(c) {
     return startFlow(chat, 'private', [{ k: 'fullName', q: 'ሙሉ ስም (በመታወቂያ)፦', t: 'text', min: 3, def: dv(p.fullName) || userOf(uid).name }, { k: 'idNo', q: 'የመታወቂያ ቁጥር፦', t: 'text', opt: true, def: dv(p.idNo) }, { k: 'dob', q: 'የትውልድ ቀን (2000-01-31)፦', t: 'text', opt: true, def: dv(p.dob) }, { k: 'addr', q: 'አድራሻ፦', t: 'text', opt: true, def: dv(p.addr) }, { k: 'tin', q: 'TIN ቁጥር፦', t: 'text', opt: true, def: dv(p.tin) }, { k: 'emName', q: 'የአደጋ ጊዜ ተጠሪ ስም፦', t: 'text', opt: true, def: dv(p.emName) }, { k: 'emPhone', q: 'የተጠሪ ስልክ፦', t: 'phone', loose: true, opt: true, def: dv(p.emPhone) }, { k: 'note', q: 'ማስታወሻ፦', t: 'text', opt: true, def: dv(p.note) }], {}, '🪪 የግል መረጃ — ለአድሚን ብቻ ነው የሚታየው፤ ለህዝብ አይታይም።');
   }
   FIN.private = async (chat, uid, d) => { const r = await api('PUT', '/api/me/private', uid, { fullName: d.fullName, idNo: d.idNo || '', dob: d.dob || '', addr: d.addr || '', tin: d.tin || '', emName: d.emName || '', emPhone: d.emPhone || '', note: d.note || '' }); return send(chat, r.ok ? '✅ ተቀምጧል' : bad(r)); };
-  FIN.password = async (chat, uid, d) => { const e = await authApi.setPassword(uid, d.pw); return send(chat, e ? bad({ error: e }) : '✅ አዲሱ የይለፍ ቃል ተቀምጧል — በድረ-ገጹ ለመግባት ይጠቀሙት።'); };
+
+  /* ================= አካውንቴ (መገለጫ፣ ማስተካከያ፣ መውጣት፣ መሰረዝ) ================= */
+  const prefs = uid => (getStore().docs['data/users/' + uid] || {}).prefs || {};
+  function accountMenu(chat, uid) {
+    const d = getStore().docs['data/users/' + uid] || {}, a = d.acct || {}, l = getDb().accounts[accKey(a)] || {}, muted = !!prefs(uid).mute;
+    return send(chat, `⚙️ <b>አካውንቴ</b>\n\n👤 ${H(userOf(uid).name || '—')}\n📧 ${H(a.email)}\n📞 ${H(a.phone)}\n✈️ Telegram፦ ${l.username ? '@' + H(l.username) : 'ተገናኝቷል'}\n📅 የተከፈተው፦ ${a.ts ? new Date(a.ts).toLocaleDateString('en-GB') : '—'}\n🔔 ማሳወቂያ፦ ${muted ? '🔕 ድምጸ-ከል (ቁልፍ የሌላቸው መልዕክቶች አይላኩም)' : '🔔 በርቷል'}`, ik([
+      [b('✏️ ስም ቀይር', 'acn'), b('📧 ኢሜይል ቀይር', 'ace')], [b('📱 ስልክ ቀይር', 'acp'), b('🔑 የይለፍ ቃል ቀይር', 'pw')], [b(muted ? '🔔 ማሳወቂያ አብራ' : '🔕 ማሳወቂያ አጥፋ', 'accn')], [b('🚪 ውጣ (Log out)', 'lo'), b('🗑 አካውንት ሰርዝ', 'adel')]]));
+  }
+  async function pwOk(chat, uid, pw) { const ok = await authApi.verifyPassword(uid, pw); if (ok === null) { await send(chat, '⏳ ብዙ ሙከራ — ከ15 ደቂቃ በኋላ ይሞክሩ።'); return false; } if (!ok) { await send(chat, '❌ የአሁኑ የይለፍ ቃል ትክክል አይደለም።'); return false; } return true; }
+  const PWQ = { k: 'cur', q: '🔑 አሁን ያለዎትን የይለፍ ቃል ይጻፉ (መልዕክቱ ይሰረዛል)፦', t: 'text', min: 1, max: 128, secret: true };
+  FIN.acname = async (chat, uid, d) => { const e = await authApi.setName(uid, d.name); await send(chat, e ? bad({ error: e }) : '✅ ስም ተቀይሯል'); return accountMenu(chat, uid); };
+  FIN.acemail = async (chat, uid, d) => { if (!(await pwOk(chat, uid, d.cur))) return; const e = await authApi.changeIdentity(uid, { email: d.email }); rebuild(); await send(chat, e ? bad({ error: e }) : '✅ ኢሜይል ተቀይሯል — በድረ-ገጹ በአዲሱ ኢሜይል ይግቡ።'); return accountMenu(chat, uid); };
+  FIN.acphone = async (chat, uid, d) => { if (!(await pwOk(chat, uid, d.cur))) return; ses(chat).auth = { stage: 'chphone', uid }; save(); return send(chat, '📱 አዲሱን ስልክ ቁጥርዎን ለማረጋገጥ ከታች «ስልኬን አጋራ» ይጫኑ።\n⚠️ በዚህ Telegram አካውንት ላይ የተመዘገበ ቁጥር መሆን አለበት።', CONTACT_KB); };
+  FIN.password = async (chat, uid, d) => { if (!(await pwOk(chat, uid, d.cur))) return; const e = await authApi.setPassword(uid, d.pw); return send(chat, e ? bad({ error: e }) : '✅ አዲሱ የይለፍ ቃል ተቀምጧል — በድረ-ገጹ ለመግባት ይጠቀሙት።'); };
+  FIN.acdel = async (chat, uid, d) => {
+    if (String(d.confirm).trim() !== 'ሰርዝ') return send(chat, '✖️ አልተረጋገጠም — አካውንትዎ አልተሰረዘም።'); if (!(await pwOk(chat, uid, d.cur))) return;
+    const e = await authApi.deleteAccount(uid); if (e) return send(chat, bad({ error: e })); rebuild(); delete S[chat]; save();
+    return send(chat, '🗑 አካውንትዎ ተሰርዟል፤ ሱቅዎ እና ገጾችዎ ከህዝብ ተደብቀዋል። እንደገና መመዝገብ ከፈለጉ ከታች ይጫኑ።', { remove_keyboard: true }).then(() => send(chat, '👇', ik([[b('🔐 ግባ / ተመዝገብ', 'login')]])));
+  };
+  async function logout(chat, uid) {
+    authApi.unlinkChat(uid); rebuild(); delete S[chat]; save();
+    await send(chat, '🚪 ከአካውንትዎ ወጥተዋል። ጋሪዎ ተጠርጓል፤ የ Telegram ማሳወቂያዎችም ይቆማሉ።\n\nℹ️ በድረ-ገጹ ለመግባት የ Telegram ግንኙነት እንደገና ያስፈልጋል — ከዚህ ቦት ተመልሰው ሲገቡ በራሱ ይገናኛል።', { remove_keyboard: true });
+    return send(chat, '👇 እንደገና ለመግባት ወይም ሌላ አካውንት ለመክፈት፦', ik([[b('🔐 ግባ / ተመዝገብ', 'login')]]));
+  }
 
   /* ================= አድሚን (ADMIN_TELEGRAM_CHAT_ID ብቻ) ================= */
   const AD = (m, p, d) => api(m, p, 'admin', d);
@@ -508,8 +541,10 @@ module.exports = function bot(c) {
     if (/^\/cancel\b/.test(t)) { s.flow = null; s.auth = null; save(); return home(chat, '✖️ ተሰርዟል።'); }
     if (/^\/myid\b/.test(t)) return send(chat, `🆔 Chat ID፦ <code>${chat}</code>`);
     if (/^\/(start|menu|login)\b/.test(t)) { s.flow = null; if (uid) return home(chat, `🇪🇹 <b>ኢትዮ ዲጂታል ማርኬት</b>\nእንኳን ደህና መጡ ${H(userOf(uid).name)}!`); s.auth = null; return authStart(chat); }
+    if (/^\/account\b/.test(t) && uid) return accountMenu(chat, uid);
+    if (/^\/logout\b/.test(t) && uid) return send(chat, '🚪 ከአካውንትዎ መውጣት ይፈልጋሉ?', ik([[b('✅ አዎ ውጣ', 'loc'), b('✖️ አይ', 'acc')]]));
     if (/^\/help\b/.test(t) || t === '❓ እገዛ') return send(chat, HELP, menuKb(chat));
-    if (s.auth) return authText(chat, t, msg);
+    if (s.auth) { if (uid && (LABELS[t] || /^\//.test(t))) s.auth = null; else return authText(chat, t, msg); }
     if (!uid && !(isAdmin(chat) && (t === '🛡 አድሚን' || s.flow))) return authStart(chat);
     if (LABELS[t]) { s.flow = null; return action(chat, uid, LABELS[t]); }
     if (/^\//.test(t)) return home(chat);
@@ -519,6 +554,8 @@ module.exports = function bot(c) {
   async function route(chat, data) {
     const [k, a, x, y] = data.split(':'); let uid = uidOf(chat);
     if (k === 'noop') return;
+    if (k === 'login') return authStart(chat);
+    if (k === 'rst') { const a = ses(chat).auth; if (a && a.stage === 'pw') { a.stage = 'resetpw'; save(); return send(chat, '🆘 ስልክዎ በ Telegram ስለተረጋገጠ አዲስ የይለፍ ቃል መፍጠር ይችላሉ።\n🔐 አዲስ የይለፍ ቃል ይጻፉ (ቢያንስ 8 ቁምፊ — መልዕክቱ ይሰረዛል)፦'); } return authStart(chat); }
     if (!uid && !(isAdmin(chat) && /^(ad|avp|ast|arf|arl|ash|apt|amod|apay|asl|arfl|adis|ashp)/.test(k))) return authStart(chat);
     if (/^(ad|avp|ast|arf|arl|ash|ashr|apt|amod|apay|asl|arfl|adis|ashp)$/.test(k) && !isAdmin(chat)) return send(chat, '⛔ አድሚን ብቻ');
     const s = ses(chat);
@@ -563,7 +600,15 @@ module.exports = function bot(c) {
       case 'pgd': return send(chat, '🗑 ገጹ እና መልሶቹ ለዘለዓለም ይሰረዛሉ። እርግጠኛ ነዎት?', ik([[b('✅ አዎ ሰርዝ', 'pgdc:' + a), b('✖️ አይ', 'mpg:' + a)]]));
       case 'pgdc': { const r = await DEL('/api/pages/' + a, uid); await send(chat, r.ok ? '✅ ተሰርዟል' : bad(r)); return myPages(chat, uid); }
       case 'prv': return privateFlow(chat, uid);
-      case 'pw': return startFlow(chat, 'password', [{ k: 'pw', q: '🔐 አዲስ የይለፍ ቃል (ቢያንስ 8 ቁምፊ) — መልዕክቱ ይሰረዛል፦', t: 'text', min: 8, max: 128, secret: true }], {}, '🔑 የይለፍ ቃል');
+      case 'acc': return accountMenu(chat, uid);
+      case 'accn': authApi.setPref(uid, 'mute', !prefs(uid).mute); return accountMenu(chat, uid);
+      case 'acn': return startFlow(chat, 'acname', [{ k: 'name', q: '✏️ አዲሱ ሙሉ ስም፦', t: 'text', min: 3, max: 80, def: userOf(uid).name || undefined }]);
+      case 'ace': return startFlow(chat, 'acemail', [PWQ, { k: 'email', q: '📧 አዲሱ ኢሜይል፦', t: 'text', max: 120 }], {}, '📧 ኢሜይል መቀየር');
+      case 'acp': return startFlow(chat, 'acphone', [PWQ], {}, '📱 ስልክ መቀየር');
+      case 'pw': return startFlow(chat, 'password', [PWQ, { k: 'pw', q: '🔐 አዲስ የይለፍ ቃል (ቢያንስ 8 ቁምፊ)፦', t: 'text', min: 8, max: 128, secret: true }], {}, '🔑 የይለፍ ቃል መቀየር');
+      case 'lo': return send(chat, '🚪 ከአካውንትዎ መውጣት ይፈልጋሉ?\n(ጋሪዎ ይጠራረጋል፤ ማሳወቂያዎች ይቆማሉ።)', ik([[b('✅ አዎ ውጣ', 'loc'), b('✖️ አይ', 'acc')]]));
+      case 'loc': return logout(chat, uid);
+      case 'adel': return startFlow(chat, 'acdel', [PWQ, { k: 'confirm', q: '⚠️ <b>አካውንት መሰረዝ የማይመለስ ነው።</b> ሱቅዎ፣ ገጾችዎ፣ ሥራዎችዎ ከህዝብ ይደበቃሉ።\nለማረጋገጥ <b>ሰርዝ</b> ብለው ይጻፉ፦', t: 'text', max: 20 }], {}, '🗑 አካውንት መሰረዝ');
       /* አድሚን */
       case 'ad': return adminHub(chat); case 'apay': case 'asl': case 'arfl': case 'adis': case 'ashp': return adminList(chat, k); case 'amod': return modList(chat);
       case 'avp': if (x === '1') { const r = await AD('POST', `/api/market/admin/order/${a}/verify-payment`, { ok: true }); return send(chat, r.ok ? '✅ ክፍያ ተረጋግጧል — ደረሰኝ ለገዥ ተልኳል' : bad(r)); } return startFlow(chat, 'aorder', [{ k: 'ref', q: 'ውድቅ የተደረገበት ምክንያት፦', t: 'text', min: 2 }], { id: a, act: 'verify-payment' });

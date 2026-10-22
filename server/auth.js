@@ -144,5 +144,37 @@ module.exports = function auth(ctx) {
     const a = col('data/users/' + uid).acct; pw = String(pw || ''); if (!a) return 'not_found'; if (pw.length < 8 || pw.length > 128) return 'weak_password';
     a.salt = crypto.randomBytes(16).toString('base64'); a.h = await hash(pw, a.salt); await saveAcct(uid); return null;
   }
-  return { createAccount, verifyPassword, linkChat, setPassword };
+  /* ---------- የአካውንት አስተዳደር (ለ Telegram bot) ---------- */
+  const acctOf = uid => col('data/users/' + uid).acct;
+  function unlinkChat(uid) { const a = acctOf(uid); if (!a) return; delete getDb().accounts[accountKey(a.email, a.phone)]; saveDB(); }
+  async function setName(uid, name) {
+    const p = 'data/users/' + uid, a = acctOf(uid); name = S(name, 80); if (!a) return 'not_found'; if (name.length < 3) return 'missing_fields';
+    a.name = name; col(p).private = { ...(col(p).private || {}), fullName: name, ts: Date.now() }; await saveAcct(uid); return null;
+  }
+  async function changeIdentity(uid, { email, phone }, chatId, username) {     // ኢሜይል እና/ወይም ስልክ ይቀይራል፤ የ Telegram ግንኙነት ከአዲሱ ጋር ይቀጥላል
+    const a = acctOf(uid); if (!a) return 'not_found'; const st = getStore(); let ne = a.email, np = a.phone;
+    if (email) { ne = S(email, 120).toLowerCase(); if (!/^\S+@\S+\.\S+$/.test(ne)) return 'invalid_email'; if (process.env.ADMIN_EMAIL && ne === process.env.ADMIN_EMAIL.trim().toLowerCase()) return 'email_taken'; const o = findUid(ne); if (o && o !== uid) return 'email_taken'; }
+    if (phone) { np = normPhoneET(phone); if (!np) return 'invalid_phone'; const o = findUid(np); if (o && o !== uid) return 'phone_taken'; }
+    const oldKey = accountKey(a.email, a.phone), prev = getDb().accounts[oldKey]; delete getDb().accounts[oldKey];
+    delete st.idx['e:' + String(a.email).toLowerCase()]; delete st.idx['p:' + a.phone];
+    a.email = ne; a.phone = np; st.idx['e:' + ne] = uid; st.idx['p:' + np] = uid;
+    getDb().accounts[accountKey(ne, np)] = { chatId: chatId || (prev && prev.chatId), phone: normPhoneET(np), username: username || (prev && prev.username) || '', linkedAt: Date.now() };
+    saveDB(); await saveAcct(uid); return null;
+  }
+  function setPref(uid, k, v) {
+    const p = 'data/users/' + uid; if (!acctOf(uid)) return; col(p).prefs = { ...(col(p).prefs || {}), [k]: v };
+    if (pool) pgUpsert(p, 'prefs', col(p).prefs).catch(e => console.warn('pref save', e.message)); else persist(); bump(p);
+  }
+  async function deleteAccount(uid) {                                            // ንቁ ትዕዛዝ ካለ አይሰረዝም፤ ህዝባዊ ገጾች ይደበቃሉ
+    const a = acctOf(uid); if (!a) return 'not_found'; const st = getStore(), db = getDb(), sh = Object.values(col('mk/shops')).find(x => x.uid === uid);
+    const DONE = ['settled', 'cancelled', 'refunded'];
+    if (Object.values(col('mk/orders')).some(o => !DONE.includes(o.status) && (o.buyerUid === uid || (sh && o.shopId === sh.id)))) return 'orders_active';
+    const ch = [], hide = (path, pred, patch) => Object.values(col(path)).forEach(x => { if (pred(x)) { Object.assign(x, patch); ch.push([path, x.id]); } });
+    hide('mk/shops', x => x.uid === uid, { status: 'suspended', note: 'አካውንት ተሰርዟል' }); hide('pg/pages', x => x.uid === uid, { status: 'hidden' }); hide('pp/workers', x => x.uid === uid, { status: 'hidden' }); hide('pp/employers', x => x.uid === uid, { status: 'hidden' }); hide('pp/jobs', x => x.uid === uid, { status: 'closed', deleted: true });
+    const p = 'data/users/' + uid; delete db.accounts[accountKey(a.email, a.phone)];
+    Object.keys(st.idx).forEach(k => { if (st.idx[k] === uid) delete st.idx[k]; }); delete st.docs[p];
+    if (pool) { for (const [path, id] of ch) await pgUpsert(path, id, col(path)[id]); await pool.query('DELETE FROM kv WHERE path=$1', [p]); await pgUpsert('_sys', 'idx', st.idx); } else persist();
+    [...new Set(ch.map(x => x[0]))].forEach(bump); bump(p); saveDB(); return null;
+  }
+  return { createAccount, verifyPassword, linkChat, setPassword, unlinkChat, setName, changeIdentity, setPref, deleteAccount };
 };
