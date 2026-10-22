@@ -207,6 +207,22 @@ async function handleContact(msg) {
 }
 async function handleStart(text, chat) {
   if (/^\/myid\b/.test(text || '')) return tg('sendMessage', { chat_id: chat.id, text: `🆔 የእርስዎ Telegram Chat ID፦ ${chat.id}\n\n(አድሚን ከሆኑ ይህን በ Render ውስጥ ADMIN_TELEGRAM_CHAT_ID ላይ ያስገቡ።)` });
+  const command = String(text || '').trim().split(/\s+/)[0].split('@')[0].toLowerCase();
+  const commandLinks = {
+    '/market': '/market', '/products': '/market', '/shops': '/shops',
+    '/jobs': '/jobs', '/orders': '/orders', '/login': '/login',
+    '/register': '/register', '/profile': '/me', '/admin': '/admin'
+  };
+  if (command === '/help') {
+    return tg('sendMessage', { chat_id: chat.id,
+      text: '🇪🇹 Etio Digital Market — እገዛ\n\n/start — ዋና ማውጫ\n/market — ዕቃዎችን ፈልግ\n/shops — ሱቆችን አስስ\n/jobs — ሥራ ፈልግ\n/orders — ትዕዛዞች\n/login — ግባ\n/register — መለያ ፍጠር\n\nሁሉንም ተግባሮች በMarketplace ውስጥ ለመጠቀም ከታች ያለውን ቁልፍ ይጫኑ።',
+      reply_markup: { inline_keyboard: [[{ text: '🛍️ Marketplace ክፈት', web_app: { url: `${PUBLIC_BASE_URL}/telegram` } }]] } });
+  }
+  if (commandLinks[command]) {
+    const paths = { '/market':'/market', '/products':'/market', '/shops':'/shops', '/jobs':'/jobs', '/orders':'/orders', '/login':'/login', '/register':'/register', '/profile':'/me', '/admin':'/admin' };
+    const target = `${PUBLIC_BASE_URL}${paths[command]}`;
+    return tg('sendMessage', { chat_id: chat.id, text: `🇪🇹 Etio Digital Market\n\n${command.slice(1)} ለመክፈት ከታች ይጫኑ።`, reply_markup: { inline_keyboard: [[{ text: '➡️ ክፈት', url: target }], [{ text: '🛍️ ሙሉ Marketplace', web_app: { url: `${PUBLIC_BASE_URL}/telegram` } }]] } });
+  }
   const m=/^\/start(?:\s+(.+))?$/.exec(text||'');
   if(!m) return;
   const requestId=m[1];
@@ -222,7 +238,7 @@ async function handleStart(text, chat) {
     await tg('sendMessage',{chat_id:chat.id,text:`🇪🇹 Etio Digital Market\n\n🔒 ለደህንነትዎ፣ OTP የሚላከው በምዝገባ ወቅት ወደተሰጠው ስልክ ቁጥር ብቻ ነው።\n📞 የተመዘገበ ቁጥር፦ ${maskPhone(r.phone)}\n\nከታች ያለውን «📱 ስልኬን አጋራ» ይጫኑ።`,reply_markup:CONTACT_KB});
     return;
   }
-  await tg('sendMessage',{chat_id:chat.id,text:'🇪🇹 እንኳን ወደ Etio Digital Market በደህና መጡ!\n\n🛍️ ዕቃዎችን ይፈልጉ፣ ትዕዛዝ ይከታተሉ፣ ሱቅ ይክፈቱ ወይም ሥራ ይፈልጉ።\n\nከታች ያለውን ቁልፍ በመጫን ሙሉ Marketplace ይክፈቱ።', reply_markup:{inline_keyboard:[[{text:'🇪🇹 Marketplace ክፈት',web_app:{url:`${PUBLIC_BASE_URL}/telegram`}}],[{text:'🌐 Website ክፈት',url:PUBLIC_BASE_URL}]]}});
+  await tg('sendMessage',{chat_id:chat.id,text:'🇪🇹 እንኳን ወደ Etio Digital Market በደህና መጡ!\n\n🛍️ ዕቃ ይግዙ/ይሽጡ፣ ሱቆችን ያስሱ፣ ሥራ ይፈልጉ፣ ትዕዛዞችን ይከታተሉ እና የንግድ ገጽዎን ያስተዳድሩ።\n\n👇 ሙሉ Marketplace በTelegram ውስጥ ለመክፈት ይጫኑ።\n/help ለትዕዛዞች ዝርዝር።', reply_markup:{inline_keyboard:[[{text:'🇪🇹 🛍️ Marketplace ክፈት',web_app:{url:`${PUBLIC_BASE_URL}/telegram`}}],[{text:'🔎 ዕቃዎች',url:`${PUBLIC_BASE_URL}/market`},{text:'💼 ሥራዎች',url:`${PUBLIC_BASE_URL}/jobs`}],[{text:'🌐 Website ክፈት',url:PUBLIC_BASE_URL}]]}});
 }
 
 async function configureWebhook() {
