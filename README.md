@@ -1,0 +1,57 @@
+# 🇪🇹 ኢትዮ ዲጂታል ማርኬት — Next.js + Tailwind CSS
+
+አንድ ሰርቨር (Node): **Express API** (`server/`) + **Next.js 14** ገጾች (`src/`) + **Tailwind CSS**።
+ውሂብ በ Postgres (Neon)፤ መግቢያ በይለፍ ቃል + በተመዘገበው ስልክ ብቻ የሚላክ Telegram OTP።
+
+## አወቃቀር
+```
+server.js            ← መነሻ (Express + Next አንድ ላይ)
+server/app.js        ← OTP/Telegram፣ ማከማቻ፣ አድሚን፣ ክፍለ-ጊዜ
+server/auth.js       ← ምዝገባ/መግቢያ (PBKDF2 — ከድሮው ጋር ተኳሃኝ)
+server/market.js     ← ሱቅ፣ ዕቃ፣ ትዕዛዝ (escrow)፣ ግምገማ
+server/people.js     ← ሠራተኛ፣ አሰሪ፣ ሥራ፣ ማመልከቻ
+src/app/**           ← ገጾች (App Router)
+src/components/**    ← ክፍሎች     src/lib/** ← API፣ ቅጽ፣ ቋሚዎች
+public/              ← og.png፣ Google ማረጋገጫ ፋይል
+```
+
+## በኮምፒዩተር ላይ መሞከር
+```bash
+npm install
+cp .env.example .env     # ዋጋዎቹን ይሙሉ
+npm run build
+npm start                # http://localhost:3000
+```
+
+## 🚀 Render ላይ መጫን (ደረጃ በደረጃ)
+1. **GitHub፦** በ repo ውስጥ ያሉትን የድሮ ፋይሎች በሙሉ ያጥፉ (`app.js`፣ `index.html`፣ `market.js`፣ `market-ui.js`፣ `people.js`፣ `package*.json`፣ `og.png`…)፤ ከዚያ ይህን ፕሮጀክት (ሁሉንም ፋይሎች እና አቃፊዎች) ይጫኑ። **አቃፊዎችን (`src`፣ `server`፣ `public`) መጎተት ኮምፒዩተር ላይ ብቻ ይሠራል።**
+2. **Render → Settings፦**
+   - Build Command፦ `npm install && npm run build`
+   - Start Command፦ `npm start`
+   - Health Check Path፦ `/api/health`
+3. **Environment፦** `.env.example` ውስጥ ያሉትን ሁሉ ያስገቡ። ዋና ዋናዎቹ፦ `DATABASE_URL`፣ `ADMIN_PASSWORD`፣ `ADMIN_EMAIL`፣ `TOKEN_SECRET`፣ `TELEGRAM_*`፣ `SITE_URL`፣ `NEXT_PUBLIC_SITE_URL`፣ `NODE_OPTIONS=--max-old-space-size=460`።
+4. **Deploy** ይጫኑ፤ Logs ውስጥ `Postgres storage ready` እና `listening on port` ይፈልጉ።
+5. ያረጋግጡ፦ `/api/health` → `"ok":true`፤ `/robots.txt`፤ `/sitemap.xml`።
+6. **አድሚን፦** `/login` → «አድሚን ነዎት?» → ኢሜይል (ADMIN_EMAIL) + የይለፍ ቃል (ADMIN_PASSWORD)። ከዚያ `/admin` → ገበያ → ⚙️ ቅንብር ውስጥ **የክፍያ አካውንቶችን** (ዘዴ|ቁጥር|ባለቤት) እና ኮሚሽን ያስገቡ።
+
+## 🆕 ስሪት 4 — የራስ ገጽ እና የክፍያ ደረሰኝ
+- **🌐 የራስ ገጽ (`/me/sites/new`)፦** ማንኛውም የተመዘገበ ሰው (ሠራተኛ፣ አሰሪ፣ ሱቅ፣ ሆቴል፣ ክሊኒክ… ወይም ባዶ) ከአብነት ይጀምራል፤ ክፍሎችን እና ጥያቄዎችን እንደ Google Form ራሱ ይቀርጻል (10 የመልስ ዓይነቶች፦ ጽሑፍ፣ ቁጥር፣ ስልክ፣ ሊንክ፣ ቀን፣ ምርጫ፣ ብዙ ምርጫ፣ አዎ/አይደለም፣ ፎቶ)፣ ራሱ ይሞላል → ገጹ `/site/<id>` ላይ እንደ ራሱ ድረ-ገጽ ይታያል። ሁሉም ክፍል 👁 እና «ተጨማሪ ይመልከቱ» አለው። ዝርዝር፦ `/sites`።
+- **🔒 «ለአድሚን ብቻ»፦** በመስክ ላይ ምልክት ሲደረግ (የክፍያ አካውንት፣ መታወቂያ…) ከህዝብ API ይወገዳል፤ አድሚን በ `/admin → 🌐 ገጾች` ያየዋል።
+- **📝 የጎብኝ ቅጽ፦** ባለቤቱ ቀጠሮ/ክፍል ማስያዣ/ማመልከቻ ቅጽ ያዘጋጃል፤ የገቡ ተጠቃሚዎች ይሞላሉ → መልሶች በ «📬 መልሶች» ይታያሉ + Telegram ማሳወቂያ።
+- **🧾 ደረሰኝ፦** አድሚን ክፍያ ሲያረጋግጥ (ለገዥ)፣ ለሻጭ ሲከፍል (ለሻጭ)፣ ተመላሽ ሲያደርግ (ለገዥ) bot «🧾 ደረሰኝ አውርድ» ቁልፍ ያለው መልዕክት ይልካል። ሊንኩ `/r/<የተፈረመ ቶከን>` (90 ቀን፣ ሊቀየር አይችልም)፤ `?dl=1` ፋይል ሆኖ ይወርዳል፣ «አትም / PDF» ቁልፍ አለው። በድረ-ገጹ ደግሞ በ ትዕዛዝ ገጽ እና በሻጭ ትዕዛዝ ዝርዝር ውስጥ ይገኛል። **ማስታወሻ፦** የ Telegram ቁልፍ እንዲሠራ `PUBLIC_BASE_URL` በ `https://` መጀመር አለበት።
+
+## 🤖 ስሪት 5 — ሙሉ ድረ-ገጹ በ Telegram bot ውስጥም
+ቦቱ (`server/bot.js`) ለተገናኘው አካውንት በተፈረመ ቶከን ወደ ራሱ API (127.0.0.1) ይጠራል — ስለዚህ ህጎች፣ escrow፣ ማረጋገጫዎች እና ማሳወቂያዎች ከድረ-ገጹ ጋር አንድ ናቸው።
+- **መግቢያ/ምዝገባ፦** `/start` → «📱 ስልኬን አጋራ» (Telegram ስልኩን ያረጋግጣል) → ነባር አካውንት ካለ የይለፍ ቃል፤ ከሌለ ኢሜይል + ስም + የይለፍ ቃል (የይለፍ ቃል መልዕክቶች ወዲያው ይሰረዛሉ)። በቦቱ የተከፈተ አካውንት በድረ-ገጹም ይሠራል።
+- **ማውጫ፦** 🛍 ገበያ · 🏪 ሱቆች · 💼 ሥራ · 🌐 ገጾች · 🛒 ጋሪ · 📦 ትዕዛዞቼ · 👤 ገጾቼ · 🔎 ፈልግ · ❓ እገዛ (+ 🛡 አድሚን ለ `ADMIN_TELEGRAM_CHAT_ID`)።
+- **ገዥ፦** መፈለግ፣ ጋሪ፣ ትዕዛዝ (በአካል/ማድረስ)፣ ክፍያ ማስገባት፣ መሰረዝ፣ «ደርሶኛል»፣ ክርክር፣ ግምገማ፣ ደረሰኝ ማውረድ።
+- **ሻጭ፦** ሱቅ መክፈት/ማስተካከል (ፎቶ ጨምሮ)፣ ዕቃ መጨመር/ማስተካከል/መደበቅ/መሰረዝ፣ ትዕዛዝ መቀበል/መላክ — ማሳወቂያው ላይ ✅/✕ ቁልፍ አለ።
+- **ሥራ፦** ክፍት ሥራ/ሠራተኛ ማየት፣ ማመልከት፣ ቅጥር መጠየቅ፣ ሠራተኛ/አሰሪ ገጽ፣ ሥራ ማስታወቅ፣ አመልካቾችን ዝርዝር/ቅጥር/ውድቅ።
+- **የራስ ገጽ፦** አብነት መርጦ ጥያቄ በጥያቄ መሙላት፣ የሌሎችን ገጽ ክፍል በክፍል 👁 ማየት፣ የጎብኝ ቅጽ መሙላት፣ መልሶችን ማየት፣ መደበቅ/መሰረዝ። (ጥያቄዎችን መጨመር/መቀየር በድረ-ገጽ አርታዒ ሊንክ ነው።)
+- **አድሚን፦** ክፍያ ✅/❌፣ ለሻጭ መክፈል (ማጣቀሻ)፣ ተመላሽ፣ ክርክር፣ ሱቅ ማጽደቅ/ውድቅ፣ ገጽ/ሠራተኛ/አሰሪ/ሥራ ማገድ — ማሳወቂያዎች ላይ ቁልፎች አሉ።
+- **ማስታወሻ፦** የጋሪ እና የንግግር ሁኔታ በ Postgres ይቀመጣል። `server/templates.generated.js` ከ `src/lib/templates.js` የተፈጠረ ነው (አብነት ከቀየሩ እንደገና ይፍጠሩ፦ `esbuild src/lib/templates.js --format=cjs --outfile=server/templates.generated.js`)። Webhook አሁን `callback_query` ይቀበላል — ከ deploy በኋላ በራሱ ይዘጋጃል።
+
+## ማስታወሻዎች
+- የድሮ አካውንቶች (የድሮው ገጽ የፈጠራቸው) በተመሳሳይ ኢሜይል/ስልክ እና የይለፍ ቃል ይገባሉ፤ Telegram ካልተገናኙ አንድ ጊዜ «ስልኬን አጋራ» ያደርጋሉ።
+- የድሮው አጠቃላይ የዳታቤዝ API (`/api/db`፣ `/api/session`፣ `/api/account`) ተዘግቷል (ያለ OTP አካውንት መፍጠር እንዳይቻል)።
+- Google Search Console ማረጋገጫ ፋይል (`public/google423971619482a954.html`) ተካትቷል።
