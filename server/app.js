@@ -373,11 +373,20 @@ app.delete('/api/admin/account/:uid', needAdmin, async (req, res) => {
 });
 
 const ADMIN_CHAT = process.env.ADMIN_TELEGRAM_CHAT_ID || '';
-function sendTg(chatId, text) { if (!TOKEN || !chatId) return; tg('sendMessage', { chat_id: chatId, text: String(text).slice(0, 3800), disable_web_page_preview: true }).catch(e => console.warn('notify failed:', e.message)); }
-function notifyUser(uid, text) { try { const a = (store.docs['data/users/' + uid] || {}).acct; if (!a) return; const l = db.accounts[accKey(a)]; if (l && l.chatId) sendTg(l.chatId, `🇪🇹 Etio Digital Market\n\n${text}\n\n🔗 ${PUBLIC_BASE_URL}`); } catch (e) { console.warn('notifyUser', e.message); } }
+async function sendTg(chatId, text, btn) {   // btn = { url, label } → በመልዕክቱ ስር የሚጫን ቁልፍ (ለምሳሌ «🧾 ደረሰኝ አውርድ»)
+  if (!TOKEN || !chatId) return;
+  const base = { chat_id: chatId, text: String(text).slice(0, 3800), disable_web_page_preview: true };
+  try {
+    if (btn && /^https:\/\//.test(btn.url || '')) { try { return await tg('sendMessage', { ...base, reply_markup: { inline_keyboard: [[{ text: String(btn.label || '🧾 ደረሰኝ አውርድ').slice(0, 60), url: btn.url }]] } }); } catch (e) { console.warn('button send failed, retry plain:', e.message); } }
+    await tg('sendMessage', base);
+  } catch (e) { console.warn('notify failed:', e.message); }
+}
+function notifyUser(uid, text, btn) { try { const a = (store.docs['data/users/' + uid] || {}).acct; if (!a) return; const l = db.accounts[accKey(a)]; if (l && l.chatId) sendTg(l.chatId, `🇪🇹 Etio Digital Market\n\n${text}${btn && btn.url ? '\n\n🧾 ' + btn.url : ''}\n\n🔗 ${PUBLIC_BASE_URL}`, btn); } catch (e) { console.warn('notifyUser', e.message); } }
 function notifyAdmin(text) { sendTg(ADMIN_CHAT, `🛡️ አድሚን\n\n${text}\n\n🔗 ${PUBLIC_BASE_URL}`); }
-const mkApi = require('./market')({ app, col, bump, pool, pgUpsert, persist, readTok, limit, notifyUser, notifyAdmin });
+const receipts = require('./receipt')({ app, col, secret: TOKEN_SECRET, baseUrl: PUBLIC_BASE_URL });
+const mkApi = require('./market')({ app, col, bump, pool, pgUpsert, persist, readTok, limit, notifyUser, notifyAdmin, receipts });
 require('./people')({ app, col, limit, notifyUser, notifyAdmin, ...mkApi });
+require('./pages')({ app, col, bump, pool, persist, limit, notifyUser, notifyAdmin, ...mkApi });
 
 require('./auth')({ app, col, bump, pool, pgUpsert, persist, readTok, limit, tokFor, findUid, isSusp, accountKey, normPhoneET, tg, randDigits, id, safeOtpMatch, clean, saveDB, getDb: () => db, getStore: () => store, PUBLIC_BASE_URL, BOT_USERNAME, OTP_TTL, LINK_TTL, notifyAdmin });
 

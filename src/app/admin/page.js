@@ -65,8 +65,17 @@ function People() {
     </div>
   );
 }
+function Pages() {
+  const [d, setD] = useState(null), [open, setOpen] = useState({}); const load = useCallback(() => get('/api/pages/admin/list').then(setD), []); useEffect(() => { load(); }, [load]);
+  async function st(id, status) { await post(`/api/pages/admin/${id}/status`, { status }); load(); }
+  async function view(id) { if (open[id]) return setOpen({ ...open, [id]: null }); const r = await get('/api/pages/admin/' + id); setOpen({ ...open, [id]: r }); }
+  const show = v => (Array.isArray(v) ? v.join('፣ ') : v === 'yes' ? 'አዎ' : v === 'no' ? 'አይደለም' : String(v));
+  if (!d) return <Spinner />; if (!d.ok) return <p className="msg-err">{errText(d.error)}</p>;
+  return (<div>{d.items.length === 0 && <div className="card muted text-center">ገጽ የለም</div>}{d.items.map(x => (<div key={x.id} className="card mb-2"><div className="flex items-center gap-2"><div className="min-w-0 flex-1"><b className="block truncate">{x.title} <span className="tag">{x.kind}</span></b><span className="muted block truncate">{x.owner.email} · {x.owner.phone}</span></div><StatusTag s={x.status} /><button className="btn-ghost !min-h-[40px] !px-3" onClick={() => view(x.id)} aria-label="ሙሉ መረጃ">👁</button><button className="btn-ghost !min-h-[40px] !px-3" onClick={() => st(x.id, x.status === 'suspended' ? 'active' : 'suspended')}>{x.status === 'suspended' ? '✅' : '⛔'}</button></div>
+    {open[x.id] && open[x.id].ok && <div className="mt-3 space-y-2">{open[x.id].page.sections.map(s => <div key={s.id} className="rounded-2xl bg-brand-light p-3"><b>{s.icon} {s.title}</b>{s.fields.filter(f => !(Array.isArray(f.value) ? !f.value.length : f.value === '')).map(f => <p key={f.id} className="text-sm"><span className="muted">{f.priv ? '🔒 ' : ''}{f.label}፦</span> {f.type === 'image' ? f.value.map(i => <a key={i} className="mr-2 font-bold text-brand underline" target="_blank" rel="noopener" href={`/api/market/img/${i}`}>ፎቶ</a>) : show(f.value)}</p>)}</div>)}</div>}</div>))}</div>);
+}
 function Admin() {
-  const [t, setT] = useState('market'), tabs = [['market', '🛍️ ገበያ'], ['accounts', '👥 አካውንቶች'], ['people', '💼 ሰዎች እና ሥራ']];
-  return (<div className="mx-auto max-w-3xl"><PageTitle>🛡️ አድሚን</PageTitle><div className="mb-4 flex gap-2 overflow-x-auto">{tabs.map(([k, l]) => <button key={k} className={t === k ? 'chip-on' : 'chip'} onClick={() => setT(k)}>{l}</button>)}</div>{t === 'market' && <Market />}{t === 'accounts' && <Accounts />}{t === 'people' && <People />}</div>);
+  const [t, setT] = useState('market'), tabs = [['market', '🛍️ ገበያ'], ['accounts', '👥 አካውንቶች'], ['people', '💼 ሰዎች እና ሥራ'], ['pages', '🌐 ገጾች']];
+  return (<div className="mx-auto max-w-3xl"><PageTitle>🛡️ አድሚን</PageTitle><div className="mb-4 flex gap-2 overflow-x-auto">{tabs.map(([k, l]) => <button key={k} className={t === k ? 'chip-on' : 'chip'} onClick={() => setT(k)}>{l}</button>)}</div>{t === 'market' && <Market />}{t === 'accounts' && <Accounts />}{t === 'people' && <People />}{t === 'pages' && <Pages />}</div>);
 }
 export default function Page() { return <RequireAuth admin><Admin /></RequireAuth>; }

@@ -9,9 +9,9 @@ import RequireAuth from '@/components/RequireAuth';
 import PayAccounts from '@/components/PayAccounts';
 
 function Order({ id }) {
-  const [o, setO] = useState(null); const [cfg, setCfg] = useState({ accounts: [] }); const [m, setM] = useState(''); const [f, setF] = useState({ method: PAY[0], ref: '', note: '', reason: '', rate: 0, text: '' });
+  const [rcpts, setRcpts] = useState([]); const [o, setO] = useState(null); const [cfg, setCfg] = useState({ accounts: [] }); const [m, setM] = useState(''); const [f, setF] = useState({ method: PAY[0], ref: '', note: '', reason: '', rate: 0, text: '' });
   const load = useCallback(async () => { const [r, c] = await Promise.all([get('/api/market/my/orders'), get('/api/market/config')]); setO((r.orders || []).find(x => x.id === id) || false); if (c.ok) setCfg(c); }, [id]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); get(`/api/market/order/${id}/receipts`).then(r => setRcpts(r.receipts || [])); }, [load, id]);
   async function act(path, body, url) { setM(''); const r = await post(url || `/api/market/order/${id}/${path}`, body); if (!r.ok) return setM(errText(r.error)); await load(); }
   if (o === null) return <Spinner />; if (o === false) return <div className="card">ትዕዛዝ አልተገኘም</div>;
   const set = k => e => setF({ ...f, [k]: e.target.value });
@@ -28,6 +28,8 @@ function Order({ id }) {
         <h2 className="text-lg">💳 ክፍያ</h2><PayAccounts amount={o.total} />
         <Select label="የከፈሉበት ዘዴ" options={PAY} value={f.method} onChange={set('method')} /><Input label="የግብይት ማጣቀሻ ቁጥር" value={f.ref} onChange={set('ref')} placeholder="ለምሳሌ TB123456789" /><Input label="ማስታወሻ (አማራጭ)" value={f.note} onChange={set('note')} />
         <Msg m={m} /><button className="btn-primary mt-3 w-full" onClick={() => act('pay', { method: f.method, ref: f.ref, note: f.note })}>💳 ክፍያ ፈጽሜያለሁ — አረጋግጥ</button><button className="btn-ghost mt-2 w-full" onClick={() => act('cancel', {})}>✕ ትዕዛዙን ሰርዝ</button></div>)}
+
+      {rcpts.length > 0 && <div className="card"><h2 className="text-lg">🧾 ደረሰኞች</h2>{rcpts.map(r => <div key={r.kind} className="mt-2 flex items-center gap-2 rounded-2xl bg-brand-light p-3"><div className="min-w-0 flex-1"><b>{r.label}</b><p className="muted">{r.no}</p></div><a className="btn-ghost !min-h-[40px]" href={r.url} target="_blank" rel="noopener">👁</a><a className="btn-primary !min-h-[40px]" href={r.url + '?dl=1'}>⬇️ አውርድ</a></div>)}</div>}
 
       {(o.status === 'shipped' || o.status === 'delivered') && (<div className="card">{o.status === 'shipped' && <button className="btn-primary w-full" onClick={() => act('receive', {})}>🤝 ዕቃው ደረሰኝ፤ ደህና ነው</button>}
         <Input label="ችግር አለ? ምክንያት ይጻፉ" value={f.reason} onChange={set('reason')} placeholder="ዕቃው አልደረሰም / ተበላሽቷል…" /><button className="btn-danger mt-2 w-full" onClick={() => act('dispute', { reason: f.reason })}>⚖️ ክርክር ክፈት</button><Msg m={m} /></div>)}

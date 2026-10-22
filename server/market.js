@@ -5,7 +5,7 @@
 const crypto = require('crypto');
 module.exports = function market(ctx) {
   const { app, col, bump, pool, pgUpsert, persist, readTok, limit } = ctx;
-  const tell = (uid, t) => { try { ctx.notifyUser && ctx.notifyUser(uid, t); } catch (e) { } }, tellAdmin = t => { try { ctx.notifyAdmin && ctx.notifyAdmin(t); } catch (e) { } };
+  const rc = ctx.receipts, tell = (uid, t, btn) => { try { ctx.notifyUser && ctx.notifyUser(uid, t, btn); } catch (e) { } }, rbtn = (o, k) => (rc ? { url: rc.url(o.id, k), label: '🧾 ደረሰኝ አውርድ' } : undefined), tellAdmin = t => { try { ctx.notifyAdmin && ctx.notifyAdmin(t); } catch (e) { } };
   const short = o => '#' + o.id.slice(0, 6), money = n => Number(n).toLocaleString('en-US') + ' ብር';
   const COMM = Number(process.env.COMMISSION_PCT) || 5;
   const CATS = ['ምግብ እና መጠጥ', 'ልብስ እና ጫማ', 'ኤሌክትሮኒክስ', 'ሞባይል እና መለዋወጫ', 'የቤት ዕቃ', 'ግንባታ እና ሃርድዌር', 'ግብርና', 'ውበት እና ጤና', 'መጻሕፍት እና ትምህርት', 'ሆቴል እና ማረፊያ', 'ሙያተኛ አገልግሎት', 'አገልግሎት', 'ሌላ'];
@@ -186,6 +186,14 @@ module.exports = function market(ctx) {
     try { await saveMany([[P.reviews, id], [P.orders, o.id]]); const sh = col(P.shops)[o.shopId]; sh && tell(sh.uid, `⭐ አዲስ ግምገማ (${r}/5)${S(req.body.text, 100) ? '፦ ' + S(req.body.text, 100) : ''}`); res.json({ ok: true }); } catch (e) { bad(res, 503, 'storage'); }
   });
 
+  // ለገዥ/ለሻጭ የሚገኙ ደረሰኞች (በድረ-ገጹ ላይ «ደረሰኝ አውርድ» ቁልፍ)
+  app.get('/api/market/order/:id/receipts', (req, res) => {
+    const u = who(req, res); if (!u || !rc) return; const o = col(P.orders)[req.params.id]; if (!o) return bad(res, 404, 'not_found');
+    const s = col(P.shops)[o.shopId], isBuyer = o.buyerUid === u.uid, isSeller = s && s.uid === u.uid; if (!isBuyer && !isSeller) return bad(res, 403, 'not_allowed');
+    const mineKinds = rc.available(o).filter(k => (k === 'payout' ? isSeller : isBuyer));
+    res.json({ ok: true, receipts: mineKinds.map(k => ({ kind: k, label: rc.KINDS[k], no: rc.no(o, k), url: rc.url(o.id, k).replace(/^https?:\/\/[^/]+/, '') })) });
+  });
+
   /* ---------- አድሚን ---------- */
   app.get('/api/market/admin/overview', async (req, res) => {
     if (!adminOnly(req, res)) return; await expire(); const O = Object.values(col(P.orders)), V = o => orderView(o, 'admin');
@@ -216,9 +224,9 @@ module.exports = function market(ctx) {
     const ch = [[P.orders, o.id]], err = a.run(o, req.body || {}); if (err) return bad(res, 400, err);
     if (a.restock) { restock(o); o.items.forEach(i => col(P.products)[i.pid] && ch.push([P.products, i.pid])); }
     try { await saveMany(ch); const sh = col(P.shops)[o.shopId], act = req.params.act, b = req.body || {};
-      if (act === 'verify-payment') { if (b.ok) { tell(o.buyerUid, `✅ ክፍያዎ ${short(o)} ተረጋግጧል። ሻጩ ዕቃውን ያዘጋጃል።`); sh && tell(sh.uid, `✅ ትዕዛዝ ${short(o)} ክፍያ ተረጋግጧል — አሁን ተቀብለው ያዘጋጁ (${money(o.total)})።`); } else tell(o.buyerUid, `❌ ክፍያዎ ${short(o)} አልተቀበለም${o.payment && o.payment.rejected ? '፦ ' + o.payment.rejected : ''}። ትክክለኛውን ማጣቀሻ በድረ-ገጹ እንደገና ያስገቡ።`); }
-      if (act === 'settle' || act === 'release') sh && tell(sh.uid, `💰 ለትዕዛዝ ${short(o)} ${money(o.sellerNet)} ተከፍሏል። ማጣቀሻ፦ ${o.settle.ref}`);
-      if (act === 'refund') tell(o.buyerUid, `↩️ ለትዕዛዝ ${short(o)} ${money(o.total)} ተመልሷል። ማጣቀሻ፦ ${o.settle.ref}`);
+      if (act === 'verify-payment') { if (b.ok) { tell(o.buyerUid, `✅ ክፍያዎ ${short(o)} ተረጋግጧል (${money(o.total)})። ሻጩ ዕቃውን ያዘጋጃል።\n📥 የክፍያ ደረሰኝዎን ከታች ባለው ቁልፍ ያውርዱ።`, rbtn(o, 'payment')); sh && tell(sh.uid, `✅ ትዕዛዝ ${short(o)} ክፍያ ተረጋግጧል — አሁን ተቀብለው ያዘጋጁ (${money(o.total)})።`); } else tell(o.buyerUid, `❌ ክፍያዎ ${short(o)} አልተቀበለም${o.payment && o.payment.rejected ? '፦ ' + o.payment.rejected : ''}። ትክክለኛውን ማጣቀሻ በድረ-ገጹ እንደገና ያስገቡ።`); }
+      if (act === 'settle' || act === 'release') sh && tell(sh.uid, `💰 ለትዕዛዝ ${short(o)} ${money(o.sellerNet)} ተከፍሏል። ማጣቀሻ፦ ${o.settle.ref}\n📥 የክፍያ ደረሰኝዎን ያውርዱ።`, rbtn(o, 'payout'));
+      if (act === 'refund') tell(o.buyerUid, `↩️ ለትዕዛዝ ${short(o)} ${money(o.total)} ተመልሷል። ማጣቀሻ፦ ${o.settle.ref}\n📥 የተመላሽ ደረሰኝዎን ያውርዱ።`, rbtn(o, 'refund'));
       res.json({ ok: true, status: o.status }); } catch (e) { bad(res, 503, 'storage'); }
   });
   return { who, saveMany, bad, S, N, phoneET, adminOnly, nid, userInfo };

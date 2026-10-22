@@ -12,7 +12,7 @@ export default function Header() {
         <Link href="/" className="shrink-0 bg-brand bg-clip-text text-lg font-black text-transparent sm:text-xl">🇪🇹 ኢትዮ ዲጂታል ማርኬት</Link>
         <form onSubmit={search} className="hidden flex-1 md:block"><input name="q" className="input !py-2" placeholder="🔎 ዕቃ፣ ሱቅ ወይም አገልግሎት ፈልግ" /></form>
         <nav className="ml-auto hidden items-center gap-1 text-sm font-bold md:flex">
-          <Link className="rounded-xl px-3 py-2 hover:bg-brand-light" href="/market">ገበያ</Link><Link className="rounded-xl px-3 py-2 hover:bg-brand-light" href="/shops">ሱቆች</Link><Link className="rounded-xl px-3 py-2 hover:bg-brand-light" href="/jobs">ሥራ</Link><Link className="rounded-xl px-3 py-2 hover:bg-brand-light" href="/about">ስለ እኛ</Link>
+          <Link className="rounded-xl px-3 py-2 hover:bg-brand-light" href="/market">ገበያ</Link><Link className="rounded-xl px-3 py-2 hover:bg-brand-light" href="/shops">ሱቆች</Link><Link className="rounded-xl px-3 py-2 hover:bg-brand-light" href="/jobs">ሥራ</Link><Link className="rounded-xl px-3 py-2 hover:bg-brand-light" href="/sites">ገጾች</Link><Link className="rounded-xl px-3 py-2 hover:bg-brand-light" href="/about">ስለ እኛ</Link>
         </nav>
         <Link href="/cart" aria-label="ጋሪ" className="relative ml-auto grid h-11 w-11 place-items-center rounded-2xl border border-line bg-white text-xl md:ml-0 dark:border-[#25352c] dark:bg-[#16211b]">🛒{cartCount > 0 && <b className="absolute -right-1.5 -top-1.5 min-w-[20px] rounded-full bg-red-600 px-1 text-center text-[11px] leading-5 text-white">{cartCount}</b>}</Link>
         {user ? (
