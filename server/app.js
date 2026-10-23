@@ -4,6 +4,10 @@ const path = require('path');
 const crypto = require('crypto');
 require('dotenv').config();
 
+// የአድሚን ማንነት (በ Render environment መቀየር ይቻላል)፦ ኢሜይል (ኢሜይል OTP) + ስልክ (Telegram ማረጋገጫ)
+process.env.ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'tirunehawoke12@gmail.com';
+const ADMIN_PHONE = process.env.ADMIN_PHONE || '0946705941';
+const mailer = require('./mailer');
 const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '1mb' }));
@@ -22,8 +26,8 @@ const DB_FILE = process.env.OTP_DB_FILE || path.join(__dirname, 'telegram-otp-da
 function loadDB() {
   try {
     const d = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-    return { links: d.links || {}, pending: d.pending || {}, accounts: d.accounts || {} };
-  } catch { return { links: {}, pending: {}, accounts: {} }; }
+    return { links: d.links || {}, pending: d.pending || {}, accounts: d.accounts || {}, admin: d.admin || null };
+  } catch { return { links: {}, pending: {}, accounts: {}, admin: null }; }
 }
 let db = loadDB();
 let saveTimer;
@@ -291,13 +295,29 @@ app.post('/api/account/login', (req, res) => {
   if (!a || proof.length !== String(a.h).length || !crypto.timingSafeEqual(Buffer.from(proof), Buffer.from(String(a.h)))) return res.status(401).json({ ok: false, error: 'invalid' });
   res.json({ ok: true, uid: u, token: tokFor(u, 'user') });
 });
-app.post('/api/admin/login', (req, res) => {
+/* አድሚን መግቢያ — 3 ማረጋገጫ፦ (1) ኢሜይል + የይለፍ ቃል፣ (2) Telegram OTP ወደ ስልክ ADMIN_PHONE ወደተረጋገጠው አካውንት፣ (3) ኢሜይል OTP ወደ ADMIN_EMAIL */
+const admPend = {};
+app.post('/api/admin/login', async (req, res) => {
   if (!ADMIN_PASSWORD) return res.status(503).json({ ok: false, error: 'admin_not_configured' });
-  if (process.env.ADMIN_EMAIL && String(req.body.email || '').trim().toLowerCase() !== process.env.ADMIN_EMAIL.trim().toLowerCase()) return res.status(401).json({ ok: false, error: 'invalid' });
   if (!limit('ad' + ip(req), 5, 900e3)) return res.status(429).json({ ok: false, error: 'too_many_attempts' });
-  const a = Buffer.from(String(req.body.password || '')), b = Buffer.from(ADMIN_PASSWORD);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return res.status(401).json({ ok: false, error: 'invalid' });
-  res.json({ ok: true, uid: 'admin', token: tokFor('admin', 'admin') });
+  const em = String(req.body.email || '').trim().toLowerCase(), a = Buffer.from(String(req.body.password || '')), b = Buffer.from(ADMIN_PASSWORD);
+  if (em !== process.env.ADMIN_EMAIL.trim().toLowerCase() || a.length !== b.length || !crypto.timingSafeEqual(a, b)) return res.status(401).json({ ok: false, error: 'invalid' });
+  const chat = adminChatId(); if (!chat) return res.status(409).json({ ok: false, error: 'admin_telegram_not_linked', phone: maskPhone(normPhoneET(ADMIN_PHONE)) });
+  const rid = id(), needEmail = !!mailer.configured(), o = { tg: randDigits(6), mail: needEmail ? randDigits(6) : null, attempts: 0, exp: Date.now() + 10 * 60e3 };
+  Object.keys(admPend).forEach(k => { if (admPend[k].exp < Date.now()) delete admPend[k]; });
+  try {
+    await tg('sendMessage', { chat_id: chat, text: `🛡️ የአድሚን መግቢያ — Telegram ኮድ\n\nኮድዎ፦ ${o.tg}\n⏱ በ10 ደቂቃ ውስጥ ያበቃል።\n⚠️ እርስዎ ካልገቡ ኮዱን ለማንም አይስጡ፤ የይለፍ ቃልዎን ይቀይሩ።` });
+    if (needEmail) await mailer.send({ to: process.env.ADMIN_EMAIL.trim(), subject: 'Etio Digital Market — የአድሚን መግቢያ ኮድ', text: `የአድሚን መግቢያ ኢሜይል ኮድዎ፦ ${o.mail}\n\nበ10 ደቂቃ ውስጥ ያበቃል። እርስዎ ካልጠየቁ ይህን ኢሜይል ችላ ይበሉ እና የይለፍ ቃልዎን ይቀይሩ።` });
+  } catch (e) { console.error('admin otp send failed:', e.message); return res.status(500).json({ ok: false, error: 'otp_send_failed' }); }
+  if (!needEmail) console.warn('⚠️ አድሚን ኢሜይል OTP አልተዘጋጀም (RESEND_API_KEY / BREVO_API_KEY / SMTP_HOST) — Telegram ብቻ ተጠቅሟል');
+  admPend[rid] = o; res.json({ ok: true, requestId: rid, needEmail, emailHint: String(process.env.ADMIN_EMAIL).replace(/^(.).*(@.*)$/, '$1***$2') });
+});
+app.post('/api/admin/login/verify', (req, res) => {
+  const r = admPend[String(req.body.requestId || '')];
+  if (!r || r.exp < Date.now()) return res.status(404).json({ ok: false, error: 'request_not_found' });
+  if (++r.attempts > 5) { delete admPend[req.body.requestId]; return res.status(429).json({ ok: false, error: 'too_many_attempts' }); }
+  if (!safeOtpMatch(String(req.body.telegramOtp || '').trim(), r.tg) || (r.mail && !safeOtpMatch(String(req.body.emailOtp || '').trim(), r.mail))) return res.status(400).json({ ok: false, error: 'invalid_otp', attemptsLeft: Math.max(0, 5 - r.attempts) });
+  delete admPend[req.body.requestId]; res.json({ ok: true, uid: 'admin', token: tokFor('admin', 'admin') });
 });
 app.get('/api/db/doc', (req, res) => {
   const t = readTok(req), p = String(req.query.p || ''), id = String(req.query.id || '');
@@ -377,6 +397,8 @@ app.delete('/api/admin/account/:uid', needAdmin, async (req, res) => {
 });
 
 const ADMIN_CHAT = process.env.ADMIN_TELEGRAM_CHAT_ID || '';
+const adminChatId = () => (db.admin && db.admin.chatId) || ADMIN_CHAT;   // ስልክ 0946705941 በቦቱ ሲረጋገጥ የሚታሰር Telegram chat (ወይም env)
+function bindAdmin(chatId) { if (db.admin && db.admin.chatId === chatId) return; db.admin = { chatId, phone: ADMIN_PHONE, at: Date.now() }; saveDB(); }
 async function sendTg(chatId, text, btn) {   // btn = { url, label } → በመልዕክቱ ስር የሚጫን ቁልፍ (ለምሳሌ «🧾 ደረሰኝ አውርድ»)
   if (!TOKEN || !chatId) return;
   const base = { chat_id: chatId, text: String(text).slice(0, 3800), disable_web_page_preview: true };
@@ -388,7 +410,7 @@ async function sendTg(chatId, text, btn) {   // btn = { url, label } → በመ�
 }
 function notifyUser(uid, text, btn) { try { const d = store.docs['data/users/' + uid] || {}, a = d.acct; if (!a) return; if (!btn && d.prefs && d.prefs.mute) return;   // ድምጸ-ከል፦ ቁልፍ የሌላቸው (መረጃ ብቻ) መልዕክቶች አይላኩም
     const l = db.accounts[accKey(a)]; if (l && l.chatId) sendTg(l.chatId, `🇪🇹 Etio Digital Market\n\n${text}${btn && btn.url ? '\n\n🧾 ' + btn.url : ''}\n\n🔗 ${PUBLIC_BASE_URL}`, btn); } catch (e) { console.warn('notifyUser', e.message); } }
-function notifyAdmin(text, btn) { sendTg(ADMIN_CHAT, `🛡️ አድሚን\n\n${text}\n\n🔗 ${PUBLIC_BASE_URL}`, btn); }
+function notifyAdmin(text, btn) { sendTg(adminChatId(), `🛡️ አድሚን\n\n${text}\n\n🔗 ${PUBLIC_BASE_URL}`, btn); }
 const receipts = require('./receipt')({ app, col, secret: TOKEN_SECRET, baseUrl: PUBLIC_BASE_URL });
 const mkApi = require('./market')({ app, col, bump, pool, pgUpsert, persist, readTok, limit, notifyUser, notifyAdmin, receipts });
 require('./people')({ app, col, limit, notifyUser, notifyAdmin, ...mkApi });
@@ -396,7 +418,7 @@ require('./pages')({ app, col, bump, pool, persist, limit, notifyUser, notifyAdm
 
 const authApi = require('./auth')({ app, col, bump, pool, pgUpsert, persist, readTok, limit, tokFor, findUid, isSusp, accountKey, normPhoneET, tg, randDigits, id, safeOtpMatch, clean, saveDB, getDb: () => db, getStore: () => store, PUBLIC_BASE_URL, BOT_USERNAME, OTP_TTL, LINK_TTL, notifyAdmin });
 
-botApi = require('./bot')({ tg, tokFor, port: PORT, baseUrl: PUBLIC_BASE_URL, adminChat: ADMIN_CHAT, token: TOKEN, getDb: () => db, getStore: () => store, accKey, findUid, normPhoneET, authApi, pool, pgUpsert, isSusp });
+botApi = require('./bot')({ tg, tokFor, port: PORT, baseUrl: PUBLIC_BASE_URL, adminChat: adminChatId, bindAdmin, adminPhone: normPhoneET(ADMIN_PHONE), token: TOKEN, getDb: () => db, getStore: () => store, accKey, findUid, normPhoneET, authApi, pool, pgUpsert, isSusp });
 
 async function initStorage() {
   if (!pool) return;
@@ -404,7 +426,7 @@ async function initStorage() {
   const r = await pool.query('SELECT path,id,data FROM kv');
   store = { docs: {}, rev: {}, idx: {} };
   for (const row of r.rows) {
-    if (row.path === '_sys') { if (row.id === 'idx') store.idx = row.data; if (row.id === 'botdb') botApi.restore(row.data); if (row.id === 'otpdb') db = { links: row.data.links || {}, pending: row.data.pending || {}, accounts: row.data.accounts || {} }; }
+    if (row.path === '_sys') { if (row.id === 'idx') store.idx = row.data; if (row.id === 'botdb') botApi.restore(row.data); if (row.id === 'otpdb') db = { links: row.data.links || {}, pending: row.data.pending || {}, accounts: row.data.accounts || {}, admin: row.data.admin || null }; }
     else (store.docs[row.path] = store.docs[row.path] || {})[row.id] = row.data;
   }
   console.log('Postgres storage ready:', r.rows.length, 'records');

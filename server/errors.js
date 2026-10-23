@@ -20,5 +20,6 @@ function errText(e) {
   if (e.startsWith('unavailable')) return 'አልተገኘም፦ ' + e.split(':')[1];
   return ERR[e] || 'ስህተት፦ ' + e;
 }
+ERR.admin_telegram_not_linked = 'መጀመሪያ በ Telegram bot የአድሚን ስልክ ያረጋግጡ';
 ERR.orders_active = 'ንቁ (ያልተጠናቀቀ) ትዕዛዝ ስላለ አካውንት መሰረዝ አይቻልም — መጀመሪያ ትዕዛዞቹ ይጠናቀቁ';
 module.exports = { ERR, errText };

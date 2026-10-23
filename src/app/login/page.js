@@ -11,17 +11,26 @@ import TelegramStep from '@/components/TelegramStep';
 
 function LoginForm() {
   const { login } = useApp(); const router = useRouter(); const sp = useSearchParams(); const next = sp.get('next') || '/';
-  const [f, setF] = useState({ id: '', password: '' }); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false); const [req, setReq] = useState(null); const [admin, setAdmin] = useState(false);
+  const [f, setF] = useState({ id: '', password: '' }); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false); const [req, setReq] = useState(null); const [admin, setAdmin] = useState(false); const [adm, setAdm] = useState(null);
+  async function verifyAdmin(e) { e.preventDefault(); setErr(''); setBusy(true); const r = await post('/api/admin/login/verify', { requestId: adm.requestId, telegramOtp: adm.tg, emailOtp: adm.mail }); setBusy(false); if (!r.ok) return setErr(errText(r.error) + (r.attemptsLeft != null ? ` (${r.attemptsLeft} ሙከራ ቀርቷል)` : '')); await login(r.token); router.push('/admin'); }
   async function submit(e) {
     e.preventDefault(); setErr(''); setBusy(true);
-    if (admin) { const r = await post('/api/admin/login', { email: f.id, password: f.password }); setBusy(false); if (!r.ok) return setErr(errText(r.error)); await login(r.token); return router.push('/admin'); }
+    if (admin) { const r = await post('/api/admin/login', { email: f.id, password: f.password }); setBusy(false); if (!r.ok) return setErr(errText(r.error)); return setAdm({ ...r, tg: '', mail: '' }); }
     const r = await post('/api/auth/login', { id: f.id, password: f.password }); setBusy(false); r.ok ? setReq(r) : setErr(errText(r.error));
   }
   return (
     <div className="mx-auto max-w-md">
       <div className="card">
         <h1 className="text-2xl">{admin ? '🛡️ አድሚን መግቢያ' : 'ግባ'}</h1>
-        {!req ? (
+        {adm ? (
+          <form onSubmit={verifyAdmin}>
+            <p className="muted mt-2">✈️ የ Telegram ኮድ ወደ አድሚን ስልክዎ ተልኳል{adm.needEmail ? ` · 📧 የኢሜይል ኮድ ወደ ${adm.emailHint} ተልኳል` : ''}።</p>
+            <Input label="የ Telegram ኮድ" inputMode="numeric" maxLength={6} value={adm.tg} onChange={e => setAdm({ ...adm, tg: e.target.value })} autoComplete="one-time-code" required />
+            {adm.needEmail && <Input label="የኢሜይል ኮድ" inputMode="numeric" maxLength={6} value={adm.mail} onChange={e => setAdm({ ...adm, mail: e.target.value })} required />}
+            <Msg m={err} /><button className="btn-primary mt-4 w-full" disabled={busy}>{busy ? '⏳…' : 'አረጋግጥ እና ግባ'}</button>
+            <button type="button" className="btn-ghost mt-2 w-full" onClick={() => { setAdm(null); setErr(''); }}>‹ ተመለስ</button>
+          </form>
+        ) : !req ? (
           <form onSubmit={submit}>
             <Input label={admin ? 'የአድሚን ኢሜይል' : 'ኢሜይል ወይም ስልክ'} value={f.id} onChange={e => setF({ ...f, id: e.target.value })} autoComplete="username" required={!admin} />
             <Input label="የይለፍ ቃል" type="password" value={f.password} onChange={e => setF({ ...f, password: e.target.value })} autoComplete="current-password" required />

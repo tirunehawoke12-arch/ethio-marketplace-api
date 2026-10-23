@@ -11,7 +11,7 @@ const APPST = { applied: '📨 ተልኳል', shortlisted: '⭐ በዝርዝር'
 const MENU = [['🛍 ገበያ', '🏪 ሱቆች', '💼 ሥራ'], ['🌐 ገጾች', '🛒 ጋሪ', '📦 ትዕዛዞቼ'], ['👤 ገጾቼ', '🔎 ፈልግ', '❓ እገዛ']];
 
 module.exports = function bot(c) {
-  const { tg, tokFor, port, baseUrl, adminChat, token, getDb, getStore, accKey, findUid, normPhoneET, authApi, pool, pgUpsert, isSusp } = c;
+  const { tg, tokFor, port, baseUrl, adminChat, bindAdmin, adminPhone, token, getDb, getStore, accKey, findUid, normPhoneET, authApi, pool, pgUpsert, isSusp } = c;
   const H = x => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const B = x => '<b>' + H(x) + '</b>';
   const ETB = n => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' ብር';
@@ -20,7 +20,7 @@ module.exports = function bot(c) {
   const u = (t, link) => ({ text: String(t).slice(0, 60), url: link });
   const ik = rows => ({ inline_keyboard: rows.filter(r => r && r.length) });
   const web = p => baseUrl + p;
-  const isAdmin = chat => !!adminChat && String(chat) === String(adminChat);
+  const isAdmin = chat => { const a = typeof adminChat === 'function' ? adminChat() : adminChat; return !!a && String(chat) === String(a); };
   const grid = (arr, n = 2) => { const out = []; for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n)); return out; };
 
   /* ---------- ክፍለ-ጊዜ (ንግግር፣ ጋሪ) ---------- */
@@ -148,6 +148,7 @@ module.exports = function bot(c) {
     const ct = msg.contact; if (!msg.from || ct.user_id !== msg.from.id) return send(chat, '⚠️ የራስዎን ስልክ ቁጥር ብቻ ማጋራት ይችላሉ። «📱 ስልኬን አጋራ» ቁልፉን ይጠቀሙ።', CONTACT_KB);
     const phone = normPhoneET(ct.phone_number); if (!phone) return send(chat, '❌ ይህ የኢትዮጵያ ስልክ ቁጥር አይደለም (09… / 07…)። ለመመዝገብ የኢትዮጵያ ቁጥር ያስፈልጋል።');
     const username = msg.from.username || msg.from.first_name || '', exist = findUid(phone), s = ses(chat);
+    if (adminPhone && phone === adminPhone) { bindAdmin(chat); await send(chat, '🛡 <b>የአድሚን ስልክ በ Telegram ተረጋግጧል።</b>\nአሁን በድረ-ገጹ አድሚን ሲገቡ የ Telegram ኮድ ወደዚህ ይላካል። «🛡 አድሚን» ቁልፍ በማውጫው ይታያል።'); }
     if (s.auth && s.auth.stage === 'chphone') {                                       // ስልክ መቀየር — በ Telegram የተረጋገጠ አዲስ ቁጥር
       const e = await authApi.changeIdentity(s.auth.uid, { phone }, chat, username); s.auth = null; save(); rebuild();
       return e ? send(chat, bad({ error: e }), menuKb(chat)) : home(chat, `✅ ስልክዎ ወደ ${H(phone)} ተቀይሯል።`);
