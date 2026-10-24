@@ -4,8 +4,10 @@
    → ሻጭ አዘጋጅ → ላክ → ደንበኛ ተቀበል → አድሚን ለሻጭ ክፈል → ግምገማ                       */
 const crypto = require('crypto');
 const imgstore = require('./imgstore');
+const payverify = require('./payverify');
 module.exports = function market(ctx) {
   const { app, col, bump, pool, pgUpsert, persist, readTok, limit } = ctx;
+  const pv = ctx.payverify || payverify.create(), refKey = payverify.refKey;
   const imgs = ctx.imgs || imgstore.create();      // S3/R2 ከተቀናበረ ምስሎች ከ Postgres ውጭ ይቀመጣሉ
   const rc = ctx.receipts, tell = (uid, t, btn) => { try { ctx.notifyUser && ctx.notifyUser(uid, t, btn); } catch (e) { } }, rbtn = (o, k) => (rc ? { url: rc.url(o.id, k), label: '🧾 ደረሰኝ አውርድ' } : undefined), tellAdmin = (t, btn) => { try { ctx.notifyAdmin && ctx.notifyAdmin(t, btn); } catch (e) { } }, KB = (...r) => ({ rows: [r.map(([t, d]) => ({ text: t, callback_data: d }))] });
   const short = o => '#' + o.id.slice(0, 6), money = n => Number(n).toLocaleString('en-US') + ' ብር';
@@ -50,12 +52,30 @@ module.exports = function market(ctx) {
     if (ch.length) await saveMany(ch);
   }
   const userInfo = uid => { const d = col('data/users/' + uid); return { name: (d.private && d.private.fullName) || '', email: d.acct && d.acct.email, phone: d.acct && d.acct.phone }; };
+  // ለአድሚን ማረጋገጫ የሚረዱ ጠቋሚዎች (ምንም ውጫዊ አገልግሎት አይጠቀሙም)
+  const payHints = o => {
+    if (!o.payment) return []; const k = refKey(o.payment.ref), H = [`💰 መጠን መሆን ያለበት፦ ${money(o.total)}`];
+    const acc = cfg().accounts.filter(a => a.method === o.payment.method); if (acc.length) H.push('🏦 ክፍያው መግባት ያለበት፦ ' + acc.map(a => `${a.method} ${a.number}${a.holder ? ' (' + a.holder + ')' : ''}`).join(' / '));
+    const dup = Object.values(col(P.orders)).filter(x => x.id !== o.id && x.payment && refKey(x.payment.ref) === k && !x.payment.rejected && x.status !== 'cancelled'); if (dup.length) H.push('⚠️ ይህ ማጣቀሻ ከዚህ በፊት ተጠቅሟል፦ ' + dup.map(short).join('፣ '));
+    if (o.payment.ts && o.ts) H.push(`⏱ ክፍያው የተገለጸው ትዕዛዙ ከተሰጠ ${Math.max(0, Math.round((o.payment.ts - o.ts) / 60000))} ደቂቃ በኋላ`);
+    if (!/^[A-Z0-9]{6,}$/.test(k)) H.push('⚠️ የማጣቀሻው ቅርጽ ያልተለመደ ነው (ቢያንስ 6 ፊደል/ቁጥር ይጠበቃል)');
+    return H;
+  };
+  const AUTO_L = { match: '✅ ተዛምዷል', mismatch: '❌ አይመሳሰልም', notfound: '❓ አልተገኘም', unknown: '⚠️ ማረጋገጥ አልተቻለም', error: '⚠️ ፍተሻው አልተሳካም' };
+  async function autoCheck(o) {                       // ውጫዊ አረጋጋጭ ከተቀናበረ ብቻ ይሠራል
+    if (!pv.enabled || !o.payment) return null; let res;
+    try { const accounts = cfg().accounts; res = pv.judge(o, accounts, await pv.lookup({ method: o.payment.method, ref: o.payment.ref, amount: o.total, accounts })); } catch (e) { console.error('pay verify failed:', e.message); res = { state: 'error', reasons: [String(e.message).slice(0, 80)] }; }
+    o.payment.auto = { ...res, ts: Date.now() }; try { await saveMany([[P.orders, o.id]]); } catch (e) { }
+    if (res.state === 'match' && pv.auto && o.status === 'payment_submitted') { const r = await applyAdmin(o, 'verify-payment', { ok: true, note: 'ራስ-ሰር ተረጋግጧል' }); if (r.ok) { tellAdmin(`🤖 ክፍያ ${short(o)} (${money(o.total)}) በራስ-ሰር ተረጋግጧል።`); return res; } }
+    tellAdmin(`🤖 ራስ-ሰር ፍተሻ ${short(o)}፦ ${AUTO_L[res.state] || res.state}${res.reasons.length ? '\n' + res.reasons.map(x => '• ' + x).join('\n') : ''}${res.state === 'match' ? '\nበአንድ ጠቅታ ማረጋገጥ ይችላሉ።' : ''}`, res.state === 'match' ? KB(['✅ አረጋግጥ', `avp:${o.id}:1`]) : undefined);
+    return res;
+  }
   const orderView = (o, role) => {                             // ማን ምን ያያል
     const base = { id: o.id, shopId: o.shopId, shopName: o.shopName, items: o.items, subtotal: o.subtotal, fee: o.fee, total: o.total, status: o.status, history: o.history, delivery: { type: o.delivery.type }, payment: o.payment ? { method: o.payment.method, ref: o.payment.ref, ts: o.payment.ts, note: o.payment.note, rejected: o.payment.rejected } : null, tracking: o.tracking || '', dispute: o.dispute || null, reviewed: !!o.reviewed, ts: o.ts };
     const paidUp = ['paid', 'preparing', 'shipped', 'delivered', 'settled', 'disputed', 'refund_pending'].includes(o.status);
     if (role === 'buyer') { const s = col(P.shops)[o.shopId]; base.delivery = o.delivery; base.shopPhone = s && s.phone; base.shopAddress = s && s.address; }
     if (role === 'seller') { base.commission = o.commission; base.sellerNet = o.sellerNet; if (paidUp) { base.delivery = o.delivery; base.buyer = { name: userInfo(o.buyerUid).name }; } }
-    if (role === 'admin') { base.delivery = o.delivery; base.commission = o.commission; base.sellerNet = o.sellerNet; base.buyer = userInfo(o.buyerUid); const s = col(P.shops)[o.shopId]; base.payout = s && s.payout; base.settle = o.settle || null; }
+    if (role === 'admin') { base.delivery = o.delivery; base.commission = o.commission; base.sellerNet = o.sellerNet; base.buyer = userInfo(o.buyerUid); const s = col(P.shops)[o.shopId]; base.payout = s && s.payout; base.settle = o.settle || null; base.hints = payHints(o); base.auto = (o.payment && o.payment.auto) || null; base.autoEnabled = pv.enabled; }
     return base;
   };
 
@@ -182,12 +202,12 @@ module.exports = function market(ctx) {
     if ((t.role === 'buyer' && !isBuyer) || (t.role === 'seller' && !isSeller)) return bad(res, 403, 'not_allowed');
     if (!t.from.includes(o.status)) return bad(res, 409, 'wrong_step:' + o.status);
     const b = req.body || {}, ch = [[P.orders, o.id]];
-    if (req.params.act === 'pay') { const ref = S(b.ref, 40); if (!S(b.method, 20) || ref.length < 4) return bad(res, 400, 'payment_proof_required'); o.payment = { method: S(b.method, 20), ref, note: S(b.note, 200), ts: Date.now() }; }
+    if (req.params.act === 'pay') { const ref = S(b.ref, 40); if (!S(b.method, 20) || ref.length < 4) return bad(res, 400, 'payment_proof_required'); const k = refKey(ref); if (Object.values(col(P.orders)).some(x => x.id !== o.id && x.payment && !x.payment.rejected && x.status !== 'cancelled' && refKey(x.payment.ref) === k)) return bad(res, 409, 'duplicate_reference'); o.payment = { method: S(b.method, 20), ref, note: S(b.note, 200), ts: Date.now() }; }
     if (req.params.act === 'ship') o.tracking = S(b.note, 200);
     if (req.params.act === 'dispute') { if (S(b.reason, 400).length < 5) return bad(res, 400, 'reason_required'); o.dispute = { reason: S(b.reason, 400), ts: Date.now() }; }
     if (t.restock) { restock(o); o.items.forEach(i => col(P.products)[i.pid] && ch.push([P.products, i.pid])); }
     push(o, t.to, t.role, S(b.note, 200));
-    try { await saveMany(ch); const a = req.params.act, sh = s; const N = { pay: () => tellAdmin(`💳 ክፍያ ለማረጋገጥ ${short(o)} — ${money(o.total)} · ${o.payment.method} · ማጣቀሻ ${o.payment.ref}`, KB(['✅ አረጋግጥ', `avp:${o.id}:1`], ['❌ ውድቅ', `avp:${o.id}:0`])), cancel: () => tell(sh.uid, `✕ ትዕዛዝ ${short(o)} በገዥው ተሰርዟል።`), accept: () => tell(o.buyerUid, `📦 ሻጩ ትዕዛዝዎን ${short(o)} እያዘጋጀ ነው።`), decline: () => { tell(o.buyerUid, `↩️ ሻጩ ትዕዛዝዎን ${short(o)} መቀበል አልቻለም፤ ገንዘብዎ ይመለሳል።`); tellAdmin(`↩️ ተመላሽ ለማድረግ ${short(o)} — ${money(o.total)}`, KB(['↩️ ተመላሽ ተደርጓል', 'arf:' + o.id])); }, ship: () => tell(o.buyerUid, `🚚 ትዕዛዝዎ ${short(o)} ተልኳል${o.tracking ? '፦ ' + o.tracking : ''}። ሲደርስ በድረ-ገጹ «ደረሰኝ» ይጫኑ።`), receive: () => { tell(sh.uid, `🤝 ገዥው ትዕዛዝ ${short(o)} ተቀብሏል — አድሚን ክፍያዎን በቅርቡ ይልካል (${money(o.sellerNet)})።`); tellAdmin(`💰 ለሻጭ ለመክፈል ${short(o)} — ${money(o.sellerNet)} → ${sh.payout.method} ${sh.payout.account}`, KB(['💰 ተከፍሏል — ማጣቀሻ', 'ast:' + o.id])); }, dispute: () => { tellAdmin(`⚖️ ክርክር ${short(o)}፦ ${o.dispute.reason}`, KB(['💰 ለሻጭ ልቀቅ', 'arl:' + o.id], ['↩️ ለገዥ መልስ', 'arf:' + o.id])); tell(sh.uid, `⚖️ ገዥው በትዕዛዝ ${short(o)} ላይ ክርክር ከፍቷል። አድሚን ይመለከተዋል።`); } }; N[a] && N[a](); res.json({ ok: true, status: o.status }); } catch (e) { bad(res, 503, 'storage'); }
+    try { await saveMany(ch); const a = req.params.act, sh = s; const N = { pay: () => { autoCheck(o).catch(() => { }); tellAdmin(`💳 ክፍያ ለማረጋገጥ ${short(o)} — ${money(o.total)} · ${o.payment.method} · ማጣቀሻ ${o.payment.ref}\n${payHints(o).slice(1).join('\n')}`, KB(['✅ አረጋግጥ', `avp:${o.id}:1`], ['❌ ውድቅ', `avp:${o.id}:0`])); }, cancel: () => tell(sh.uid, `✕ ትዕዛዝ ${short(o)} በገዥው ተሰርዟል።`), accept: () => tell(o.buyerUid, `📦 ሻጩ ትዕዛዝዎን ${short(o)} እያዘጋጀ ነው።`), decline: () => { tell(o.buyerUid, `↩️ ሻጩ ትዕዛዝዎን ${short(o)} መቀበል አልቻለም፤ ገንዘብዎ ይመለሳል።`); tellAdmin(`↩️ ተመላሽ ለማድረግ ${short(o)} — ${money(o.total)}`, KB(['↩️ ተመላሽ ተደርጓል', 'arf:' + o.id])); }, ship: () => tell(o.buyerUid, `🚚 ትዕዛዝዎ ${short(o)} ተልኳል${o.tracking ? '፦ ' + o.tracking : ''}። ሲደርስ በድረ-ገጹ «ደረሰኝ» ይጫኑ።`), receive: () => { tell(sh.uid, `🤝 ገዥው ትዕዛዝ ${short(o)} ተቀብሏል — አድሚን ክፍያዎን በቅርቡ ይልካል (${money(o.sellerNet)})።`); tellAdmin(`💰 ለሻጭ ለመክፈል ${short(o)} — ${money(o.sellerNet)} → ${sh.payout.method} ${sh.payout.account}`, KB(['💰 ተከፍሏል — ማጣቀሻ', 'ast:' + o.id])); }, dispute: () => { tellAdmin(`⚖️ ክርክር ${short(o)}፦ ${o.dispute.reason}`, KB(['💰 ለሻጭ ልቀቅ', 'arl:' + o.id], ['↩️ ለገዥ መልስ', 'arf:' + o.id])); tell(sh.uid, `⚖️ ገዥው በትዕዛዝ ${short(o)} ላይ ክርክር ከፍቷል። አድሚን ይመለከተዋል።`); } }; N[a] && N[a](); res.json({ ok: true, status: o.status }); } catch (e) { bad(res, 503, 'storage'); }
   });
   app.post('/api/market/review', async (req, res) => {
     const u = who(req, res); if (!u) return; const o = col(P.orders)[S(req.body.orderId, 24)], r = parseInt(req.body.rating);
@@ -251,16 +271,25 @@ module.exports = function market(ctx) {
     settle: { from: ['delivered'], run: (o, b) => { const ref = S(b.ref, 40); if (ref.length < 3) return 'payout_ref_required'; o.settle = { ref, ts: Date.now() }; push(o, 'settled', 'admin', 'ለሻጭ ተከፍሏል፤ ማጣቀሻ ' + ref); } },
     refund: { from: ['refund_pending', 'disputed'], restock: 1, run: (o, b) => { const ref = S(b.ref, 40); if (ref.length < 3) return 'refund_ref_required'; o.settle = { ref, ts: Date.now(), refund: true }; push(o, 'refunded', 'admin', 'ተመላሽ ተደርጓል፤ ማጣቀሻ ' + ref); } },
     release: { from: ['disputed'], run: (o, b) => { const ref = S(b.ref, 40); if (ref.length < 3) return 'payout_ref_required'; o.settle = { ref, ts: Date.now() }; push(o, 'settled', 'admin', 'ክርክር ለሻጭ ተወሰነ፤ ማጣቀሻ ' + ref); } } };
-  app.post('/api/market/admin/order/:id/:act', async (req, res) => {
-    if (!adminOnly(req, res)) return; const a = A[req.params.act], o = col(P.orders)[req.params.id]; if (!a || !o) return bad(res, 404, 'not_found');
-    if (!a.from.includes(o.status)) return bad(res, 409, 'wrong_step:' + o.status);
-    const ch = [[P.orders, o.id]], err = a.run(o, req.body || {}); if (err) return bad(res, 400, err);
+  async function applyAdmin(o, act, b) {                       // የአድሚን እርምጃ (በእጅ ወይም በራስ-ሰር ፍተሻ) — አንድ ቦታ
+    const a = A[act]; if (!a || !o) return { code: 404, error: 'not_found' };
+    if (!a.from.includes(o.status)) return { code: 409, error: 'wrong_step:' + o.status };
+    const ch = [[P.orders, o.id]], err = a.run(o, b || {}); if (err) return { code: 400, error: err };
     if (a.restock) { restock(o); o.items.forEach(i => col(P.products)[i.pid] && ch.push([P.products, i.pid])); }
-    try { await saveMany(ch); const sh = col(P.shops)[o.shopId], act = req.params.act, b = req.body || {};
+    try { await saveMany(ch); } catch (e) { return { code: 503, error: 'storage' }; }
+    b = b || {}; const sh = col(P.shops)[o.shopId];
       if (act === 'verify-payment') { if (b.ok) { tell(o.buyerUid, `✅ ክፍያዎ ${short(o)} ተረጋግጧል (${money(o.total)})። ሻጩ ዕቃውን ያዘጋጃል።\n📥 የክፍያ ደረሰኝዎን ከታች ባለው ቁልፍ ያውርዱ።`, rbtn(o, 'payment')); sh && tell(sh.uid, `✅ ትዕዛዝ ${short(o)} ክፍያ ተረጋግጧል — አሁን ተቀብለው ያዘጋጁ (${money(o.total)})።`, KB(['✅ ተቀብያለሁ', `sa:accept:${o.id}`], ['✕ አልችልም', `sa:decline:${o.id}`])); } else tell(o.buyerUid, `❌ ክፍያዎ ${short(o)} አልተቀበለም${o.payment && o.payment.rejected ? '፦ ' + o.payment.rejected : ''}። ትክክለኛውን ማጣቀሻ በድረ-ገጹ እንደገና ያስገቡ።`); }
       if (act === 'settle' || act === 'release') sh && tell(sh.uid, `💰 ለትዕዛዝ ${short(o)} ${money(o.sellerNet)} ተከፍሏል። ማጣቀሻ፦ ${o.settle.ref}\n📥 የክፍያ ደረሰኝዎን ያውርዱ።`, rbtn(o, 'payout'));
       if (act === 'refund') tell(o.buyerUid, `↩️ ለትዕዛዝ ${short(o)} ${money(o.total)} ተመልሷል። ማጣቀሻ፦ ${o.settle.ref}\n📥 የተመላሽ ደረሰኝዎን ያውርዱ።`, rbtn(o, 'refund'));
-      res.json({ ok: true, status: o.status }); } catch (e) { bad(res, 503, 'storage'); }
+    return { ok: true, status: o.status };
+  }
+  app.post('/api/market/admin/order/:id/autocheck', async (req, res) => {
+    if (!adminOnly(req, res)) return; const o = col(P.orders)[req.params.id]; if (!o || !o.payment) return bad(res, 404, 'not_found'); if (!pv.enabled) return bad(res, 400, 'verifier_not_configured');
+    const r = await autoCheck(o); res.json({ ok: true, auto: o.payment.auto || r });
+  });
+  app.post('/api/market/admin/order/:id/:act', async (req, res) => {
+    if (!adminOnly(req, res)) return; const o = col(P.orders)[req.params.id]; if (!A[req.params.act] || !o) return bad(res, 404, 'not_found');
+    const r = await applyAdmin(o, req.params.act, req.body || {}); if (!r.ok) return bad(res, r.code, r.error); res.json({ ok: true, status: r.status });
   });
   return { who, saveMany, bad, S, N, phoneET, adminOnly, nid, userInfo };
 };

@@ -25,3 +25,5 @@ ERR.orders_active = 'ንቁ (ያልተጠናቀቀ) ትዕዛዝ ስላለ አ�
 module.exports = { ERR, errText };
 ERR.storage_not_configured = 'የምስል ማከማቻ (S3/R2) አልተቀናበረም';
 ERR.busy = 'ሌላ ሥራ እየሄደ ነው — ትንሽ ቆይተው ይሞክሩ';
+ERR.duplicate_reference = 'ይህ የክፍያ ማጣቀሻ ቁጥር ለሌላ ትዕዛዝ ተጠቅሟል — ከደረሰኝዎ ላይ ትክክለኛውን ቁጥር ያስገቡ';
+ERR.verifier_not_configured = 'ራስ-ሰር የክፍያ አረጋጋጭ አልተቀናበረም';

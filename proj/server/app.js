@@ -248,16 +248,11 @@ function persist() {
   clearTimeout(storeTimer);
   storeTimer = setTimeout(() => { try { const t = STORE_FILE + '.tmp'; fs.writeFileSync(t, JSON.stringify(store), { mode: 0o600 }); fs.renameSync(t, STORE_FILE); } catch (e) { console.error('persist failed', e.message); } }, 400);
 }
-const b64u = b => Buffer.from(b).toString('base64url');
-function sign(p) { const body = b64u(JSON.stringify(p)); return body + '.' + crypto.createHmac('sha256', TOKEN_SECRET).update(body).digest('base64url'); }
+const svOf = u => (((store.docs['data/users/' + u] || {}).acct || {}).sv | 0);
+const adminSv = () => ((((store.docs['_admin'] || {}).sv) || {}).n | 0);
+const tokens = require('./tokens').create({ secret: TOKEN_SECRET, getUserSv: svOf, getAdminSv: adminSv, isSusp: u => isSusp(u) });
 function isSusp(u) { return !!(((store.docs['_admin'] || {}).susp || {})[u]); }
-function readTok(req) {
-  const t = (req.get('authorization') || '').replace(/^Bearer /, ''); const [body, sig] = t.split('.');
-  if (!body || !sig) return null;
-  const ok = crypto.createHmac('sha256', TOKEN_SECRET).update(body).digest('base64url');
-  if (sig.length !== ok.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(ok))) return null;
-  try { const p = JSON.parse(Buffer.from(body, 'base64url').toString()); if (p.k !== 'admin' && isSusp(p.u)) return null; return p.x > Date.now() ? p : null; } catch { return null; }
-}
+function readTok(req) { return tokens.verify((req.get('authorization') || '').replace(/^Bearer /, '')); }
 const normPhone = p => { p = String(p || '').replace(/[\s-]/g, ''); if (/^\+?251/.test(p)) p = '0' + p.replace(/^\+?251/, ''); return p; };
 const hits = {}; // ቀላል የፍጥነት ገደብ
 function limit(key, max, ms) { const n = Date.now(); const a = (hits[key] = (hits[key] || []).filter(t => n - t < ms)); if (a.length >= max) return false; a.push(n); return true; }
@@ -276,7 +271,7 @@ function can(tok, p, write, id) {
   if (write) return !ADMIN_ONLY_WRITE.has(top);
   return tok.k !== 'anon' || ANON_READ.has(top);
 }
-const tokFor = (u, k) => sign({ u, k, x: Date.now() + 90 * 864e5 });
+const tokFor = (u, k) => tokens.tokFor(u, k);
 
 app.post('/api/session/anon', (req, res) => {
   if (!limit('anon' + ip(req), 30, 3600e3)) return res.status(429).json({ ok: false });
@@ -298,6 +293,10 @@ app.post('/api/account/login', (req, res) => {
 });
 /* አድሚን መግቢያ — 3 ማረጋገጫ፦ (1) ኢሜይል + የይለፍ ቃል፣ (2) Telegram OTP ወደ ስልክ ADMIN_PHONE ወደተረጋገጠው አካውንት፣ (3) ኢሜይል OTP ወደ ADMIN_EMAIL */
 const admPend = {};
+app.post('/api/admin/logout-all', needAdmin, async (req, res) => {          // በሁሉም መሳሪያ ላይ ያሉ የአድሚን መግቢያዎች ይሻራሉ፤ ይህ መሳሪያ አዲስ ምልክት ያገኛል
+  try { const c = col('_admin'); c.sv = { n: adminSv() + 1 }; if (pool) await pgUpsert('_admin', 'sv', c.sv); else persist(); bump('_admin'); res.json({ ok: true, token: tokFor('admin', 'admin') }); }
+  catch (e) { res.status(503).json({ ok: false, error: 'storage' }); }
+});
 app.post('/api/admin/login', async (req, res) => {
   if (!ADMIN_PASSWORD) return res.status(503).json({ ok: false, error: 'admin_not_configured' });
   if (!limit('ad' + ip(req), 5, 900e3)) return res.status(429).json({ ok: false, error: 'too_many_attempts' });

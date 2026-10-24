@@ -107,8 +107,13 @@ module.exports = function auth(ctx) {
     if (!limit('pw' + t.u, 8, 900e3)) return bad(res, 429, 'too_many_attempts');
     if (!eq(await hash(String(req.body.current || ''), a.salt), a.h)) return bad(res, 401, 'invalid');
     if (nw.length < 8 || nw.length > 128) return bad(res, 400, 'weak_password');
-    a.salt = crypto.randomBytes(16).toString('base64'); a.h = await hash(nw, a.salt);
-    try { await saveAcct(t.u); res.json({ ok: true }); } catch (e) { bad(res, 503, 'storage'); }
+    a.salt = crypto.randomBytes(16).toString('base64'); a.h = await hash(nw, a.salt); a.sv = (a.sv | 0) + 1;
+    try { await saveAcct(t.u); res.json({ ok: true, token: tokFor(t.u, 'user') }); } catch (e) { bad(res, 503, 'storage'); }
+  });
+  async function logoutAll(uid) { const a = col('data/users/' + uid).acct; if (!a) return 'not_found'; a.sv = (a.sv | 0) + 1; await saveAcct(uid); return null; }
+  app.post('/api/auth/logout-all', async (req, res) => {                   // በሁሉም መሳሪያ ላይ ውጣ — ይህ መሳሪያ አዲስ ምልክት ያገኛል
+    const t = readTok(req); if (!t || t.k !== 'user') return bad(res, 401, 'login_required');
+    try { const e = await logoutAll(t.u); if (e) return bad(res, 404, e); res.json({ ok: true, token: tokFor(t.u, 'user') }); } catch (e) { bad(res, 503, 'storage'); }
   });
   const PF = ['fullName', 'idNo', 'dob', 'addr', 'tin', 'emName', 'emPhone', 'note'];
   app.get('/api/me/private', (req, res) => { const t = readTok(req); if (!t || t.k === 'admin') return bad(res, 401, 'login_required'); res.json({ ok: true, data: col('data/users/' + t.u).private || {} }); });
@@ -142,7 +147,7 @@ module.exports = function auth(ctx) {
   function linkChat(uid, chatId, username) { const a = col('data/users/' + uid).acct; if (a) { link(a, uid, { chatId, username }); saveDB(); } }
   async function setPassword(uid, pw) {
     const a = col('data/users/' + uid).acct; pw = String(pw || ''); if (!a) return 'not_found'; if (pw.length < 8 || pw.length > 128) return 'weak_password';
-    a.salt = crypto.randomBytes(16).toString('base64'); a.h = await hash(pw, a.salt); await saveAcct(uid); return null;
+    a.salt = crypto.randomBytes(16).toString('base64'); a.h = await hash(pw, a.salt); a.sv = (a.sv | 0) + 1; await saveAcct(uid); return null;   // የይለፍ ቃል ሲቀየር ቀድሞ የገቡ መሳሪያዎች ይወጣሉ
   }
   /* ---------- የአካውንት አስተዳደር (ለ Telegram bot) ---------- */
   const acctOf = uid => col('data/users/' + uid).acct;
@@ -176,5 +181,5 @@ module.exports = function auth(ctx) {
     if (pool) { for (const [path, id] of ch) await pgUpsert(path, id, col(path)[id]); await pool.query('DELETE FROM kv WHERE path=$1', [p]); await pgUpsert('_sys', 'idx', st.idx); } else persist();
     [...new Set(ch.map(x => x[0]))].forEach(bump); bump(p); saveDB(); return null;
   }
-  return { createAccount, verifyPassword, linkChat, setPassword, unlinkChat, setName, changeIdentity, setPref, deleteAccount };
+  return { createAccount, verifyPassword, linkChat, logoutAll, setPassword, unlinkChat, setName, changeIdentity, setPref, deleteAccount };
 };

@@ -478,7 +478,7 @@ module.exports = function bot(c) {
   function accountMenu(chat, uid) {
     const d = getStore().docs['data/users/' + uid] || {}, a = d.acct || {}, l = getDb().accounts[accKey(a)] || {}, muted = !!prefs(uid).mute;
     return send(chat, `⚙️ <b>አካውንቴ</b>\n\n👤 ${H(userOf(uid).name || '—')}\n📧 ${H(a.email)}\n📞 ${H(a.phone)}\n✈️ Telegram፦ ${l.username ? '@' + H(l.username) : 'ተገናኝቷል'}\n📅 የተከፈተው፦ ${a.ts ? new Date(a.ts).toLocaleDateString('en-GB') : '—'}\n🔔 ማሳወቂያ፦ ${muted ? '🔕 ድምጸ-ከል (ቁልፍ የሌላቸው መልዕክቶች አይላኩም)' : '🔔 በርቷል'}`, ik([
-      [b('✏️ ስም ቀይር', 'acn'), b('📧 ኢሜይል ቀይር', 'ace')], [b('📱 ስልክ ቀይር', 'acp'), b('🔑 የይለፍ ቃል ቀይር', 'pw')], [b(muted ? '🔔 ማሳወቂያ አብራ' : '🔕 ማሳወቂያ አጥፋ', 'accn')], [b('🚪 ውጣ (Log out)', 'lo'), b('🗑 አካውንት ሰርዝ', 'adel')]]));
+      [b('✏️ ስም ቀይር', 'acn'), b('📧 ኢሜይል ቀይር', 'ace')], [b('📱 ስልክ ቀይር', 'acp'), b('🔑 የይለፍ ቃል ቀይር', 'pw')], [b(muted ? '🔔 ማሳወቂያ አብራ' : '🔕 ማሳወቂያ አጥፋ', 'accn')], [b('🚪 ውጣ (Log out)', 'lo'), b('🗑 አካውንት ሰርዝ', 'adel')], [b('📵 በሁሉም መሳሪያ ላይ ውጣ', 'lall')]]));
   }
   async function pwOk(chat, uid, pw) { const ok = await authApi.verifyPassword(uid, pw); if (ok === null) { await send(chat, '⏳ ብዙ ሙከራ — ከ15 ደቂቃ በኋላ ይሞክሩ።'); return false; } if (!ok) { await send(chat, '❌ የአሁኑ የይለፍ ቃል ትክክል አይደለም።'); return false; } return true; }
   const PWQ = { k: 'cur', q: '🔑 አሁን ያለዎትን የይለፍ ቃል ይጻፉ (መልዕክቱ ይሰረዛል)፦', t: 'text', min: 1, max: 128, secret: true };
@@ -609,6 +609,8 @@ module.exports = function bot(c) {
       case 'pw': return startFlow(chat, 'password', [PWQ, { k: 'pw', q: '🔐 አዲስ የይለፍ ቃል (ቢያንስ 8 ቁምፊ)፦', t: 'text', min: 8, max: 128, secret: true }], {}, '🔑 የይለፍ ቃል መቀየር');
       case 'lo': return send(chat, '🚪 ከአካውንትዎ መውጣት ይፈልጋሉ?\n(ጋሪዎ ይጠራረጋል፤ ማሳወቂያዎች ይቆማሉ።)', ik([[b('✅ አዎ ውጣ', 'loc'), b('✖️ አይ', 'acc')]]));
       case 'loc': return logout(chat, uid);
+      case 'lall': return send(chat, '📵 በድረ-ገጽ ላይ በሌሎች መሳሪያዎች የገቡበት ሁሉ ይወጣሉ (እዚህ Telegram ላይ ያለዎት መግቢያ አይነካም)። ይቀጥሉ?', ik([[b('✅ አዎ', 'lallc'), b('✖️ አይ', 'acc')]]));
+      case 'lallc': { const e = await authApi.logoutAll(uid); await send(chat, e ? bad({ error: e }) : '✅ በድረ-ገጽ ላይ በሁሉም መሳሪያዎች ያሉ መግቢያዎች ወጥተዋል። እንደገና ለመግባት የይለፍ ቃል እና የ Telegram ኮድ ያስፈልጋል።'); return accountMenu(chat, uid); }
       case 'adel': return startFlow(chat, 'acdel', [PWQ, { k: 'confirm', q: '⚠️ <b>አካውንት መሰረዝ የማይመለስ ነው።</b> ሱቅዎ፣ ገጾችዎ፣ ሥራዎችዎ ከህዝብ ይደበቃሉ።\nለማረጋገጥ <b>ሰርዝ</b> ብለው ይጻፉ፦', t: 'text', max: 20 }], {}, '🗑 አካውንት መሰረዝ');
       /* አድሚን */
       case 'ad': return adminHub(chat); case 'apay': case 'asl': case 'arfl': case 'adis': case 'ashp': return adminList(chat, k); case 'amod': return modList(chat);

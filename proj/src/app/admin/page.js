@@ -1,19 +1,28 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { api, ETB, get, post } from '@/lib/api';
+import { api, ETB, get, post, setTok } from '@/lib/api';
 import { errText } from '@/lib/consts';
 import { Msg, PageTitle, Spinner, StatusTag } from '@/components/ui';
 import { ExpandCard } from '@/components/Expand';
 import RequireAuth from '@/components/RequireAuth';
 
-const Order = ({ o, children }) => (
+const AUTO = { match: ['✅ ራስ-ሰር ፍተሻ ተዛምዷል', 'msg-ok'], mismatch: ['❌ ራስ-ሰር ፍተሻ አይመሳሰልም', 'msg-err'], notfound: ['❓ በአረጋጋጩ አልተገኘም', 'msg-err'], unknown: ['⚠️ ማረጋገጥ አልተቻለም', 'muted'], error: ['⚠️ ፍተሻው አልተሳካም', 'muted'] };
+const Order = ({ o, children, onCheck }) => (
   <ExpandCard className="mb-3" defaultOpen href={`/orders/${o.id}`} cta="ትዕዛዙን ክፈት"
     head={<><div className="flex justify-between"><b>#{o.id.slice(0, 6)} · {o.shopName}</b><b className="text-brand">{ETB(o.total)}</b></div><p className="muted">👤 {o.buyer.name} {o.buyer.email} {o.buyer.phone}</p></>}
     actions={children}>
     {o.payment && <p className="rounded-2xl bg-brand-light p-2 text-sm">💳 <b>{o.payment.method}</b> · ማጣቀሻ፦ <b>{o.payment.ref}</b> {o.payment.note}</p>}
+    {o.hints && o.hints.length > 0 && <ul className="space-y-1 text-sm">{o.hints.map(h => <li key={h} className={h.startsWith('⚠️') ? 'font-bold text-red-600' : 'muted'}>{h}</li>)}</ul>}
+    {o.auto && AUTO[o.auto.state] && <div className={'rounded-xl px-3 py-2 text-sm ' + AUTO[o.auto.state][1]}><b>{AUTO[o.auto.state][0]}</b>{(o.auto.reasons || []).map(r => <p key={r}>• {r}</p>)}</div>}
+    {o.autoEnabled && onCheck && <button className="btn-soft w-full" onClick={onCheck}>🤖 ራስ-ሰር ፍተሻ አድርግ</button>}
     {o.items && o.items.length > 0 && <p className="muted">{o.items.map(i => `${i.title}×${i.qty}`).join('፣ ')}</p>}
   </ExpandCard>);
 
+function AdminSession() {
+  const [m, setM] = useState(''), [sure, setSure] = useState(false);
+  async function go() { const r = await post('/api/admin/logout-all'); setSure(false); if (r.ok && r.token) { setTok(r.token); setM('✅ በሌሎች መሳሪያዎች ላይ ያሉ የአድሚን መግቢያዎች ወጥተዋል።'); } else setM(errText(r.error)); }
+  return (<div className="mb-3 flex flex-wrap items-center gap-2"><span className="muted">⏱ የአድሚን መግቢያ ከ12 ሰዓት በኋላ ያበቃል።</span>{!sure ? <button className="btn-soft ml-auto" onClick={() => setSure(true)}>🚪 በሁሉም መሳሪያ ላይ ውጣ</button> : <span className="ml-auto flex gap-2"><button className="btn-danger !min-h-[40px] !px-3" onClick={go}>✅ አዎ</button><button className="btn-soft" onClick={() => setSure(false)}>✖️</button></span>}{m && <span className="w-full text-sm text-brand-dark">{m}</span>}</div>);
+}
 function ImgStore() {
   const [d, setD] = useState(null), [busy, setBusy] = useState(false), [m, setM] = useState('');
   const load = useCallback(() => get('/api/market/admin/images').then(setD), []); useEffect(() => { load(); }, [load]);
@@ -48,7 +57,7 @@ function Market() {
       <h2 className="mt-5 text-lg">🏪 ለማጽደቅ የሚጠብቁ ሱቆች ({d.pendingShops.length})</h2>
       {d.pendingShops.map(s => (<div key={s.id} className="card mb-3"><b>{s.name}</b> <span className="tag">{s.kind}</span><p className="muted">{s.city}, {s.region} — {s.address}</p><p className="muted">👤 {s.owner.name} {s.owner.email} {s.owner.phone}{s.license ? ` · 🪪 ${s.license}` : ''}</p><p className="muted">💰 {s.payout.method} {s.payout.account} ({s.payout.holder})</p><In k={'sn' + s.id} ph="መልዕክት (አማራጭ)" /><div className="mt-2 grid grid-cols-2 gap-2"><button className="btn-primary" onClick={() => run(`/api/market/admin/shop/${s.id}/status`, { status: 'active', note: x['sn' + s.id] })}>✅ አጽድቅ</button><button className="btn-danger" onClick={() => run(`/api/market/admin/shop/${s.id}/status`, { status: 'rejected', note: x['sn' + s.id] })}>❌ ውድቅ</button></div></div>))}
       <h2 className="mt-5 text-lg">💳 ክፍያ ለማረጋገጥ ({d.payments.length})</h2>
-      {d.payments.map(o => (<Order key={o.id} o={o}><In k={'vn' + o.id} ph="መልዕክት (አማራጭ)" /><div className="mt-2 grid grid-cols-2 gap-2"><button className="btn-primary" onClick={() => run(`/api/market/admin/order/${o.id}/verify-payment`, { ok: true, note: x['vn' + o.id] })}>✅ ደርሷል</button><button className="btn-danger" onClick={() => run(`/api/market/admin/order/${o.id}/verify-payment`, { ok: false, note: x['vn' + o.id] })}>❌ አልደረሰም</button></div></Order>))}
+      {d.payments.map(o => (<Order key={o.id} o={o} onCheck={() => run(`/api/market/admin/order/${o.id}/autocheck`, {})}><In k={'vn' + o.id} ph="መልዕክት (አማራጭ)" /><div className="mt-2 grid grid-cols-2 gap-2"><button className="btn-primary" onClick={() => run(`/api/market/admin/order/${o.id}/verify-payment`, { ok: true, note: x['vn' + o.id] })}>✅ ደርሷል</button><button className="btn-danger" onClick={() => run(`/api/market/admin/order/${o.id}/verify-payment`, { ok: false, note: x['vn' + o.id] })}>❌ አልደረሰም</button></div></Order>))}
       <h2 className="mt-5 text-lg">💰 ለሻጭ ለመክፈል ({d.toSettle.length})</h2>
       {d.toSettle.map(o => (<Order key={o.id} o={o}><p className="mt-1 text-sm">ለሻጭ <b>{ETB(o.sellerNet)}</b> (ኮሚሽን {ETB(o.commission)}) → {o.payout && o.payout.method} {o.payout && o.payout.account} ({o.payout && o.payout.holder})</p><In k={'sr' + o.id} ph="የክፍያ ማጣቀሻ ቁጥር" /><button className="btn-primary mt-2 w-full" onClick={() => run(`/api/market/admin/order/${o.id}/settle`, { ref: x['sr' + o.id] })}>💰 ተከፍሏል</button></Order>))}
       <h2 className="mt-5 text-lg">↩️ ተመላሽ ({d.refunds.length}) · ⚖️ ክርክር ({d.disputes.length})</h2>
@@ -102,6 +111,6 @@ function Pages() {
 }
 function Admin() {
   const [t, setT] = useState('market'), tabs = [['market', '🛍️ ገበያ'], ['accounts', '👥 አካውንቶች'], ['people', '💼 ሰዎች እና ሥራ'], ['pages', '🌐 ገጾች']];
-  return (<div className="mx-auto max-w-3xl"><PageTitle>🛡️ አድሚን</PageTitle><div className="mb-4 flex gap-2 overflow-x-auto">{tabs.map(([k, l]) => <button key={k} className={t === k ? 'chip-on' : 'chip'} onClick={() => setT(k)}>{l}</button>)}</div>{t === 'market' && <Market />}{t === 'accounts' && <Accounts />}{t === 'people' && <People />}{t === 'pages' && <Pages />}</div>);
+  return (<div className="mx-auto max-w-3xl"><PageTitle>🛡️ አድሚን</PageTitle><AdminSession /><div className="mb-4 flex gap-2 overflow-x-auto">{tabs.map(([k, l]) => <button key={k} className={t === k ? 'chip-on' : 'chip'} onClick={() => setT(k)}>{l}</button>)}</div>{t === 'market' && <Market />}{t === 'accounts' && <Accounts />}{t === 'people' && <People />}{t === 'pages' && <Pages />}</div>);
 }
 export default function Page() { return <RequireAuth admin><Admin /></RequireAuth>; }
