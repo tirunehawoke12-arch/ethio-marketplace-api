@@ -1,0 +1,29 @@
+'use strict';
+// ከ src/lib/consts.js የተወሰደ — የስህተት ኮዶች በአማርኛ (ለ Telegram bot)
+const ERR = {
+  login_required: 'መጀመሪያ ይግቡ', not_registered: 'መጀመሪያ አካውንት ይክፈቱ', invalid: 'መረጃው ወይም የይለፍ ቃሉ ትክክል አይደለም', suspended: 'አካውንትዎ ታግዷል — አድሚኑን ያነጋግሩ',
+  too_many_attempts: 'ብዙ ሙከራ — ትንሽ ቆይተው ይሞክሩ', slow_down: 'ትንሽ ቆይተው ይሞክሩ', invalid_email: 'ትክክለኛ ኢሜይል ያስገቡ', invalid_phone: 'ትክክለኛ የኢትዮጵያ ስልክ (09… ወይም 07…) ያስገቡ',
+  weak_password: 'የይለፍ ቃል ቢያንስ 8 ቁምፊ መሆን አለበት', email_taken: 'ይህ ኢሜይል ቀድሞ ተመዝግቧል', phone_taken: 'ይህ ስልክ ቁጥር ቀድሞ ተመዝግቧል', already_registered: 'ቀድሞ ተመዝግበዋል',
+  invalid_otp: 'ኮዱ ትክክል አይደለም', otp_expired: 'ኮዱ ጊዜው አልፏል — እንደገና ይጀምሩ', otp_not_ready: 'መጀመሪያ በ Telegram ስልክዎን ያረጋግጡ', request_not_found: 'ጥያቄው አልተገኘም — እንደገና ይጀምሩ', phone_not_verified: 'ስልክ ቁጥር አልተረጋገጠም',
+  telegram_not_configured: 'የ Telegram Bot አልተዘጋጀም', network: 'ግንኙነት የለም፤ እንደገና ይሞክሩ', missing_fields: 'ሁሉንም አስፈላጊ መረጃ ያሟሉ', bad_fields: 'መረጃውን ያሟሉ (ስም፣ ዋጋ፣ ብዛት፣ ምድብ)', bad_image: 'ምስሉ ተቀባይነት የለውም',
+  open_shop_first: 'መጀመሪያ ሱቅዎን ይክፈቱ', own_product: 'የራስዎን ዕቃ መግዛት አይቻልም', payout_required: 'የክፍያ መቀበያ መረጃ ያስፈልጋል', payment_proof_required: 'የክፍያ ዘዴ እና የማጣቀሻ ቁጥር ያስገቡ',
+  payout_ref_required: 'የክፍያ ማጣቀሻ ቁጥር ያስገቡ', refund_ref_required: 'የተመላሽ ማጣቀሻ ቁጥር ያስገቡ', reason_required: 'ምክንያት ይጻፉ', open_worker_first: 'ለማመልከት መጀመሪያ የሠራተኛ ገጽ ይክፈቱ', open_employer_first: 'መጀመሪያ የአሰሪ ገጽ ይክፈቱ',
+  already_applied: 'ቀድሞ አመልክተዋል', own_job: 'የራስዎን ሥራ ማመልከት አይቻልም', own_profile: 'ለራስዎ መላክ አይቻልም', message_required: 'መልዕክት ይጻፉ', admin_only: 'አድሚን ብቻ', not_found: 'አልተገኘም', too_many: 'ከተፈቀደው ብዛት አልፈዋል', not_yours: 'ይህ የእርስዎ አይደለም', admin_cannot: 'አድሚን ይህን ማድረግ አይችልም', missing_fields_page: 'ርዕስ ያስገቡ',
+};
+function errText(e) {
+  e = String(e || '');
+  if (e.startsWith('out_of_stock')) return 'በቂ ክምችት የለም፦ ' + e.split(':')[1];
+  if (e.startsWith('wrong_step')) return 'ይህ እርምጃ አሁን አይፈቀድም (ሁኔታው ተቀይሯል)';
+  if (e.startsWith('no_delivery')) return 'ይህ ሱቅ ማድረስ አያደርግም፦ ' + e.split(':')[1];
+  if (e.startsWith('no_pickup')) return 'ይህ ሱቅ በአካል መውሰድ አይፈቅድም፦ ' + e.split(':')[1];
+  if (e.startsWith('required_missing')) return 'ያልተሞላ አስፈላጊ መስክ፦ ' + e.split(':').slice(1).join(':');
+  if (e.startsWith('unavailable')) return 'አልተገኘም፦ ' + e.split(':')[1];
+  return ERR[e] || 'ስህተት፦ ' + e;
+}
+ERR.admin_telegram_not_linked = 'መጀመሪያ በ Telegram bot የአድሚን ስልክ ያረጋግጡ';
+ERR.orders_active = 'ንቁ (ያልተጠናቀቀ) ትዕዛዝ ስላለ አካውንት መሰረዝ አይቻልም — መጀመሪያ ትዕዛዞቹ ይጠናቀቁ';
+module.exports = { ERR, errText };
+ERR.storage_not_configured = 'የምስል ማከማቻ (S3/R2) አልተቀናበረም';
+ERR.busy = 'ሌላ ሥራ እየሄደ ነው — ትንሽ ቆይተው ይሞክሩ';
+ERR.duplicate_reference = 'ይህ የክፍያ ማጣቀሻ ቁጥር ለሌላ ትዕዛዝ ተጠቅሟል — ከደረሰኝዎ ላይ ትክክለኛውን ቁጥር ያስገቡ';
+ERR.verifier_not_configured = 'ራስ-ሰር የክፍያ አረጋጋጭ አልተቀናበረም';

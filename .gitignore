@@ -1,0 +1,10 @@
+node_modules/
+.next/
+.env
+.env.local
+market-data.json
+market-data.json.tmp
+otp-db.json
+telegram-otp-data.json
+.token-secret
+*.log
