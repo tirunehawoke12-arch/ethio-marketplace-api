@@ -1,0 +1,36 @@
+name: Unzip upload
+on:
+  push:
+    paths: ['*.zip']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  unzip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract zip into repo root
+        run: |
+          shopt -s nullglob
+          zips=(*.zip)
+          if [ ${#zips[@]} -eq 0 ]; then echo "No zip at repo root"; exit 0; fi
+          Z="${zips[-1]}"; echo "Using $Z"
+          rm -rf /tmp/x && mkdir /tmp/x && unzip -q "$Z" -d /tmp/x
+          SRC=/tmp/x
+          if [ "$(ls -A /tmp/x | wc -l)" -eq 1 ] && [ -d "/tmp/x/$(ls -A /tmp/x)" ]; then SRC="/tmp/x/$(ls -A /tmp/x)"; fi
+          test -f "$SRC/package.json" || { echo "package.json not found in zip"; exit 1; }
+          rm -rf src server tests
+          rm -rf "$SRC/.github"
+          cp -a "$SRC"/. .
+          rm -f *.zip
+      - name: Commit
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && { echo "No changes"; exit 0; }
+          git commit -m "Import project from zip"
+          git push
