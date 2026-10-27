@@ -3,6 +3,9 @@ import { AppProvider } from '@/lib/app';
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import Footer from '@/components/Footer';
+import PwaRegister from '@/components/PwaRegister';
+import { LangProvider } from '@/lib/i18n';
+import { THEME_SCRIPT } from '@/lib/themeScript';
 import { SITE, BOT_URL } from '@/lib/consts';
 
 const TITLE = 'Etio Digital Market | ኢትዮ ዲጂታል ማርኬት — ሱቅ፣ ሆቴል፣ ሙያተኛ እና ሥራ በኢትዮጵያ';
@@ -15,6 +18,8 @@ export const metadata = {
   alternates: { canonical: '/', languages: { am: '/', 'x-default': '/' } },
   applicationName: 'Etio Digital Market',
   manifest: '/manifest.webmanifest',
+  icons: { icon: [{ url: '/icons/icon-192.png', sizes: '192x192' }, { url: '/icons/icon-512.png', sizes: '512x512' }], apple: '/icons/apple-touch-icon.png' },
+  appleWebApp: { capable: true, title: 'ኢትዮ ማርኬት', statusBarStyle: 'default' },
   category: 'shopping',
   ...(process.env.GOOGLE_SITE_VERIFICATION ? { verification: { google: process.env.GOOGLE_SITE_VERIFICATION } } : {}),
   robots: { index: true, follow: true, googleBot: { 'max-image-preview': 'large' } },
@@ -29,15 +34,17 @@ const LD = { '@context': 'https://schema.org', '@graph': [
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="am">
+    <html lang="am" suppressHydrationWarning>
+      <head><script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} /></head>
       <body>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(LD) }} />
-        <AppProvider>
+        <LangProvider><AppProvider>
           <Header />
           <main className="mx-auto max-w-6xl px-3 pb-6 pt-4">{children}</main>
           <Footer />
           <BottomNav />
-        </AppProvider>
+          <PwaRegister />
+        </AppProvider></LangProvider>
       </body>
     </html>
   );

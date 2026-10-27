@@ -1,4 +1,5 @@
 'use strict';
+const AM = require('./amnorm');
 /* ===== የራስ ገጽ (Google Form + የግል ድረ-ገጽ) =====
    ማንኛውም የተመዘገበ ሰው — ሠራተኛ፣ አሰሪ፣ ሱቅ፣ ሆቴል፣ ትምህርት ቤት፣ ክሊኒክ… — እንደፈለገው ገጽ ይሠራል፦
    • ክፍሎችን (ስለ እኔ፣ ስለ ሥራዬ፣ ክፍያ፣ አድራሻ…) እና በውስጣቸው ጥያቄ/መስኮችን ራሱ ይቀርጻል (Google Form እንደሚሠራ)
@@ -10,7 +11,7 @@ module.exports = function pages(ctx) {
   const tell = (uid, t) => { try { notifyUser && notifyUser(uid, t); } catch (e) { } };
   const P = { pg: 'pg/pages', rs: 'pg/responses' };
   const TYPES = ['text', 'long', 'number', 'phone', 'link', 'date', 'choice', 'multi', 'yesno', 'image'];
-  const THEMES = ['green', 'ocean', 'sunset', 'royal', 'rose', 'night', 'gold'];
+  const THEMES = ['green', 'ocean', 'sunset', 'royal', 'rose', 'night', 'gold', 'ethio', 'coffee', 'sky', 'forest', 'plum', 'mint'];
   const LIM = { sections: 14, fields: 30, total: 150, options: 24, formFields: 25, pages: 1, forms: 5 };
   const imgsOk = (arr, n) => (Array.isArray(arr) ? arr : []).slice(0, n).map(x => S(x, 24)).filter(x => col('_img')[x]);
   const phoneOk = p => { let d = String(p || '').replace(/[^\d+]/g, '').replace(/^\+/, ''); if (d.startsWith('251')) d = d.slice(3); if (d.startsWith('0')) d = d.slice(1); return /^[79]\d{8}$/.test(d) ? '0' + d : ''; };
@@ -69,14 +70,14 @@ module.exports = function pages(ctx) {
   };
   // ለህዝብ፦ «ለአድሚን ብቻ» መስኮች ይወገዳሉ፤ ባዶ ክፍሎች አይታዩም
   const pubSections = pg => pg.sections.map(s => ({ ...s, fields: s.fields.filter(f => !f.priv && !(Array.isArray(f.value) ? !f.value.length : f.value === '')) })).filter(s => s.fields.length);
-  const card = pg => ({ id: pg.id, kind: pg.kind, title: pg.title, tagline: pg.tagline, logo: pg.logo, cover: pg.cover, theme: pg.theme, region: pg.region, city: pg.city, ts: pg.ts, sections: pg.sections.length, about: String(pg.about || '').slice(0, 320), phone: pg.showPhone ? pg.phone : '', topics: pg.sections.map(x => x.title).slice(0, 8), hasForm: liveForms(pg).length > 0 });
+  const card = pg => ({ verified: !!pg.verified, id: pg.id, kind: pg.kind, title: pg.title, tagline: pg.tagline, logo: pg.logo, cover: pg.cover, theme: pg.theme, region: pg.region, city: pg.city, ts: pg.ts, sections: pg.sections.length, about: String(pg.about || '').slice(0, 320), phone: pg.showPhone ? pg.phone : '', topics: pg.sections.map(x => x.title).slice(0, 8), hasForm: liveForms(pg).length > 0 });
   const pub = pg => ({ ...card(pg), about: pg.about, gallery: pg.gallery, phone: pg.showPhone ? pg.phone : '', sections: pubSections(pg), forms: liveForms(pg).map(formPub), form: liveForms(pg)[0] ? formPub(liveForms(pg)[0]) : null, refs: refsOf(pg.uid) });
   const mineList = uid => Object.values(col(P.pg)).filter(p => p.uid === uid);
 
   /* ---------- ህዝባዊ ---------- */
   app.get('/api/pages', (req, res) => {
     const q = S(req.query.q, 60).toLowerCase(), kind = S(req.query.kind, 40), reg = S(req.query.region, 40), page = Math.max(1, parseInt(req.query.page) || 1);
-    const L = Object.values(col(P.pg)).filter(p => p.status === 'active' && (!kind || p.kind === kind) && (!reg || p.region === reg) && (!q || (p.title + ' ' + p.tagline + ' ' + p.kind + ' ' + p.city).toLowerCase().includes(q))).sort((a, b) => b.ts - a.ts);
+    const L = Object.values(col(P.pg)).filter(p => p.status === 'active' && (!kind || p.kind === kind) && (!reg || p.region === reg) && (!q || AM.hit(p.title + ' ' + p.tagline + ' ' + p.kind + ' ' + p.city, q))).sort((a, b) => b.ts - a.ts);
     res.json({ ok: true, total: L.length, page, items: L.slice((page - 1) * 24, page * 24).map(card), kinds: [...new Set(Object.values(col(P.pg)).filter(p => p.status === 'active').map(p => p.kind))].slice(0, 40) });
   });
 

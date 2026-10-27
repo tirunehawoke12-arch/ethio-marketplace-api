@@ -1,7 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: ['./src/**/*.{js,jsx}'],
-  darkMode: 'media',
+  darkMode: 'class',
   theme: {
     extend: {
       colors: { brand: { DEFAULT: '#0a8a56', dark: '#076b43', light: '#e6f6ee' }, teal: { brand: '#0b6e8f' }, gold: '#f5b301', ink: '#14221a', mute: '#5f6f65', line: '#e3e9e4', bg: '#f3f6f2' },

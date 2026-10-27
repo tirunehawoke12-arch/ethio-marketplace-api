@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { VerifyRequest } from '@/components/actions/TrustBits';
 import { useEffect, useState } from 'react';
 import { get } from '@/lib/api';
 import { PageTitle, Spinner, StatusTag } from '@/components/ui';
@@ -24,6 +25,7 @@ function Hub() {
           <MoreText text={x.about} limit={160} /><Facts items={[['📬', 'የደረሱ መልሶች', x.responses], ['📑', 'ክፍሎች', x.sections], ['📍', 'ቦታ', [x.city, x.region].filter(Boolean).join(', ')]]} />
         </ExpandCard>))}</ExpandGroup>
         {!g.length && <Link className="btn-primary mt-3 w-full" href="/me/sites/new">➕ ገጼን ክፈት</Link>}</div>
+      <VerifyRequest />
       <Row icon="🏪" title="ሱቅ · ነጋዴ · ሆቴል · አገልግሎት ሰጪ · አምራች" sub={s ? `${s.name} · ${s.kind}` : 'ዕቃ ወይም አገልግሎት ለህዝብ ይሽጡ'} st={s && s.status} href="/me/shop" cta={s ? '🛠 አስተዳድር / አስፋ' : '➕ ገጽ ክፈት'} />
       <Row icon="🧑‍🔧" title="ሠራተኛ / ሙያተኛ ገጽ" sub={w ? `${w.name} · ${w.title}` : 'ሙያዎን ያሳዩ፤ አሰሪዎች ያገኙዎታል'} st={w && w.status} href="/me/worker" cta={w ? '✏️ አዘምን' : '➕ ገጽ ክፈት'} extra={<Link className="btn-ghost flex-1" href="/me/applications">📄 ማመልከቻዎቼ{p.applications ? ` (${p.applications})` : ''}</Link>} />
       <Row icon="🏢" title="አሰሪ ገጽ" sub={e ? `${e.name} · ${e.sector}` : 'ሠራተኛ ይፈልጋሉ? ሥራ ያስታውቁ'} st={e && e.status} href="/me/employer" cta={e ? '✏️ አዘምን' : '➕ ገጽ ክፈት'} extra={e && <Link className="btn-ghost flex-1" href="/me/jobs/new">➕ ሥራ አስታውቅ</Link>} />

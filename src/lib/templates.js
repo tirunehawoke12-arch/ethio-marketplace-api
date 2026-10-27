@@ -10,6 +10,7 @@ export const FIELD_TYPES = [
 export const THEMES = {
   green: ['#0a8a56', '#0b6e8f', 'አረንጓዴ'], ocean: ['#0b6e8f', '#2b4acb', 'ውቅያኖስ'], sunset: ['#e8590c', '#c2255c', 'ፀሐይ መጥለቂያ'], royal: ['#6741d9', '#364fc7', 'ሐምራዊ'],
   rose: ['#d6336c', '#ae3ec9', 'ጽጌረዳ'], night: ['#212529', '#495057', 'ሌሊት'], gold: ['#b8860b', '#e67700', 'ወርቅ'],
+  ethio: ['#078930', '#da121a', 'ባንዲራ'], coffee: ['#6f4e37', '#a47148', 'ቡና'], sky: ['#0ea5e9', '#6366f1', 'ሰማይ'], forest: ['#2f6f4f', '#1b4332', 'ደን'], plum: ['#7b2d8e', '#c2255c', 'ወይን'], mint: ['#12b886', '#15aabf', 'ናና'],
 };
 export const themeGrad = t => { const c = THEMES[t] || THEMES.green; return `linear-gradient(135deg, ${c[0]}, ${c[1]})`; };
 export const themeColor = t => (THEMES[t] || THEMES.green)[0];

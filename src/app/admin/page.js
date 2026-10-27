@@ -5,6 +5,7 @@ import { errText } from '@/lib/consts';
 import { Msg, PageTitle, Spinner, StatusTag } from '@/components/ui';
 import { ExpandCard } from '@/components/Expand';
 import AccountViewer from '@/components/AccountViewer';
+import Trust from '@/components/AdminTrust';
 import RequireAuth from '@/components/RequireAuth';
 
 const AUTO = { match: ['✅ ራስ-ሰር ፍተሻ ተዛምዷል', 'msg-ok'], mismatch: ['❌ ራስ-ሰር ፍተሻ አይመሳሰልም', 'msg-err'], notfound: ['❓ በአረጋጋጩ አልተገኘም', 'msg-err'], unknown: ['⚠️ ማረጋገጥ አልተቻለም', 'muted'], error: ['⚠️ ፍተሻው አልተሳካም', 'muted'] };
@@ -111,7 +112,7 @@ function Pages() {
     {open[x.id] && open[x.id].ok && <div className="mt-3 space-y-2">{open[x.id].page.sections.map(s => <div key={s.id} className="rounded-2xl bg-brand-light p-3"><b>{s.icon} {s.title}</b>{s.fields.filter(f => !(Array.isArray(f.value) ? !f.value.length : f.value === '')).map(f => <p key={f.id} className="text-sm"><span className="muted">{f.priv ? '🔒 ' : ''}{f.label}፦</span> {f.type === 'image' ? f.value.map(i => <a key={i} className="mr-2 font-bold text-brand underline" target="_blank" rel="noopener" href={`/api/market/img/${i}`}>ፎቶ</a>) : show(f.value)}</p>)}</div>)}</div>}</div>))}</div>);
 }
 function Admin() {
-  const [t, setT] = useState('market'), tabs = [['market', '🛍️ ገበያ'], ['accounts', '👥 አካውንቶች'], ['people', '💼 ሰዎች እና ሥራ'], ['pages', '🌐 ገጾች']];
-  return (<div className="mx-auto max-w-3xl"><PageTitle>🛡️ አድሚን</PageTitle><AdminSession /><div className="mb-4 flex gap-2 overflow-x-auto">{tabs.map(([k, l]) => <button key={k} className={t === k ? 'chip-on' : 'chip'} onClick={() => setT(k)}>{l}</button>)}</div>{t === 'market' && <Market />}{t === 'accounts' && <Accounts />}{t === 'people' && <People />}{t === 'pages' && <Pages />}</div>);
+  const [t, setT] = useState('market'), tabs = [['market', '🛍️ ገበያ'], ['accounts', '👥 አካውንቶች'], ['people', '💼 ሰዎች እና ሥራ'], ['pages', '🌐 ገጾች'], ['trust', '🛡 እምነት']];
+  return (<div className="mx-auto max-w-3xl"><PageTitle>🛡️ አድሚን</PageTitle><AdminSession /><div className="mb-4 flex gap-2 overflow-x-auto">{tabs.map(([k, l]) => <button key={k} className={t === k ? 'chip-on' : 'chip'} onClick={() => setT(k)}>{l}</button>)}</div>{t === 'market' && <Market />}{t === 'accounts' && <Accounts />}{t === 'people' && <People />}{t === 'pages' && <Pages />}{t === 'trust' && <Trust />}</div>);
 }
 export default function Page() { return <RequireAuth admin><Admin /></RequireAuth>; }

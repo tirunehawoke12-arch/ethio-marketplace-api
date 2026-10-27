@@ -6,9 +6,11 @@ import { errText } from '@/lib/consts';
 async function compress(file) {
   const url = await new Promise(r => { const f = new FileReader(); f.onload = () => r(f.result); f.readAsDataURL(file); });
   const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
-  const k = Math.min(1, 900 / Math.max(im.width, im.height)), c = document.createElement('canvas');
-  c.width = Math.round(im.width * k); c.height = Math.round(im.height * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
-  let q = 0.8, d = c.toDataURL('image/jpeg', q); while (d.length > 360000 && q > 0.4) { q -= 0.1; d = c.toDataURL('image/jpeg', q); } return d;
+  const k = Math.min(1, 1000 / Math.max(im.width, im.height)), c = document.createElement('canvas');
+  c.width = Math.round(im.width * k); c.height = Math.round(im.height * k); const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height);
+  // WebP ከተደገፈ (ከ JPEG ~30% ያነሰ) — ካልሆነ JPEG። ከ ~220KB እስኪያንስ ጥራት ይቀንሳል፤ ያ ካልበቃ መጠን ይቀነሳል
+  const mime = c.toDataURL('image/webp', 0.8).startsWith('data:image/webp') ? 'image/webp' : 'image/jpeg';
+  let q = 0.82, d = c.toDataURL(mime, q); while (d.length > 300000 && q > 0.45) { q -= 0.08; d = c.toDataURL(mime, q); } return d;
 }
 /** value፦ የምስል መታወቂያዎች ዝርዝር፤ max=1 ከሆነ አንድ ምስል */
 export default function ImageInput({ label, value = [], onChange, max = 4 }) {

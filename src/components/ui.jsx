@@ -17,3 +17,4 @@ export const StatusTag = ({ s }) => {
   const m = { active: ['🟢 ክፍት'], open: ['🟢 ክፍት'], pending: ['⏳ በግምገማ', 'warn'], hidden: ['🙈 ተደብቋል', 'warn'], closed: ['⚪ ተዘግቷል', 'warn'], rejected: ['❌ አልተቀበለም', 'bad'], suspended: ['⛔ ታግዷል', 'bad'] }[s] || [s];
   return <span className={m[1] === 'bad' ? 'tag-bad' : m[1] === 'warn' ? 'tag-warn' : 'tag'}>{m[0]}</span>;
 };
+export const Verified = ({ v, small }) => (v ? <span title="በአድሚን የተረጋገጠ" className={'ml-1 inline-flex items-center gap-1 rounded-full bg-sky-100 font-extrabold text-sky-700 dark:bg-sky-900/40 dark:text-sky-300 ' + (small ? 'px-1.5 text-[11px]' : 'px-2.5 py-0.5 text-xs')}>✅ {small ? '' : 'የተረጋገጠ'}</span> : null);

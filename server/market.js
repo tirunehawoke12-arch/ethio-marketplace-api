@@ -1,4 +1,5 @@
 'use strict';
+const AM = require('./amnorm');
 /* ===== ኢትዮ ዲጂታል ማርኬት — ደረጃ በደረጃ የሚሄድ ገበያ (ሁሉም ህጎች በሰርቨር ይጠበቃሉ) =====
    ሱቅ ክፈት → አጽድቅ → ዕቃ ዘርዝር → ደንበኛ እዘዝ → ክፈል (escrow) → አድሚን አረጋግጥ
    → ሻጭ አዘጋጅ → ላክ → ደንበኛ ተቀበል → አድሚን ለሻጭ ክፈል → ግምገማ                       */
@@ -41,7 +42,7 @@ module.exports = function market(ctx) {
     : [{ method: 'telebirr', number: '0946705941', holder: 'TIRUNEH AWOKE CHANIE' }, { method: 'ንግድ ባንክ (CBE)', number: '1000594431379', holder: 'TIRUNEH AWOKE CHANIE' }];
   const cfg = () => { const c = col(P.cfg).main || {}; return { commissionPct: c.commissionPct == null ? COMM : c.commissionPct, accounts: c.accounts && c.accounts.length ? c.accounts : DEFAULT_ACCOUNTS, note: c.note || '' }; };
   const rate = shopId => { const rs = Object.values(col(P.reviews)).filter(r => r.shopId === shopId); return { avg: rs.length ? Math.round(rs.reduce((a, r) => a + r.rating, 0) / rs.length * 10) / 10 : 0, n: rs.length }; };
-  const pubShop = s => { const r = rate(s.id); return { id: s.id, kind: s.kind || KINDS[0], gallery: s.gallery || [], links: s.links || {}, year: s.year || '', tags: s.tags || [], name: s.name, about: s.about, category: s.category, region: s.region, city: s.city, address: s.address, hours: s.hours, phone: s.showPhone ? s.phone : '', logo: s.logo, cover: s.cover, delivery: s.delivery, rating: r.avg, reviews: r.n, ts: s.ts }; };
+  const pubShop = s => { const r = rate(s.id); return { verified: !!s.verified, id: s.id, kind: s.kind || KINDS[0], gallery: s.gallery || [], links: s.links || {}, year: s.year || '', tags: s.tags || [], name: s.name, about: s.about, category: s.category, region: s.region, city: s.city, address: s.address, hours: s.hours, phone: s.showPhone ? s.phone : '', logo: s.logo, cover: s.cover, delivery: s.delivery, rating: r.avg, reviews: r.n, ts: s.ts }; };
   const pubProd = (p, s) => ({ id: p.id, title: p.title, desc: p.desc, price: p.price, unit: p.unit, stock: p.stock, category: p.category, imgs: p.imgs, ts: p.ts, shop: { id: s.id, name: s.name, city: s.city, region: s.region, logo: s.logo, rating: rate(s.id).avg } });
   const live = () => { const sh = col(P.shops); return Object.values(col(P.products)).filter(p => p.status === 'active' && sh[p.shopId] && sh[p.shopId].status === 'active').map(p => [p, sh[p.shopId]]); };
   const push = (o, s, by, note) => { o.status = s; (o.history = o.history || []).push({ s, ts: Date.now(), by, note: note || '' }); };
@@ -86,14 +87,14 @@ module.exports = function market(ctx) {
     res.json({ ok: true, cats, latest: L.sort((a, b) => b[0].ts - a[0].ts).slice(0, 12).map(([p, s]) => pubProd(p, s)), shops: Object.values(col(P.shops)).filter(s => s.status === 'active').sort((a, b) => b.ts - a.ts).slice(0, 8).map(pubShop), total: L.length });
   });
   app.get('/api/market/products', (req, res) => {
-    const q = S(req.query.q, 60).toLowerCase(), cat = S(req.query.cat, 40), shop = S(req.query.shop, 40), reg = S(req.query.region, 40), min = N(req.query.min), max = N(req.query.max), sort = S(req.query.sort, 12), page = Math.max(1, parseInt(req.query.page) || 1);
-    let L = live().filter(([p, s]) => (!q || (p.title + ' ' + p.desc + ' ' + s.name).toLowerCase().includes(q)) && (!cat || p.category === cat) && (!shop || s.id === shop) && (!reg || s.region === reg) && (isNaN(min) || p.price >= min) && (isNaN(max) || p.price <= max));
+    const q = S(req.query.q, 60).toLowerCase(), cat = S(req.query.cat, 40), shop = S(req.query.shop, 40), reg = S(req.query.region, 40), min = N(req.query.min), max = N(req.query.max), city = S(req.query.city, 60), mr = N(req.query.minRating), sort = S(req.query.sort, 12), page = Math.max(1, parseInt(req.query.page) || 1);
+    let L = live().filter(([p, s]) => (!q || AM.hit(p.title + ' ' + p.desc + ' ' + s.name, q)) && (!cat || p.category === cat) && (!shop || s.id === shop) && (!reg || s.region === reg) && (!city || AM.hit(s.city || '', city)) && (isNaN(mr) || mr <= 0 || rate(s.id).avg >= mr) && (isNaN(min) || p.price >= min) && (isNaN(max) || p.price <= max));
     L.sort(sort === 'price_asc' ? (a, b) => a[0].price - b[0].price : sort === 'price_desc' ? (a, b) => b[0].price - a[0].price : (a, b) => b[0].ts - a[0].ts);
     res.json({ ok: true, total: L.length, page, items: L.slice((page - 1) * 24, page * 24).map(([p, s]) => pubProd(p, s)) });
   });
   app.get('/api/market/shops', (req, res) => {
-    const q = S(req.query.q, 60).toLowerCase(), kind = S(req.query.kind, 40), reg = S(req.query.region, 40);
-    const L = Object.values(col(P.shops)).filter(s => s.status === 'active' && (!kind || (s.kind || KINDS[0]) === kind) && (!reg || s.region === reg) && (!q || (s.name + ' ' + s.about + ' ' + (s.tags || []).join(' ')).toLowerCase().includes(q))).sort((a, b) => b.ts - a.ts);
+    const q = S(req.query.q, 60).toLowerCase(), kind = S(req.query.kind, 40), reg = S(req.query.region, 40), city = S(req.query.city, 60), mr = N(req.query.minRating);
+    const L = Object.values(col(P.shops)).filter(s => s.status === 'active' && (!kind || (s.kind || KINDS[0]) === kind) && (!reg || s.region === reg) && (!city || AM.hit(s.city || '', city)) && (isNaN(mr) || mr <= 0 || rate(s.id).avg >= mr) && (!q || AM.hit(s.name + ' ' + s.about + ' ' + (s.tags || []).join(' '), q))).sort((a, b) => b.ts - a.ts);
     res.json({ ok: true, total: L.length, items: L.slice(0, 48).map(pubShop) });
   });
   app.get('/api/market/product/:id', (req, res) => {

@@ -1,4 +1,5 @@
 'use strict';
+const AM = require('./amnorm');
 /* ===== ሠራተኛ ገጽ፣ አሰሪ ገጽ፣ የሥራ ማስታወቂያ፣ ማመልከቻ እና ቅጥር =====
    ሠራተኛ ገጽ ይከፍታል → አሰሪ ገጽ ይከፍታል → ሥራ ያስታውቃል → ሠራተኛ ያመለክታል
    → አሰሪ ይመርጣል (ዝርዝር ውስጥ ያስገባል / ይቀጥራል / ውድቅ ያደርጋል) → ሁሉም በ Telegram ይነገራል */
@@ -11,8 +12,9 @@ module.exports = function people(ctx) {
   const mine = (p, uid) => Object.values(col(p)).find(x => x.uid === uid);
   const imgsOk = (arr, n) => (Array.isArray(arr) ? arr : []).slice(0, n).map(x => S(x, 24)).filter(x => col('_img')[x]);
   const list = (a, n, m) => (Array.isArray(a) ? a : String(a || '').split(/[,،\n]/)).map(x => S(x, m)).filter(Boolean).slice(0, n);
-  const pubW = w => ({ id: w.id, name: w.name, title: w.title, category: w.category, skills: w.skills, exp: w.exp, education: w.education, about: w.about, region: w.region, city: w.city, rate: w.rate, availability: w.availability, photo: w.photo, gallery: w.gallery, languages: w.languages, phone: w.showPhone ? w.phone : '', ts: w.ts });
-  const pubE = e => ({ id: e.id, name: e.name, sector: e.sector, about: e.about, region: e.region, city: e.city, address: e.address, logo: e.logo, size: e.size, links: e.links, phone: e.showPhone ? e.phone : '', ts: e.ts });
+  const rt = (t, id) => { const L = Object.values(col('tr/reviews')).filter(r => r.t === t && r.targetId === id); return { avg: L.length ? Math.round(L.reduce((a, r) => a + r.rating, 0) / L.length * 10) / 10 : 0, n: L.length }; };
+  const pubW = w => ({ verified: !!w.verified, rating: rt('w', w.id), id: w.id, name: w.name, title: w.title, category: w.category, skills: w.skills, exp: w.exp, education: w.education, about: w.about, region: w.region, city: w.city, rate: w.rate, availability: w.availability, photo: w.photo, gallery: w.gallery, languages: w.languages, phone: w.showPhone ? w.phone : '', ts: w.ts });
+  const pubE = e => ({ verified: !!e.verified, rating: rt('e', e.id), id: e.id, name: e.name, sector: e.sector, about: e.about, region: e.region, city: e.city, address: e.address, logo: e.logo, size: e.size, links: e.links, phone: e.showPhone ? e.phone : '', ts: e.ts });
   const open = j => { const e = col(P.e)[j.employerId]; return j.status === 'open' && e && e.status === 'active' && (!j.deadline || j.deadline >= new Date().toISOString().slice(0, 10)); };
   const pubJ = j => { const e = col(P.e)[j.employerId]; return { id: j.id, title: j.title, category: j.category, type: j.type, description: j.description, requirements: j.requirements, salary: j.salary, openings: j.openings, region: j.region, city: j.city, deadline: j.deadline, ts: j.ts, employer: e ? { id: e.id, name: e.name, logo: e.logo, sector: e.sector } : null, applicants: Object.values(col(P.a)).filter(a => a.jobId === j.id && !a.invite).length }; };
 
@@ -31,7 +33,7 @@ module.exports = function people(ctx) {
   });
   app.get('/api/people/workers', (req, res) => {
     const q = S(req.query.q, 60).toLowerCase(), cat = S(req.query.cat, 40), reg = S(req.query.region, 40), av = S(req.query.av, 12), page = Math.max(1, parseInt(req.query.page) || 1);
-    const L = Object.values(col(P.w)).filter(w => w.status === 'active' && (!q || (w.name + ' ' + w.title + ' ' + (w.skills || []).join(' ') + ' ' + w.about).toLowerCase().includes(q)) && (!cat || w.category === cat) && (!reg || w.region === reg) && (!av || w.availability === av)).sort((a, b) => b.ts - a.ts);
+    const L = Object.values(col(P.w)).filter(w => w.status === 'active' && (!q || AM.hit(w.name + ' ' + w.title + ' ' + (w.skills || []).join(' ') + ' ' + w.about, q)) && (!cat || w.category === cat) && (!reg || w.region === reg) && (!av || w.availability === av)).sort((a, b) => b.ts - a.ts);
     res.json({ ok: true, total: L.length, page, items: L.slice((page - 1) * 24, page * 24).map(pubW) });
   });
   app.get('/api/people/worker/:id', (req, res) => { const w = col(P.w)[req.params.id]; if (!w || w.status !== 'active') return bad(res, 404, 'not_found'); res.json({ ok: true, worker: pubW(w) }); });
@@ -48,7 +50,7 @@ module.exports = function people(ctx) {
   });
   app.get('/api/people/employers', (req, res) => {
     const q = S(req.query.q, 60).toLowerCase(), reg = S(req.query.region, 40), page = Math.max(1, parseInt(req.query.page) || 1);
-    const L = Object.values(col(P.e)).filter(e => e.status === 'active' && (!q || (e.name + ' ' + e.sector + ' ' + e.about).toLowerCase().includes(q)) && (!reg || e.region === reg)).sort((a, b) => b.ts - a.ts);
+    const L = Object.values(col(P.e)).filter(e => e.status === 'active' && (!q || AM.hit(e.name + ' ' + e.sector + ' ' + e.about, q)) && (!reg || e.region === reg)).sort((a, b) => b.ts - a.ts);
     res.json({ ok: true, total: L.length, page, items: L.slice((page - 1) * 24, page * 24).map(pubE) });
   });
   app.get('/api/people/employer/:id', (req, res) => { const e = col(P.e)[req.params.id]; if (!e || e.status !== 'active') return bad(res, 404, 'not_found'); res.json({ ok: true, employer: pubE(e), jobs: Object.values(col(P.j)).filter(j => j.employerId === e.id && open(j)).map(pubJ) }); });
@@ -76,7 +78,7 @@ module.exports = function people(ctx) {
   });
   app.get('/api/people/jobs', (req, res) => {
     const q = S(req.query.q, 60).toLowerCase(), cat = S(req.query.cat, 40), reg = S(req.query.region, 40), type = S(req.query.type, 20), page = Math.max(1, parseInt(req.query.page) || 1);
-    const L = Object.values(col(P.j)).filter(j => !j.deleted && open(j) && (!q || (j.title + ' ' + j.description + ' ' + (col(P.e)[j.employerId] || {}).name).toLowerCase().includes(q)) && (!cat || j.category === cat) && (!reg || j.region === reg) && (!type || j.type === type)).sort((a, b) => b.ts - a.ts);
+    const L = Object.values(col(P.j)).filter(j => !j.deleted && open(j) && (!q || AM.hit(j.title + ' ' + j.description + ' ' + (col(P.e)[j.employerId] || {}).name, q)) && (!cat || j.category === cat) && (!reg || j.region === reg) && (!type || j.type === type)).sort((a, b) => b.ts - a.ts);
     res.json({ ok: true, total: L.length, page, items: L.slice((page - 1) * 24, page * 24).map(pubJ) });
   });
   app.get('/api/people/job/:id', (req, res) => { const j = col(P.j)[req.params.id]; if (!j || j.deleted || !open(j)) return bad(res, 404, 'not_found'); res.json({ ok: true, job: pubJ(j), employer: pubE(col(P.e)[j.employerId]) }); });

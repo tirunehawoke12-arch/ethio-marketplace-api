@@ -1,8 +1,10 @@
+import ChatBtn from '@/components/actions/ChatBtn';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { sget } from '@/lib/server';
 import { SITE } from '@/lib/consts';
 import { Thumb, salaryText } from '@/components/Cards';
+import { ReportBtn } from '@/components/actions/TrustBits';
 import ApplyBox from '@/components/actions/ApplyBox';
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +30,8 @@ export default async function JobPage({ params }) {
       </div>
       <Link href={`/employers/${e.id}`} className="card mt-3 flex items-center gap-3 hover:shadow-lift"><Thumb id={e.logo} /><div><p className="font-extrabold">🏢 {e.name}</p><p className="muted">{e.sector} · {e.city}</p></div></Link>
       <ApplyBox jobId={j.id} />
+      <div className="mt-4"><ChatBtn t="j" id={j.id} /></div>
+      <ReportBtn t="j" id={j.id} />
     </div>
   );
 }

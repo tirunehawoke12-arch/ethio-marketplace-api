@@ -7,6 +7,7 @@ import { ETB, imgUrl } from '@/lib/api';
 import { salaryText, ago, isNew } from '@/lib/fmt';
 import { themeGrad } from '@/lib/templates';
 import { Thumb, PH } from '@/components/Thumb';
+import { Verified } from '@/components/ui';
 import { ExpandCard, Facts, Gallery, MoreText, Tags, ToggleBtn, useOpen } from '@/components/Expand';
 
 const Phone = ({ v }) => (v ? <a className="font-extrabold text-brand" href={`tel:${v}`}>📞 {v}</a> : null);
@@ -46,7 +47,7 @@ export function ProductCard({ p }) {
 export function ShopCard({ s }) {
   return (
     <ExpandCard href={`/shop/${s.id}`} cta="ሱቁን ክፈት"
-      head={<div className="flex items-center gap-3"><Thumb id={s.logo} className="h-16 w-16 rounded-2xl" /><div className="min-w-0 flex-1"><p className="truncate font-extrabold">{s.name}</p><p className="mt-0.5"><span className="tag">{s.kind}</span></p><p className="muted mt-0.5 truncate">📍 {s.city}, {s.region}</p><p className="muted">{s.reviews ? `⭐ ${s.rating} (${s.reviews})` : '✨ አዲስ'}</p></div></div>}>
+      head={<div className="flex items-center gap-3"><Thumb id={s.logo} className="h-16 w-16 rounded-2xl" /><div className="min-w-0 flex-1"><p className="truncate font-extrabold">{s.name}<Verified v={s.verified} small /></p><p className="mt-0.5"><span className="tag">{s.kind}</span></p><p className="muted mt-0.5 truncate">📍 {s.city}, {s.region}</p><p className="muted">{s.reviews ? `⭐ ${s.rating} (${s.reviews})` : '✨ አዲስ'}</p></div></div>}>
       <MoreText text={s.about} limit={200} />
       <Facts items={[['🏷', 'ምድብ', s.category], ['🕒', 'የሥራ ሰዓት', s.hours], ['📍', 'አድራሻ', s.address], ['📞', 'ስልክ', s.phone ? <Phone key="p" v={s.phone} /> : ''], ['🚚', 'አቅርቦት', s.delivery ? [s.delivery.pickup ? 'በአካል መውሰድ' : '', s.delivery.local ? `ማድረስ ${s.delivery.fee || 0} ብር` : ''].filter(Boolean).join(' · ') : ''], ['📅', 'ከ', s.year]]} />
       <Tags list={(s.tags || []).map(t => '#' + t)} />
@@ -75,7 +76,7 @@ export function WorkerCard({ w }) {
   const on = w.availability === 'available';
   return (
     <ExpandCard href={`/workers/${w.id}`} cta="ቅጠር / ገጹን ክፈት"
-      head={<div className="flex items-center gap-3"><Thumb id={w.photo} className="h-16 w-16 rounded-full" /><div className="min-w-0 flex-1"><p className="font-extrabold">{w.name}</p><p className="truncate text-sm">{w.title} · <span className="muted">{w.category}</span></p><p className="mt-0.5"><span className={on ? 'tag' : 'tag-warn'}>{on ? '🟢 ዝግጁ' : '🟡 ተሰማርቷል'}</span></p><p className="muted mt-0.5 truncate">📍 {w.city} · {w.exp} ዓመት ልምድ{w.rate && w.rate.amount ? ` · ${ETB(w.rate.amount)}/${w.rate.per}` : ''}</p></div></div>}>
+      head={<div className="flex items-center gap-3"><Thumb id={w.photo} className="h-16 w-16 rounded-full" /><div className="min-w-0 flex-1"><p className="font-extrabold">{w.name}<Verified v={w.verified} small />{w.rating && w.rating.n > 0 && <span className="ml-1 text-xs font-bold text-gold">★ {w.rating.avg}</span>}</p><p className="truncate text-sm">{w.title} · <span className="muted">{w.category}</span></p><p className="mt-0.5"><span className={on ? 'tag' : 'tag-warn'}>{on ? '🟢 ዝግጁ' : '🟡 ተሰማርቷል'}</span></p><p className="muted mt-0.5 truncate">📍 {w.city} · {w.exp} ዓመት ልምድ{w.rate && w.rate.amount ? ` · ${ETB(w.rate.amount)}/${w.rate.per}` : ''}</p></div></div>}>
       <MoreText text={w.about} limit={200} />
       <Tags list={w.skills} />
       <Facts items={[['🎓', 'ትምህርት', w.education], ['🗣', 'ቋንቋ', (w.languages || []).join('፣ ')], ['💰', 'ክፍያ', w.rate && w.rate.amount ? `${ETB(w.rate.amount)} / ${w.rate.per}` : ''], ['📞', 'ስልክ', w.phone ? <Phone key="p" v={w.phone} /> : '']]} />
@@ -88,7 +89,7 @@ export function WorkerCard({ w }) {
 export function EmployerCard({ e }) {
   return (
     <ExpandCard href={`/employers/${e.id}`} cta="ገጹን ክፈት"
-      head={<div className="flex items-center gap-3"><Thumb id={e.logo} className="h-16 w-16 rounded-2xl" /><div className="min-w-0 flex-1"><p className="truncate font-extrabold">{e.name}</p><p className="muted truncate">{e.sector} · 📍 {e.city}, {e.region}</p></div></div>}>
+      head={<div className="flex items-center gap-3"><Thumb id={e.logo} className="h-16 w-16 rounded-2xl" /><div className="min-w-0 flex-1"><p className="truncate font-extrabold">{e.name}<Verified v={e.verified} small />{e.rating && e.rating.n > 0 && <span className="ml-1 text-xs font-bold text-gold">★ {e.rating.avg}</span>}</p><p className="muted truncate">{e.sector} · 📍 {e.city}, {e.region}</p></div></div>}>
       <MoreText text={e.about} limit={200} />
       <Facts items={[['👥', 'መጠን', e.size], ['📍', 'አድራሻ', e.address], ['📞', 'ስልክ', e.phone ? <Phone key="p" v={e.phone} /> : '']]} />
     </ExpandCard>
@@ -103,7 +104,7 @@ export function SiteCard({ p }) {
       <Link href={`/site/${p.id}`} className="block" aria-label={p.title}>
         <div className="relative h-24 overflow-hidden" style={{ background: themeGrad(p.theme) }}>{p.cover && <img src={imgUrl(p.cover)} alt="" loading="lazy" className="h-full w-full object-cover" />}<span className="absolute right-2 top-2 rounded-full bg-white/90 px-2.5 py-0.5 text-[11px] font-black text-ink">{p.kind}</span></div>
         <div className="relative px-4 pt-8"><div className="absolute -top-7 left-4 overflow-hidden rounded-2xl border-4 border-white bg-white dark:border-[#16211b]"><Thumb id={p.logo} className="h-14 w-14" /></div>
-          <p className="font-extrabold leading-snug">{p.title}</p>{p.tagline && <p className={'muted ' + (open ? '' : 'line-clamp-2')}>{p.tagline}</p>}<p className="muted mt-1 pb-3">📍 {[p.city, p.region].filter(Boolean).join(', ') || '—'}{p.ts ? ` · ${ago(p.ts)}` : ''}</p></div>
+          <p className="font-extrabold leading-snug">{p.title}<Verified v={p.verified} small /></p>{p.tagline && <p className={'muted ' + (open ? '' : 'line-clamp-2')}>{p.tagline}</p>}<p className="muted mt-1 pb-3">📍 {[p.city, p.region].filter(Boolean).join(', ') || '—'}{p.ts ? ` · ${ago(p.ts)}` : ''}</p></div>
       </Link>
       {open && (
         <div id={id} className="animate-fadeUp space-y-3 border-t border-dashed border-line px-4 py-3 dark:border-[#25352c]">

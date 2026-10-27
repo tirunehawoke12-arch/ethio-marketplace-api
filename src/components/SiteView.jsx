@@ -6,7 +6,9 @@ import { get, imgUrl, post } from '@/lib/api';
 import { errText } from '@/lib/consts';
 import { themeColor, themeGrad } from '@/lib/templates';
 import { useApp } from '@/lib/app';
-import { Msg } from '@/components/ui';
+import { Msg, Verified } from '@/components/ui';
+import ChatBtn from '@/components/actions/ChatBtn';
+import { ReportBtn } from '@/components/actions/TrustBits';
 
 const PREVIEW = 3;            // በእያንዳንዱ ክፍል መጀመሪያ የሚታዩ መስኮች ብዛት
 const LONG = 140;             // ከዚህ በላይ ረጅም ጽሑፍ «ተጨማሪ ይመልከቱ» ይኖረዋል
@@ -108,7 +110,7 @@ export default function SiteView({ pg }) {
         <div className="relative h-44 sm:h-60" style={{ background: 'var(--tg)' }}>{pg.cover && <img src={imgUrl(pg.cover)} alt="" className="h-full w-full object-cover" />}<div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" /><span className="absolute left-4 top-4 rounded-full bg-white/90 px-3 py-1 text-xs font-extrabold" style={{ color: 'var(--tc)' }}>{pg.kind}</span></div>
         <div className="relative bg-white px-5 pb-5 pt-12 dark:bg-[#16211b]">
           <div className="absolute -top-10 left-5 grid h-20 w-20 place-items-center overflow-hidden rounded-3xl border-4 border-white bg-white text-3xl shadow-soft dark:border-[#16211b]" style={{ background: 'var(--tg)' }}>{pg.logo ? <img src={imgUrl(pg.logo)} alt="" className="h-full w-full object-cover" /> : <span className="text-white">{(pg.title || '?').slice(0, 1)}</span>}</div>
-          <h1 className="text-2xl sm:text-3xl">{pg.title}</h1>{pg.tagline && <p className="mt-1 text-[15px] font-bold" style={{ color: 'var(--tc)' }}>{pg.tagline}</p>}
+          <h1 className="text-2xl sm:text-3xl">{pg.title}<Verified v={pg.verified} /></h1>{pg.tagline && <p className="mt-1 text-[15px] font-bold" style={{ color: 'var(--tc)' }}>{pg.tagline}</p>}
           {(pg.city || pg.region) && <p className="muted mt-1">📍 {[pg.city, pg.region].filter(Boolean).join(', ')}</p>}
           {pg.about && <div className="mt-3"><More text={pg.about} /></div>}
           <div className="mt-4 flex flex-wrap gap-2">
@@ -121,6 +123,8 @@ export default function SiteView({ pg }) {
       {pg.gallery && pg.gallery.length > 0 && <div className="mt-4 flex snap-x gap-2 overflow-x-auto pb-1">{pg.gallery.map(g => <button key={g} onClick={() => setZoom(g)} className="group relative shrink-0 snap-center" aria-label="ፎቶ ክፈት"><img src={imgUrl(g)} alt="" loading="lazy" className="h-40 w-60 rounded-3xl object-cover" /><span className="absolute inset-0 grid place-items-center rounded-3xl bg-black/30 text-2xl text-white opacity-0 transition group-hover:opacity-100">👁</span></button>)}</div>}
       {nav.length > 1 && <div className="sticky top-[62px] z-30 -mx-3 mt-4 flex gap-2 overflow-x-auto bg-bg/90 px-3 py-2 backdrop-blur dark:bg-[#0d1511]/90">{nav.map(([i, ic, t]) => <a key={i} href={'#s-' + i} className="chip">{ic} {t}</a>)}<button onClick={() => setAll(!all)} className="chip" style={{ color: 'var(--tc)' }}>{all ? '🙈 ሰብስብ' : '👁 ሁሉንም አሳይ'}</button></div>}
       <div className="mt-3 space-y-4">{pg.sections.map(s => <Section key={s.id} s={s} zoom={setZoom} forceOpen={all} />)}{mods.map(k => <Module key={k} kind={k} r={refs[k]} forceOpen={all} />)}{forms.map(f => <VisitorForm key={f.id || 'x'} pg={pg} f={f} />)}</div>
+      {pg.id && !pg.preview && <div className="mt-4"><ChatBtn t="g" id={pg.id} /></div>}
+      {pg.id && !pg.preview && <ReportBtn t="g" id={pg.id} />}
       <p className="muted mt-6 text-center">🇪🇹 በ <Link href="/" className="font-bold" style={{ color: 'var(--tc)' }}>ኢትዮ ዲጂታል ማርኬት</Link> የተሠራ ገጽ · <Link href="/me/sites/new" className="font-bold underline">የራስዎን ገጽ ይክፈቱ</Link></p>
       <Lightbox id={zoom} onClose={() => setZoom('')} />
     </div>

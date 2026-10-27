@@ -263,7 +263,7 @@ const bump = p => { store.rev[p] = (store.rev[p] || REV0) + 1; persist(); };
 const validPath = p => typeof p === 'string' && p.length < 200 && /^[\w@+.:~\/-]+$/.test(p) && !p.includes('..');
 function can(tok, p, write, id) {
   if (tok && tok.k === 'admin') return true;
-  { const t0 = String(p).split('/')[0]; if (t0 === 'mk' || t0 === 'pp' || t0[0] === '_') return false; }   // ገበያ እና ምስል መረጃ በልዩ API ብቻ
+  { const t0 = String(p).split('/')[0]; if (t0 === 'mk' || t0 === 'pp' || t0 === 'pg' || t0 === 'tr' || t0 === 'ch' || t0[0] === '_') return false; }   // ገበያ እና ምስል መረጃ በልዩ API ብቻ
   const m = /^data\/users\/([\w-]+)$/.exec(p);
   if (m) return !!tok && tok.u === m[1];                       // የግል ውሂብ፦ ባለቤት ብቻ
   if (!tok) return false;
@@ -427,6 +427,8 @@ const mkApi = require('./market')({ app, col, bump, pool, pgUpsert, persist, rea
 require('./people')({ app, col, limit, notifyUser, notifyAdmin, ...mkApi });
 require('./search')({ app, col, S: (v, n) => String(v == null ? '' : v).trim().slice(0, n) });
 require('./pages')({ app, col, bump, pool, persist, limit, notifyUser, notifyAdmin, ...mkApi });
+require('./chat')({ app, col, limit, notifyUser, notifyAdmin, ...mkApi });
+require('./trust')({ app, col, limit, notifyUser, notifyAdmin, ...mkApi });
 
 const authApi = require('./auth')({ app, col, bump, pool, pgUpsert, persist, readTok, limit, tokFor, findUid, isSusp, accountKey, normPhoneET, tg, randDigits, id, safeOtpMatch, clean, saveDB, getDb: () => db, getStore: () => store, PUBLIC_BASE_URL, BOT_USERNAME, OTP_TTL, LINK_TTL, notifyAdmin });
 

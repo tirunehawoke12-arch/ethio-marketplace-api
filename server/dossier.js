@@ -9,8 +9,8 @@ const scrub = v => {                                    // ጥልቅ ማጽጃ �
   if (v && typeof v === 'object') { const o = {}; for (const k of Object.keys(v)) if (!SECRET.test(k)) o[k] = scrub(v[k]); return o; }
   return v;
 };
-const SECTIONS = ['account', 'pages', 'shop', 'orders', 'work', 'employer'];
-const LABELS = { account: '👤 መገለጫ እና የግል መረጃ', pages: '🌐 ገጽ፣ ቅጾች እና መልሶች', shop: '🏪 ሱቅ እና ዕቃዎች', orders: '📦 ትዕዛዞች', work: '🧑‍🔧 ሙያ እና ማመልከቻ', employer: '🏢 አሰሪ እና ሥራዎች' };
+const SECTIONS = ['account', 'pages', 'shop', 'orders', 'work', 'employer', 'messages'];
+const LABELS = { account: '👤 መገለጫ እና የግል መረጃ', pages: '🌐 ገጽ፣ ቅጾች እና መልሶች', shop: '🏪 ሱቅ እና ዕቃዎች', orders: '📦 ትዕዛዞች', work: '🧑‍🔧 ሙያ እና ማመልከቻ', employer: '🏢 አሰሪ እና ሥራዎች', messages: '💬 መልእክቶች' };
 
 function build(col, uid, section, extra) {
   const d = col('data/users/' + uid); if (!d || !d.acct) return null;
@@ -28,6 +28,7 @@ function build(col, uid, section, extra) {
   const w = all('pp/workers').find(x => x.uid === uid), e = all('pp/employers').find(x => x.uid === uid);
   if (want('work')) out.work = { worker: w || null, applications: all('pp/apps').filter(a => a.workerUid === uid).sort((a, b) => b.ts - a.ts).slice(0, 200).map(a => ({ ...a, job: (col('pp/jobs')[a.jobId] || {}).title || '', employer: (col('pp/employers')[a.employerId] || {}).name || '' })) };
   if (want('employer')) out.employer = { employer: e || null, jobs: e ? all('pp/jobs').filter(j => j.employerId === e.id) : [], applicants: all('pp/apps').filter(a => a.employerUid === uid && !a.invite).sort((a, b) => b.ts - a.ts).slice(0, 200).map(a => ({ ...a, worker: who(a.workerUid) })) };
+  if (want('messages')) out.messages = { threads: all('ch/threads').filter(t => (t.members || []).includes(uid)).sort((a, b) => ((b.last || {}).ts || 0) - ((a.last || {}).ts || 0)).slice(0, 60).map(t => ({ id: t.id, with: who((t.members || []).find(m => m !== uid)), about: t.ctx || null, blocked: t.blocked || {}, messages: all('ch/msgs').filter(m => m.threadId === t.id).sort((a, b) => a.ts - b.ts).slice(-200).map(m => ({ ts: m.ts, from: m.from === uid ? 'ይህ አካውንት' : 'ሌላኛው', text: m.text })) })) };
   const counts = { pages: all('pg/pages').filter(p => p.uid === uid).length, shops: shops.length, orders: all('mk/orders').filter(o => o.buyerUid === uid || sids.has(o.shopId)).length, worker: w ? 1 : 0, employer: e ? 1 : 0 };
   return { sections: out, counts };
 }

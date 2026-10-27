@@ -148,7 +148,7 @@ export default function SiteBuilder({ id }) {
     <div className="mx-auto max-w-2xl"><h1 className="text-2xl">✨ ገጽዎን በምን ይጀምሩ?</h1><p className="muted mb-4">አንዱን ይምረጡ — ከዚያ ሁሉንም ነገር እንደፈለጉ መቀየር፣ ማከል እና መሰረዝ ይችላሉ።</p>
       <div className="grid gap-3 sm:grid-cols-2">{TEMPLATES.map(t => <button key={t.key} onClick={() => pick(t)} className="card text-left transition hover:-translate-y-0.5 hover:shadow-lift"><span className="text-4xl">{t.icon}</span><b className="mt-1 block text-lg">{t.name}</b><span className="muted">{t.build().length} ክፍሎች · {t.build().reduce((a, s) => a + s.fields.length, 0)} ጥያቄዎች</span></button>)}</div></div>
   );
-  const preview = { id: pid, ...f, phone: f.showPhone ? f.phone : '', kind: f.kind || 'ገጽ', sections: sections.map(s => ({ ...s, fields: s.fields.filter(x => !x.priv && !empty(x.value)) })).filter(s => s.fields.length), forms: forms.filter(x => x.enabled && x.fields.length), refs: refs || {} };
+  const preview = { preview: true, id: pid, ...f, phone: f.showPhone ? f.phone : '', kind: f.kind || 'ገጽ', sections: sections.map(s => ({ ...s, fields: s.fields.filter(x => !x.priv && !empty(x.value)) })).filter(s => s.fields.length), forms: forms.filter(x => x.enabled && x.fields.length), refs: refs || {} };
   return (
     <div className="mx-auto max-w-2xl">
       <div className="mb-3 flex items-center justify-between gap-2"><h1 className="text-xl">{pid ? '🛠 ገጼን አስተዳድር' : '🆕 አዲስ ገጽ'}</h1>{pid && <Link href={`/site/${pid}`} className="btn-ghost !min-h-[40px]" target="_blank">🌐 ገጹን ክፈት</Link>}</div>

@@ -6,7 +6,7 @@ import { get, imgUrl } from '@/lib/api';
 import { errText } from '@/lib/consts';
 import { Spinner } from '@/components/ui';
 
-const TABS = [['account', '👤', 'መገለጫ'], ['pages', '🌐', 'ገጽ'], ['shop', '🏪', 'ሱቅ'], ['orders', '📦', 'ትዕዛዝ'], ['work', '🧑‍🔧', 'ሙያ'], ['employer', '🏢', 'አሰሪ'], ['audit', '📜', 'መዝገብ']];
+const TABS = [['account', '👤', 'መገለጫ'], ['pages', '🌐', 'ገጽ'], ['shop', '🏪', 'ሱቅ'], ['orders', '📦', 'ትዕዛዝ'], ['work', '🧑‍🔧', 'ሙያ'], ['employer', '🏢', 'አሰሪ'], ['messages', '💬', 'መልእክት'], ['audit', '📜', 'መዝገብ']];
 const IMG = /^(logo|cover|photo|gallery|imgs|image|images|license|avatar|idPhoto)$/i, WHEN = /^(ts|upd|created|at)$/i;
 const isImgId = v => typeof v === 'string' && /^[\w-]{8,24}$/.test(v);
 const label = k => ({ uid: 'መለያ', email: 'ኢሜይል', phone: 'ስልክ', name: 'ስም', fullName: 'ሙሉ ስም', status: 'ሁኔታ', title: 'ርዕስ', price: 'ዋጋ', total: 'ድምር', address: 'አድራሻ', city: 'ከተማ', region: 'ክልል', about: 'መግለጫ' }[k] || k);
@@ -40,7 +40,7 @@ function Block({ title, children, count }) {
 const SecView = ({ id, d }) => {
   const s = d.sections[id]; if (!s) return null;
   if (id === 'account') return <Block title="👤 መገለጫ"><Tree data={{ ...s.acct, suspended: s.suspended, telegram: s.telegram }} /><h3 className="mt-3 font-extrabold">🔒 የግል መረጃ</h3>{s.private ? <Tree data={s.private} /> : <p className="muted">አልሞላም</p>}{s.prefs && <><h3 className="mt-3 font-extrabold">⚙️ ምርጫዎች</h3><Tree data={s.prefs} /></>}</Block>;
-  return Object.entries(s).map(([k, v]) => <Block key={k} title={{ pages: '🌐 ገጾቼ (የግል መስኮችን ጨምሮ)', received: '📬 የደረሱ መልሶች', sent: '📤 የላካቸው መልሶች', shops: '🏪 ሱቆች', products: '🛍 ዕቃዎች', reviews: '⭐ ግምገማዎች', asBuyer: '🛒 እንደ ገዥ', asSeller: '📦 እንደ ሻጭ', worker: '🧑‍🔧 ሙያ ገጽ', applications: '📄 ማመልከቻዎች', employer: '🏢 አሰሪ ገጽ', jobs: '💼 ሥራዎች', applicants: '👥 አመልካቾች' }[k] || k} count={Array.isArray(v) ? v.length : undefined}>{v && (!Array.isArray(v) || v.length) ? <Tree data={v} depth={Array.isArray(v) ? 0 : 1} /> : <p className="muted">ምንም የለም</p>}</Block>);
+  return Object.entries(s).map(([k, v]) => <Block key={k} title={{ pages: '🌐 ገጾቼ (የግል መስኮችን ጨምሮ)', received: '📬 የደረሱ መልሶች', sent: '📤 የላካቸው መልሶች', shops: '🏪 ሱቆች', products: '🛍 ዕቃዎች', reviews: '⭐ ግምገማዎች', asBuyer: '🛒 እንደ ገዥ', asSeller: '📦 እንደ ሻጭ', worker: '🧑‍🔧 ሙያ ገጽ', applications: '📄 ማመልከቻዎች', employer: '🏢 አሰሪ ገጽ', jobs: '💼 ሥራዎች', applicants: '👥 አመልካቾች', threads: '💬 ውይይቶች' }[k] || k} count={Array.isArray(v) ? v.length : undefined}>{v && (!Array.isArray(v) || v.length) ? <Tree data={v} depth={Array.isArray(v) ? 0 : 1} /> : <p className="muted">ምንም የለም</p>}</Block>);
 };
 function Audit({ uid }) {
   const [d, setD] = useState(null); useEffect(() => { get('/api/admin/audit?uid=' + uid).then(setD); }, [uid]);

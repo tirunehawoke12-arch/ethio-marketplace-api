@@ -2,10 +2,11 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useApp } from '@/lib/app';
+import { useT } from '@/lib/i18n';
 
 export default function BottomNav() {
-  const p = usePathname(), { cartCount } = useApp();
-  const items = [['/', '🏠', 'መነሻ', p === '/' || p.startsWith('/market') || p.startsWith('/p/') || p.startsWith('/shop')], ['/jobs', '💼', 'ሥራ', p.startsWith('/jobs') || p.startsWith('/workers') || p.startsWith('/employers')], ['/cart', '🛒', 'ጋሪ', p === '/cart' || p === '/checkout'], ['/orders', '📦', 'ትዕዛዞች', p.startsWith('/orders')], ['/me', '👤', 'ገጾቼ', p.startsWith('/me') || p.startsWith('/admin')]];
+  const p = usePathname(), { cartCount } = useApp(), { t } = useT();
+  const items = [['/', '🏠', t('home'), p === '/' || p.startsWith('/market') || p.startsWith('/p/') || p.startsWith('/shop')], ['/jobs', '💼', t('jobs'), p.startsWith('/jobs') || p.startsWith('/workers') || p.startsWith('/employers')], ['/cart', '🛒', t('cart'), p === '/cart' || p === '/checkout'], ['/orders', '📦', t('orders'), p.startsWith('/orders')], ['/me', '👤', t('mypages'), p.startsWith('/me') || p.startsWith('/admin')]];
   return (
     <nav className="fixed inset-x-3 bottom-3 z-40 mx-auto flex max-w-lg rounded-3xl border border-line bg-white/90 p-1.5 shadow-lift backdrop-blur-xl md:hidden dark:border-[#25352c] dark:bg-[#111b16]/90" style={{ marginBottom: 'env(safe-area-inset-bottom)' }}>
       {items.map(([h, i, t, on]) => (

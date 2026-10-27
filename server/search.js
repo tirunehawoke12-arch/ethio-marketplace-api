@@ -1,8 +1,9 @@
 'use strict';
+const AM = require('./amnorm');
 /* ===== የተዋሃደ ፍለጋ — አንድ ቃል በሁሉም የተመዘገቡ ነገሮች ላይ (ዕቃ፣ ሱቅ፣ ገጽ፣ ሙያተኛ፣ አሰሪ፣ ሥራ) =====
    ለህዝብ የሚታዩትን (active/open) ብቻ ይመልሳል፤ የግል መስኮች (ስልክ፣ ክፍያ…) አይካተቱም። */
 module.exports = function search({ app, col, S }) {
-  const hit = (q, ...parts) => parts.join(' ').toLowerCase().includes(q);
+  const hit = (q, ...parts) => AM.hit(parts.join(' '), q);
   app.get('/api/search', (req, res) => {
     const q = S(req.query.q, 60).toLowerCase(); if (q.length < 2) return res.json({ ok: true, q, groups: [] });
     const shops = col('mk/shops'), emps = col('pp/employers'), today = new Date().toISOString().slice(0, 10), N = 6;

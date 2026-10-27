@@ -1,3 +1,4 @@
+import ChatBtn from '@/components/actions/ChatBtn';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { sget } from '@/lib/server';
@@ -5,6 +6,7 @@ import { ETB, imgUrl } from '@/lib/api';
 import { SITE } from '@/lib/consts';
 import { Stars } from '@/components/ui';
 import { Thumb } from '@/components/Cards';
+import { ReportBtn } from '@/components/actions/TrustBits';
 import ProductActions from '@/components/actions/ProductActions';
 export const dynamic = 'force-dynamic';
 
@@ -35,6 +37,8 @@ export default async function ProductPage({ params }) {
         <Link href={`/shop/${s.id}`} className="card mt-3 flex items-center gap-3 hover:shadow-lift"><Thumb id={s.logo} className="h-14 w-14 rounded-2xl" /><div className="min-w-0 flex-1"><p className="font-extrabold">🏪 {s.name}</p><p className="muted">{s.city}, {s.region}</p><p className="muted">{s.reviews ? <><Stars n={s.rating} /> {s.rating} ({s.reviews})</> : 'አዲስ ሱቅ'}</p><p className="muted">{s.delivery.pickup ? '🏬 በአካል መውሰድ ' : ''}{s.delivery.local ? '🚚 ማድረስ' : ''}</p></div></Link>
         {reviews.length > 0 && (<div className="mt-3 space-y-2">{reviews.map((v, k) => <div key={k} className="card"><Stars n={v.rating} /> <b>{v.who}</b><p>{v.text}</p></div>)}</div>)}
       </div>
+      <div className="mt-4"><ChatBtn t="p" id={p.id} /></div>
+      <ReportBtn t="p" id={p.id} />
     </div>
   );
 }
