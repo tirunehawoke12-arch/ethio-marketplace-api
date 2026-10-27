@@ -7,7 +7,7 @@
    • ማገድ ይቻላል፤ አድሚን በአካውንት እይታ ውስጥ ማየት ይችላል (በኦዲት መዝገብ) */
 module.exports = function chat(ctx) {
   const { app, col, limit, who, saveMany, bad, S, nid, userInfo, notifyUser } = ctx;
-  const tell = (u, t) => { try { notifyUser && notifyUser(u, t); } catch (e) { } };
+  const tell = (u, t, btn) => { try { notifyUser && notifyUser(u, t, btn); } catch (e) { } };
   const C = { th: 'ch/threads', ms: 'ch/msgs' };
   const OWN = { s: ['mk/shops', 'ሱቅ', x => x.name], p: ['mk/products', 'ዕቃ', (x, g) => ((g('mk/shops')[x.shopId]) || {}).name || x.title], w: ['pp/workers', 'ሙያተኛ', x => x.name], e: ['pp/employers', 'አሰሪ', x => x.name], j: ['pp/jobs', 'ሥራ', (x, g) => ((g('pp/employers')[x.employerId]) || {}).name || x.title], g: ['pg/pages', 'ገጽ', x => x.title] };
   const ownerOf = (t, x) => (t === 'p' ? (col('mk/shops')[x.shopId] || {}).uid : x.uid);
@@ -25,7 +25,7 @@ module.exports = function chat(ctx) {
     const now = Date.now(), m = { id: nid(), threadId: t.id, from: u.uid, text, ts: now }, to = other(t, u.uid);
     col(C.ms)[m.id] = m; t.last = { ts: now, from: u.uid, text: text.slice(0, 80) }; const wasZero = !((t.unread || {})[to] | 0); t.unread = { ...(t.unread || {}), [to]: ((t.unread || {})[to] | 0) + 1 };
     await saveMany([[C.ms, m.id], [C.th, t.id]]);
-    if (wasZero) tell(to, `💬 አዲስ መልእክት ከ«${(t.labels || {})[to] || 'ተጠቃሚ'}»፦ ${text.slice(0, 100)}\nበድረ-ገጹ «💬 መልእክቶች» ውስጥ ይመልሱ።`);
+    if (wasZero) tell(to, `💬 አዲስ መልእክት ከ«${(t.labels || {})[to] || 'ተጠቃሚ'}»፦ ${text.slice(0, 100)}\nበድረ-ገጹ «💬 መልእክቶች» ውስጥ ይመልሱ።`, { rows: [[{ text: '↩️ መልስ', callback_data: 'cr:' + t.id }]] });
     return m;
   }
   app.post('/api/chat/start', async (req, res) => {

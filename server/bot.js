@@ -8,7 +8,20 @@ const REGIONS = ['አዲስ አበባ', 'ድሬዳዋ', 'አማራ', 'ኦሮሚ�
 const PAY = ['telebirr', 'CBE Birr', 'ንግድ ባንክ', 'አዋሽ ባንክ', 'ዳሽን ባንክ', 'አቢሲኒያ ባንክ', 'ሌላ'];
 const STEP = { placed: '📝 ታዘዘ', payment_submitted: '💳 ክፍያ ተላከ', paid: '✅ ክፍያ ተረጋገጠ', preparing: '📦 እየተዘጋጀ', shipped: '🚚 ተላከ', delivered: '🤝 ደረሰ', settled: '💰 ለሻጭ ተከፈለ', cancelled: '✕ ተሰርዟል', refund_pending: '↩️ ተመላሽ በመጠባበቅ', refunded: '↩️ ተመላሽ ተደርጓል', disputed: '⚖️ ክርክር ላይ' };
 const APPST = { applied: '📨 ተልኳል', shortlisted: '⭐ በዝርዝር', hired: '🎉 ተቀጥረዋል', rejected: '✖️ አልተመረጡም', withdrawn: '↩️ ተነስቷል', invited: '🤝 ግብዣ' };
-const MENU = [['🛍 ገበያ', '🏪 ሱቆች', '💼 ሥራ'], ['🌐 ገጾች', '🛒 ጋሪ', '📦 ትዕዛዞቼ'], ['👤 ገጾቼ', '🔎 ፈልግ', '❓ እገዛ']];
+const MENU_KEYS = [['market', 'shops', 'jobs'], ['pages', 'cart', 'orders'], ['me', 'search', 'help'], ['near', 'alerts', 'messages']];
+const MENU_TX = {                                    // የታች ማውጫ በ4 ቋንቋ (ትርጉሙ በአፍ-መፍቻ ተናጋሪ ቢታይ ይመረጣል)
+  am: [['🛍 ገበያ', '🏪 ሱቆች', '💼 ሥራ'], ['🌐 ገጾች', '🛒 ጋሪ', '📦 ትዕዛዞቼ'], ['👤 ገጾቼ', '🔎 ፈልግ', '❓ እገዛ'], ['📍 በአቅራቢያዬ', '🔔 ማንቂያዎች', '💬 መልእክቶች']],
+  en: [['🛍 Market', '🏪 Shops', '💼 Jobs'], ['🌐 Pages', '🛒 Cart', '📦 My orders'], ['👤 My page', '🔎 Search', '❓ Help'], ['📍 Nearby', '🔔 Alerts', '💬 Messages']],
+  om: [['🛍 Gabaa', '🏪 Suuqota', '💼 Hojii'], ['🌐 Fuulota', '🛒 Gaarii', '📦 Ajajoota koo'], ['👤 Fuula koo', '🔎 Barbaadi', '❓ Gargaarsa'], ['📍 Naannoo koo', '🔔 Beeksisa', '💬 Ergaawwan']],
+  ti: [['🛍 ዕዳጋ', '🏪 ድኳናት', '💼 ስራሕ'], ['🌐 ገጻት', '🛒 ቅርጫት', '📦 ትዕዛዛተይ'], ['👤 ገጸይ', '🔎 ድለይ', '❓ ሓገዝ'], ['📍 ኣብ ጎረቤተይ', '🔔 መተሓሳሰቢ', '💬 መልእኽታት']],
+};
+const BOT_LANGS = [['am', 'አማርኛ'], ['en', 'English'], ['om', 'Afaan Oromoo'], ['ti', 'ትግርኛ']];
+const TX = {
+  welcome: { am: 'እንኳን ደህና መጡ', en: 'Welcome', om: 'Baga nagaan dhufte', ti: 'እንቋዕ ብደሓን መጻእኩም' },
+  home: { am: '🏠 ዋና ማውጫ — ከታች ካሉት ቁልፎች ይምረጡ።', en: '🏠 Main menu — choose from the buttons below.', om: '🏠 Menu guddaa — qabduu gadii filadhu.', ti: '🏠 ቀንዲ ሜኑ — ካብ ዝስዕቡ ኣዝራራት ምረጹ።' },
+  langSet: { am: '✅ ቋንቋ፦ አማርኛ', en: '✅ Language: English', om: '✅ Afaan: Afaan Oromoo', ti: '✅ ቋንቋ፦ ትግርኛ' },
+};
+const LABEL_KEYS = {}; Object.values(MENU_TX).forEach(m => m.forEach((row, i) => row.forEach((t, j) => { LABEL_KEYS[t] = MENU_KEYS[i][j]; })));
 
 module.exports = function bot(c) {
   const { tg, tokFor, port, baseUrl, adminChat, bindAdmin, adminPhone, token, getDb, getStore, accKey, findUid, normPhoneET, authApi, pool, pgUpsert, isSusp } = c;
@@ -29,24 +42,17 @@ module.exports = function bot(c) {
   const restore = d => { if (d && typeof d === 'object') Object.assign(S, d); };
 
   /* ---------- መላኪያ ---------- */
-  /* ቁልፍ ሲነካ የመጀመሪያው መልዕክት ጽሑፍ ከሆነ በቦታው ይስተካከላል (ቻቱ አይጨናነቅም)። */
-  const pend = {};
-  const send = (chat, text, kb) => {
-    const body = { chat_id: chat, text: String(text).slice(0, 3900), parse_mode: 'HTML', disable_web_page_preview: true };
-    const mid = pend[chat]; delete pend[chat];
-    if (mid && kb && kb.inline_keyboard) {
-      return tg('editMessageText', { ...body, message_id: mid, reply_markup: kb })
-        .catch(e => /not modified/i.test(e.message) ? null : tg('sendMessage', { ...body, reply_markup: kb }).catch(err => console.warn('bot send:', err.message)));
-    }
-    return tg('sendMessage', { ...body, ...(kb ? { reply_markup: kb } : {}) }).catch(e => console.warn('bot send:', e.message));
-  };
+  const send = (chat, text, kb) => tg('sendMessage', { chat_id: chat, text: String(text).slice(0, 3900), parse_mode: 'HTML', disable_web_page_preview: true, ...(kb ? { reply_markup: kb } : {}) }).catch(e => console.warn('bot send:', e.message));
   async function photo(chat, id, caption, kb) {
     if (!id || !/^https:/.test(baseUrl)) return send(chat, caption, kb);
     try { return await tg('sendPhoto', { chat_id: chat, photo: web('/api/market/img/' + id), caption: String(caption).slice(0, 1000), parse_mode: 'HTML', ...(kb ? { reply_markup: kb } : {}) }); } catch (e) { return send(chat, caption, kb); }
   }
-  const webAppRow = () => (/^https:/.test(baseUrl) ? [[{ text: '📱 መተግበሪያውን ክፈት', web_app: { url: baseUrl } }]] : []);
-  const menuKb = chat => ({ keyboard: [...(isAdmin(chat) ? [...MENU, ['🛡 አድሚን']] : MENU), ...webAppRow()], resize_keyboard: true, is_persistent: true });
-  const home = (chat, text) => send(chat, text || '🏠 ዋና ማውጫ — ከታች ካሉት ቁልፎች ይምረጡ።', menuKb(chat));
+  const lang = chat => (S[chat] && S[chat].lang) || 'am', tx = (chat, k) => (TX[k] && (TX[k][lang(chat)] || TX[k].am)) || '';
+  const menuKb = chat => { const m = MENU_TX[lang(chat)] || MENU_TX.am; return { keyboard: isAdmin(chat) ? [...m, ['🛡 አድሚን']] : m, resize_keyboard: true, is_persistent: true }; };
+  const home = async (chat, text) => {
+    await send(chat, text || tx(chat, 'home'), menuKb(chat));
+    const s = ses(chat), uid = uidOf(chat); if (s.deep && uid) { const d = s.deep; s.deep = null; save(); await openDeep(chat, uid, d); }   // deep link ከመግባት በኋላ
+  };
 
   /* ---------- ወደ ድረ-ገጹ API (በተጠቃሚው ቶከን) ---------- */
   async function api(method, path, who, body) {
@@ -212,7 +218,7 @@ module.exports = function bot(c) {
   async function listProducts(chat, uid, ctx, page) {
     const s = ses(chat); s.lp = ctx; save(); const cf = await cfg(uid);
     const r = await GET('/api/market/products' + qs({ cat: ctx.cat !== undefined && ctx.cat !== '-' ? cf.cats[Number(ctx.cat)] : '', q: ctx.q, shop: ctx.shop, page }), uid);
-    if (!r.ok) return send(chat, bad(r)); if (!r.items.length) return send(chat, '🤷 ምንም ዕቃ አልተገኘም።');
+    if (!r.ok) return send(chat, bad(r)); if (!r.items.length) { if (ctx.q) s.lastQ = ctx.q; save(); return send(chat, '🤷 ምንም ዕቃ አልተገኘም።', ctx.q ? ik([[b('🔔 ሲመጣ ንገረኝ', 'alq')]]) : undefined); }
     const rows = r.items.map(p => [b(`${clip(p.title, 26)} · ${ETB(p.price)}`, 'p:' + p.id)]), nav = [];
     if (page > 1) nav.push(b('‹ ቀዳሚ', 'lp:' + (page - 1))); if (page * 24 < r.total) nav.push(b('ቀጣይ ›', 'lp:' + (page + 1))); rows.push(nav);
     return send(chat, `🛍 ${B(r.total + ' ዕቃዎች')}${ctx.q ? ` — «${H(ctx.q)}»` : ''}  (ገጽ ${page})`, ik(rows));
@@ -220,8 +226,8 @@ module.exports = function bot(c) {
   async function showProduct(chat, uid, id) {
     const r = await GET('/api/market/product/' + id, uid); if (!r.ok) return send(chat, bad(r));
     const p = r.product, sh = r.shop;
-    const cap = `${B(p.title)}\n💰 ${B(ETB(p.price))} / ${H(p.unit)}\n📦 ክምችት፦ ${p.stock}\n${p.desc ? '\n<blockquote>' + H(clip(p.desc, 450)) + '</blockquote>\n' : ''}\n🏪 ${H(sh.name)} · 📍 ${H(sh.city)}${sh.rating ? ` · ⭐ ${sh.rating} (${sh.reviews})` : ''}${(r.reviews || []).slice(0, 2).map(v => `\n💬 ${'★'.repeat(v.rating)} ${H(clip(v.text, 80))}`).join('')}`;
-    const kb = ik([[1, 2, 3, 5].map(n => b('➕' + n, `ac:${p.id}:${n}`)), [b('🏪 ሱቁን ክፈት', 'sh:' + sh.id), b('🛒 ጋሪ', 'cart')], [u('🌐 በድረ-ገጽ', web('/p/' + p.id))]]);
+    const cap = `${B(p.title)}\n💰 ${B(ETB(p.price))} / ${H(p.unit)}\n📦 ክምችት፦ ${p.stock}\n${p.desc ? '\n' + H(clip(p.desc, 450)) + '\n' : ''}\n🏪 ${H(sh.name)} · 📍 ${H(sh.city)}${sh.rating ? ` · ⭐ ${sh.rating} (${sh.reviews})` : ''}${(r.reviews || []).slice(0, 2).map(v => `\n💬 ${'★'.repeat(v.rating)} ${H(clip(v.text, 80))}`).join('')}`;
+    const kb = ik([[1, 2, 3, 5].map(n => b('➕' + n, `ac:${p.id}:${n}`)), [b('🏪 ሱቁን ክፈት', 'sh:' + sh.id), b('🛒 ጋሪ', 'cart')], [b('💬 መልእክት ላክ', 'cst:p:' + p.id), u('🌐 በድረ-ገጽ', web('/p/' + p.id))]]);
     return photo(chat, p.imgs && p.imgs[0], cap, kb);
   }
   async function addCart(chat, uid, pid, n) {
@@ -278,7 +284,7 @@ module.exports = function bot(c) {
   async function showShop(chat, uid, id) {
     const r = await GET('/api/market/shop/' + id, uid); if (!r.ok) return send(chat, bad(r)); const s = r.shop;
     const cap = `🏪 ${B(s.name)} <i>${H(s.kind)}</i>\n${s.about ? H(clip(s.about, 400)) + '\n' : ''}\n📍 ${H(s.city)}, ${H(s.region)} — ${H(s.address)}${s.hours ? '\n🕒 ' + H(s.hours) : ''}${s.phone ? '\n📞 ' + H(s.phone) : ''}\n${s.delivery.pickup ? '🏬 በአካል መውሰድ ' : ''}${s.delivery.local ? `🚚 ማድረስ ${s.delivery.fee} ብር` : ''}\n${s.reviews ? `⭐ ${s.rating} (${s.reviews})` : 'አዲስ ሱቅ'} · 🛍 ${r.products.length} ዕቃዎች`;
-    return photo(chat, s.logo || s.cover, cap, ik([[b('🛍 ዕቃዎቹን አሳይ', 'shp:' + id)], [u('🌐 በድረ-ገጽ', web('/shop/' + id))]]));
+    return photo(chat, s.logo || s.cover, cap, ik([[b('🛍 ዕቃዎቹን አሳይ', 'shp:' + id)], [b('💬 መልእክት ላክ', 'cst:s:' + id), u('🌐 በድረ-ገጽ', web('/shop/' + id))]]));
   }
 
   /* ================= ፍለጋ ================= */
@@ -286,7 +292,7 @@ module.exports = function bot(c) {
 
   /* ================= የእኔ ገጾች (ማዕከል) ================= */
   const hub = (chat, uid) => send(chat, `👤 <b>ገጾቼ</b> — ${H(userOf(uid).name || '')}\n📞 ${H(userOf(uid).phone || '')}`, ik([
-    [b('🌐 የራሴ ገጾች (ድረ-ገጽ)', 'mpg')], [b('🏪 ሱቄ / ሆቴሌ / ንግዴ', 'ms')], [b('🧑‍🔧 ሠራተኛ ገጽ', 'mw'), b('🏢 አሰሪ ገጽ', 'mem')], [b('📢 ሥራዎቼ', 'mj'), b('📄 ማመልከቻዎቼ', 'mapps')], [b('🪪 የግል መረጃ', 'prv'), b('⚙️ አካውንቴ', 'acc')], [u('🖥 ድረ-ገጹን ክፈት', web('/me'))]]));
+    [b('📍 ቦታ አስቀምጥ', 'geoset'), b('🧑‍🔧 የሙያ ቦታ', 'geosetw'), b('🚫 ቦታ አጥፋ', 'geoclr')], [b('🌐 የራሴ ገጾች (ድረ-ገጽ)', 'mpg')], [b('🏪 ሱቄ / ሆቴሌ / ንግዴ', 'ms')], [b('🧑‍🔧 ሠራተኛ ገጽ', 'mw'), b('🏢 አሰሪ ገጽ', 'mem')], [b('📢 ሥራዎቼ', 'mj'), b('📄 ማመልከቻዎቼ', 'mapps')], [b('🪪 የግል መረጃ', 'prv'), b('⚙️ አካውንቴ', 'acc')], [u('🖥 ድረ-ገጹን ክፈት', web('/me'))]]));
   const dv = x => (x === undefined || x === null || x === '' || (Array.isArray(x) && !x.length) ? undefined : x);
   const yn = x => (x ? 'yes' : 'no');
 
@@ -357,7 +363,7 @@ module.exports = function bot(c) {
   }
   async function showJob(chat, uid, id) {
     const r = await GET('/api/people/job/' + id, uid); if (!r.ok) return send(chat, bad(r)); const j = r.job;
-    return send(chat, `💼 ${B(j.title)} <i>${H(j.type)}</i>\n🏢 ${H(j.employer && j.employer.name)} · 📍 ${H(j.city)}, ${H(j.region)}\n💰 ${H(sal(j.salary))} · 👥 ${j.openings} ቦታ${j.deadline ? ' · ⏳ እስከ ' + j.deadline : ''}\n\n${H(clip(j.description, 1200))}${j.requirements ? '\n\n📋 <b>መስፈርት</b>\n' + H(clip(j.requirements, 700)) : ''}`, ik([[b('📨 አመልክት', 'ja:' + id)], [b('🏢 አሰሪውን ይመልከቱ', 'e:' + j.employer.id), u('🌐 በድረ-ገጽ', web('/jobs/' + id))]]));
+    return send(chat, `💼 ${B(j.title)} <i>${H(j.type)}</i>\n🏢 ${H(j.employer && j.employer.name)} · 📍 ${H(j.city)}, ${H(j.region)}\n💰 ${H(sal(j.salary))} · 👥 ${j.openings} ቦታ${j.deadline ? ' · ⏳ እስከ ' + j.deadline : ''}\n\n${H(clip(j.description, 1200))}${j.requirements ? '\n\n📋 <b>መስፈርት</b>\n' + H(clip(j.requirements, 700)) : ''}`, ik([[b('📨 አመልክት', 'ja:' + id)], [b('🏢 አሰሪውን ይመልከቱ', 'e:' + j.employer.id), b('💬 ጠይቅ', 'cst:j:' + id)], [u('🌐 በድረ-ገጽ', web('/jobs/' + id))]]));
   }
   async function listWorkers(chat, uid, page) {
     const r = await GET('/api/people/workers' + qs({ page }), uid); if (!r.ok) return send(chat, bad(r)); if (!r.items.length) return send(chat, 'ሠራተኛ የለም።');
@@ -366,11 +372,11 @@ module.exports = function bot(c) {
   }
   async function showWorker(chat, uid, id) {
     const r = await GET('/api/people/worker/' + id, uid); if (!r.ok) return send(chat, bad(r)); const w = r.worker;
-    return photo(chat, w.photo, `🧑‍🔧 ${B(w.name)}\n${H(w.title)} · <i>${H(w.category)}</i>\n📍 ${H(w.city)}, ${H(w.region)} · ${w.exp} ዓመት ልምድ\n${w.rate && w.rate.amount ? '💰 ' + ETB(w.rate.amount) + ' / ' + H(w.rate.per) + '\n' : ''}${(w.skills || []).length ? '🛠 ' + H(w.skills.join('፣ ')) + '\n' : ''}${w.about ? '\n' + H(clip(w.about, 500)) : ''}${w.phone ? '\n📞 ' + H(w.phone) : ''}`, ik([[b('🤝 ቅጥር ጠይቅ', 'wh:' + id)], [u('🌐 በድረ-ገጽ', web('/workers/' + id))]]));
+    return photo(chat, w.photo, `🧑‍🔧 ${B(w.name)}\n${H(w.title)} · <i>${H(w.category)}</i>\n📍 ${H(w.city)}, ${H(w.region)} · ${w.exp} ዓመት ልምድ\n${w.rate && w.rate.amount ? '💰 ' + ETB(w.rate.amount) + ' / ' + H(w.rate.per) + '\n' : ''}${(w.skills || []).length ? '🛠 ' + H(w.skills.join('፣ ')) + '\n' : ''}${w.about ? '\n' + H(clip(w.about, 500)) : ''}${w.phone ? '\n📞 ' + H(w.phone) : ''}`, ik([[b('🤝 ቅጥር ጠይቅ', 'wh:' + id), b('💬 መልእክት', 'cst:w:' + id)], [u('🌐 በድረ-ገጽ', web('/workers/' + id))]]));
   }
   async function showEmployer(chat, uid, id) {
     const r = await GET('/api/people/employer/' + id, uid); if (!r.ok) return send(chat, bad(r)); const e = r.employer;
-    return photo(chat, e.logo, `🏢 ${B(e.name)} <i>${H(e.sector)}</i>\n📍 ${H(e.city)}, ${H(e.region)}${e.about ? '\n\n' + H(clip(e.about, 500)) : ''}${e.phone ? '\n📞 ' + H(e.phone) : ''}`, ik(r.jobs.slice(0, 10).map(j => [b('💼 ' + clip(j.title, 40), 'j:' + j.id)])));
+    return photo(chat, e.logo, `🏢 ${B(e.name)} <i>${H(e.sector)}</i>\n📍 ${H(e.city)}, ${H(e.region)}${e.about ? '\n\n' + H(clip(e.about, 500)) : ''}${e.phone ? '\n📞 ' + H(e.phone) : ''}`, ik(r.jobs.slice(0, 10).map(j => [b('💼 ' + clip(j.title, 40), 'j:' + j.id)]).concat([[b('💬 መልእክት ላክ', 'cst:e:' + id)]])));
   }
   FIN.apply = async (chat, uid, d, x) => { const r = await POST(`/api/people/job/${x.id}/apply`, uid, { message: d.message || '' }); return send(chat, r.ok ? '✅ ማመልከቻዎ ተልኳል።' : bad(r) + (r.error === 'open_worker_first' ? '\n🧑‍🔧 በ «ገጾቼ → ሠራተኛ ገጽ» ይክፈቱ።' : '')); };
   FIN.hire = async (chat, uid, d, x) => { const r = await POST(`/api/people/worker/${x.id}/hire-request`, uid, { message: d.message }); return send(chat, r.ok ? '✅ ጥያቄዎ ተልኳል።' : bad(r) + (r.error === 'open_employer_first' ? '\n🏢 በ «ገጾቼ → አሰሪ ገጽ» ይክፈቱ።' : '')); };
@@ -428,7 +434,7 @@ module.exports = function bot(c) {
   }
   async function showPage(chat, uid, id) {
     const r = await GET('/api/pages/' + id, uid); if (!r.ok) return send(chat, bad(r)); const p = r.page;
-    const rows = p.sections.map((s, k) => [b(`${s.icon} ${clip(s.title, 30)} (${s.fields.length}) 👁`, `ss:${id}:${k}`)]); if (p.form) rows.push([b('📝 ' + clip(p.form.title, 30), 'sf:' + id)]); rows.push([u('🌐 በድረ-ገጽ ክፈት', web('/site/' + id))]);
+    const rows = p.sections.map((s, k) => [b(`${s.icon} ${clip(s.title, 30)} (${s.fields.length}) 👁`, `ss:${id}:${k}`)]); if (p.form) rows.push([b('📝 ' + clip(p.form.title, 30), 'sf:' + id)]); rows.push([b('💬 መልእክት ላክ', 'cst:g:' + id), u('🌐 በድረ-ገጽ ክፈት', web('/site/' + id))]);
     return photo(chat, p.cover || p.logo, `🌐 ${B(p.title)} <i>${H(p.kind)}</i>\n${p.tagline ? '✨ ' + H(p.tagline) + '\n' : ''}${p.city || p.region ? '📍 ' + H([p.city, p.region].filter(Boolean).join(', ')) + '\n' : ''}${p.phone ? '📞 ' + H(p.phone) + '\n' : ''}${p.about ? '\n' + H(clip(p.about, 500)) : ''}\n\n👇 ክፍል ለማየት 👁 ይጫኑ`, ik(rows));
   }
   async function showSection(chat, uid, id, k) {
@@ -489,7 +495,7 @@ module.exports = function bot(c) {
   function accountMenu(chat, uid) {
     const d = getStore().docs['data/users/' + uid] || {}, a = d.acct || {}, l = getDb().accounts[accKey(a)] || {}, muted = !!prefs(uid).mute;
     return send(chat, `⚙️ <b>አካውንቴ</b>\n\n👤 ${H(userOf(uid).name || '—')}\n📧 ${H(a.email)}\n📞 ${H(a.phone)}\n✈️ Telegram፦ ${l.username ? '@' + H(l.username) : 'ተገናኝቷል'}\n📅 የተከፈተው፦ ${a.ts ? new Date(a.ts).toLocaleDateString('en-GB') : '—'}\n🔔 ማሳወቂያ፦ ${muted ? '🔕 ድምጸ-ከል (ቁልፍ የሌላቸው መልዕክቶች አይላኩም)' : '🔔 በርቷል'}`, ik([
-      [b('✏️ ስም ቀይር', 'acn'), b('📧 ኢሜይል ቀይር', 'ace')], [b('📱 ስልክ ቀይር', 'acp'), b('🔑 የይለፍ ቃል ቀይር', 'pw')], [b(muted ? '🔔 ማሳወቂያ አብራ' : '🔕 ማሳወቂያ አጥፋ', 'accn')], [b('🚪 ውጣ (Log out)', 'lo'), b('🗑 አካውንት ሰርዝ', 'adel')], [b('📵 በሁሉም መሳሪያ ላይ ውጣ', 'lall')]]));
+      [b('✏️ ስም ቀይር', 'acn'), b('📧 ኢሜይል ቀይር', 'ace')], [b('📱 ስልክ ቀይር', 'acp'), b('🔑 የይለፍ ቃል ቀይር', 'pw')], [b(muted ? '🔔 ማሳወቂያ አብራ' : '🔕 ማሳወቂያ አጥፋ', 'accn')], [b(prefs(uid).news === false ? '📣 ዜና አብራ' : '📣 ዜና አጥፋ', 'accnw'), b(prefs(uid).digest === false ? '📊 ማጠቃለያ አብራ' : '📊 ማጠቃለያ አጥፋ', 'accdg')], [b('🌐 ቋንቋ', 'lang')], [b('🚪 ውጣ (Log out)', 'lo'), b('🗑 አካውንት ሰርዝ', 'adel')], [b('📵 በሁሉም መሳሪያ ላይ ውጣ', 'lall')]]));
   }
   async function pwOk(chat, uid, pw) { const ok = await authApi.verifyPassword(uid, pw); if (ok === null) { await send(chat, '⏳ ብዙ ሙከራ — ከ15 ደቂቃ በኋላ ይሞክሩ።'); return false; } if (!ok) { await send(chat, '❌ የአሁኑ የይለፍ ቃል ትክክል አይደለም።'); return false; } return true; }
   const PWQ = { k: 'cur', q: '🔑 አሁን ያለዎትን የይለፍ ቃል ይጻፉ (መልዕክቱ ይሰረዛል)፦', t: 'text', min: 1, max: 128, secret: true };
@@ -515,6 +521,7 @@ module.exports = function bot(c) {
     const r = await AD('GET', '/api/market/admin/overview'); if (!r.ok) return send(chat, '❌ አድሚን አልተፈቀደም (ADMIN_PASSWORD ያረጋግጡ)');
     const c = r.counts;
     return send(chat, `🛡 <b>አድሚን</b>\n🏪 ሱቆች ${c.shops} · 🛍 ዕቃዎች ${c.products} · 📦 ትዕዛዞች ${c.orders}\n💵 GMV፦ ${ETB(c.gmv)} · 💰 ኮሚሽን፦ ${ETB(c.commission)}\n⚙️ ኮሚሽን ${r.config.commissionPct}%`, ik([
+      [b('🛡 እምነት (ባጅ/ሪፖርት)', 'atr'), b('📣 ማስታወቂያ', 'abc'), b('📊 ሪፖርት', 'arp')],
       [b(`💳 ክፍያ ለማረጋገጥ (${r.payments.length})`, 'apay')], [b(`🏪 ሱቅ ለማጽደቅ (${r.pendingShops.length})`, 'ashp'), b(`💰 ለሻጭ ለመክፈል (${r.toSettle.length})`, 'asl')], [b(`↩️ ተመላሽ (${r.refunds.length})`, 'arfl'), b(`⚖️ ክርክር (${r.disputes.length})`, 'adis')], [b('🌐 ገጾች/ሰዎች ቁጥጥር', 'amod')], [u('🖥 የአድሚን ድረ-ገጽ', web('/admin'))]]));
   }
   async function adminList(chat, kind) {
@@ -539,20 +546,111 @@ module.exports = function bot(c) {
   const HELP = `❓ <b>እገዛ — ቦቱ የሚያደርገው</b>\n\n🛍 <b>ገበያ</b> — ዕቃ ይፈልጉ፣ ጋሪ፣ ይዘዙ፣ ክፍያ ይላኩ፣ ደረሰኝ ያውርዱ፣ ግምገማ ይስጡ\n🏪 <b>ሱቆች</b> — ሱቆችን ይመልከቱ\n💼 <b>ሥራ</b> — ክፍት ሥራ፣ ሠራተኞች፣ ማመልከት፣ መቅጠር\n🌐 <b>ገጾች</b> — የሌሎችን ገጽ ይመልከቱ (👁)፣ ቅጽ ይሙሉ\n👤 <b>ገጾቼ</b> — የራስዎን ገጽ (ሠራተኛ፣ አሰሪ፣ ሱቅ፣ ሆቴል…) ይክፈቱ እና ያስተዳድሩ፤ ዕቃ እና ትዕዛዝ፤ ሥራ ማስታወቅ፤ የግል መረጃ\n\n/menu — ዋና ማውጫ · /cancel — የጀመሩትን ሰርዝ`;
 
   /* ================= ራውተር ================= */
-  const LABELS = { '🛍 ገበያ': 'market', '🏪 ሱቆች': 'shops', '💼 ሥራ': 'jobs', '🌐 ገጾች': 'pages', '🛒 ጋሪ': 'cart', '📦 ትዕዛዞቼ': 'orders', '👤 ገጾቼ': 'me', '🔎 ፈልግ': 'search', '❓ እገዛ': 'help', '🛡 አድሚን': 'admin' };
+  const LABELS = { ...LABEL_KEYS, '🛡 አድሚን': 'admin' };
+
+  /* ================= v16፦ መልስ በቦቱ · ማንቂያዎች · inline · deep link · በአቅራቢያዬ · አድሚን · ቋንቋ ================= */
+  const botUser = c.botUsername || '';
+  const deepLink = (t, id) => (botUser ? `https://t.me/${botUser}?start=${t}_${id}` : '');
+  async function openDeep(chat, uid, d) {
+    const fn = { s: showShop, p: showProduct, w: showWorker, e: showEmployer, j: showJob, g: showPage }[d.t];
+    return fn ? fn(chat, uid, d.id) : undefined;
+  }
+  /* ---------- inline ፍለጋ፦ @Bot ሶፋ ---------- */
+  async function inline(q) {
+    const text = String(q.query || '').trim().slice(0, 60), results = [], https = /^https:/.test(baseUrl);
+    if (text.length >= 2) {
+      const r = await GET('/api/search' + qs({ q: text }));
+      for (const g of (r.groups || [])) for (const it of g.items) {
+        if (results.length >= 25) break; const url = web(it.href);
+        results.push({ type: 'article', id: (g.key + ':' + it.id).slice(0, 64), title: String(it.title).slice(0, 100), description: (g.label + ' · ' + (it.sub || '')).slice(0, 200),
+          ...(https && it.img ? { thumbnail_url: web('/api/market/img/' + it.img) } : {}),
+          input_message_content: { message_text: `${it.title}\n${it.sub || ''}\n${url}`.slice(0, 4000) },
+          ...(https ? { reply_markup: { inline_keyboard: [[{ text: '👁 ክፈት', url }]] } } : {}) });
+      }
+    }
+    return tg('answerInlineQuery', { inline_query_id: q.id, results, cache_time: 20, is_personal: false }).catch(e => console.warn('inline:', e.message));
+  }
+  /* ---------- በአቅራቢያዬ ---------- */
+  const GEO_KB = { keyboard: [[{ text: '📍 ቦታዬን አጋራ', request_location: true }], ['✖️ ተው']], resize_keyboard: true, one_time_keyboard: true };
+  function nearStart(chat) { const s = ses(chat); s.await = 'near'; save(); return send(chat, '📍 ቦታዎን ያጋሩ — የቅርብ ሱቆች፣ ገጾች፣ ሙያተኞች እና አሰሪዎች አሳያለሁ።\n🔒 ቦታዎ ለዚህ ፍለጋ ብቻ ለአጭር ጊዜ ይቆያል።', GEO_KB); }
+  const KM = { s: 'shops', g: 'pages', w: 'workers', e: 'employers' }, NB_CB = { s: 'sh', g: 's', w: 'w', e: 'e' };
+  const NB_KB = ik([[b('🏪 ሱቆች', 'nb:s'), b('🌐 ገጾች', 'nb:g')], [b('🧑‍🔧 ሙያተኞች', 'nb:w'), b('🏢 አሰሪዎች', 'nb:e')]]);
+  async function onLocation(chat, m) {
+    const s = ses(chat), uid = uidOf(chat); if (!uid) return authStart(chat); const { latitude: lat, longitude: lng } = m.location, mode = s.await; s.await = null;
+    if (mode === 'set' || mode === 'setw') { const r = await POST('/api/geo/set', uid, { lat, lng, targets: mode === 'setw' ? ['w'] : ['s', 'g', 'e'] }); return send(chat, r.ok ? `✅ ቦታ ተቀምጧል (${H(r.set.join('፣'))}) — ደንበኞች «በአቅራቢያዬ» ሲፈልጉ ይገኛሉ።\n🔒 ትክክለኛ ቦታ ለህዝብ አይታይም፤ ርቀት ብቻ።` : bad(r), menuKb(chat)); }
+    if (mode === 'near') { s.loc = { lat, lng, ts: Date.now() }; await send(chat, '✅ ቦታዎ ደርሷል።', menuKb(chat)); return send(chat, '📍 ምን ይፈልጋሉ?', NB_KB); }
+    return home(chat);
+  }
+  async function nearby(chat, uid, kind) {
+    const s = ses(chat); if (!s.loc || Date.now() - s.loc.ts > 30 * 60e3) { s.loc = null; return nearStart(chat); }
+    const r = await GET('/api/nearby' + qs({ lat: s.loc.lat, lng: s.loc.lng, kind: KM[kind] || 'shops' }), uid); if (!r.ok) return send(chat, bad(r));
+    if (!r.items.length) return send(chat, '🤷 በ30 ኪ.ሜ ውስጥ ቦታቸውን ያስቀመጡ የሉም።', NB_KB);
+    return send(chat, '📍 <b>በአቅራቢያዎ</b> (ከቅርብ ወደ ሩቅ)', ik([...r.items.map(i => [b(`${clip(i.name, 24)} · ${i.km} ኪ.ሜ`, NB_CB[kind] + ':' + i.id)]), [b('🔄 ሌላ ዓይነት', 'nbk')]]));
+  }
+  /* ---------- ማንቂያዎች ---------- */
+  const AL_K = [['🛍 ዕቃ', 'products'], ['💼 ሥራ', 'jobs'], ['🧑‍🔧 ሙያተኛ', 'workers'], ['🌐 ገጽ', 'pages']];
+  async function alertsMenu(chat, uid) {
+    const r = await GET('/api/alerts', uid); if (!r.ok) return send(chat, bad(r));
+    const rows = r.items.map(a => [b(`🗑 ${r.kinds[a.kind] || ''} «${clip(a.q, 20)}»${a.city ? ' · ' + clip(a.city, 10) : ''}${a.maxPrice ? ' ≤' + a.maxPrice : ''}`, 'aldel:' + a.id)]); rows.push([b('➕ አዲስ ማንቂያ', 'aln')]);
+    return send(chat, `🔔 <b>ማንቂያዎቼ</b> (${r.items.length}/10)\nአዲስ ተዛማጅ ሲመዘገብ እነግርዎታለሁ። ለመሰረዝ 🗑 ይጫኑ።`, ik(rows));
+  }
+  const alertFlow = (chat, pre) => startFlow(chat, 'alertnew', [{ k: 'kind', q: 'ምን ዓይነት ይፈልጋሉ?', t: 'choice', o: AL_K.map(x => x[0]) }, { k: 'q', q: 'የሚፈልጉት ቃል (ለምሳሌ፦ ሹፌር፣ ሶፋ፣ አናጺ)፦', t: 'text', min: 2, max: 60, def: pre || undefined }, { k: 'city', q: 'ከተማ (አማራጭ)፦', t: 'text', opt: true, max: 60 }, { k: 'maxPrice', q: 'ከፍተኛ ዋጋ በብር (አማራጭ)፦', t: 'num', opt: true, if: ['kind', '🛍 ዕቃ'] }], {}, '🔔 አዲስ ማንቂያ');
+  FIN.alertnew = async (chat, uid, d) => { const kind = (AL_K.find(x => x[0] === d.kind) || [])[1]; const r = await POST('/api/alerts', uid, { kind, q: d.q, city: d.city || '', maxPrice: d.maxPrice || 0 }); return send(chat, r.ok ? '✅ ማንቂያ ተቀምጧል — አዲስ ተዛማጅ ሲኖር እነግርዎታለሁ።' : bad(r), ik([[b('🔔 ማንቂያዎቼ', 'alerts')]])); };
+  /* ---------- መልእክቶች (ከድረ-ገጹ chat ጋር አንድ ውይይት) ---------- */
+  async function msgList(chat, uid) {
+    const r = await GET('/api/chat/threads', uid); if (!r.ok) return send(chat, bad(r)); if (!r.items.length) return send(chat, '💬 እስካሁን ውይይት የለም — በማንኛውም ሱቅ፣ ዕቃ፣ ሙያተኛ፣ ሥራ ወይም ገጽ ላይ «💬 መልእክት ላክ» ይጫኑ።');
+    return send(chat, '💬 <b>መልእክቶች</b>', ik(r.items.slice(0, 20).map(t => [b(`${t.unread ? '🔴 ' : ''}${clip(t.label, 20)} — ${clip(t.last ? t.last.text : '', 22)}`, 'cth:' + t.id)])));
+  }
+  async function msgOpen(chat, uid, id) {
+    const r = await GET('/api/chat/thread/' + id, uid); if (!r.ok) return send(chat, bad(r)); const t = r.thread;
+    const L = r.items.slice(-6).map(m => `${m.mine ? '🟢 እኔ' : '⚪️ ' + H(t.label)}፦ ${H(clip(m.text, 300))}`).join('\n\n');
+    return send(chat, `💬 ${B(t.label)}${t.ctx ? ` · <i>${H(t.ctx.kind)}፦ ${H(t.ctx.title)}</i>` : ''}\n\n${L || '—'}`, ik([[b('↩️ መልስ', 'cr:' + id)], [u('🌐 ሙሉ ውይይት', web('/me/messages/' + id)), b('📥 መልእክቶች', 'messages')]]));
+  }
+  FIN.chatsend = async (chat, uid, d, x) => { const r = await POST('/api/chat/thread/' + x.id, uid, { text: d.text }); return send(chat, r.ok ? '✅ ተልኳል' : bad(r), ik([[b('💬 ውይይቱን ክፈት', 'cth:' + x.id)]])); };
+  FIN.chatstart = async (chat, uid, d, x) => { const r = await POST('/api/chat/start', uid, { t: x.t, id: x.id, text: d.text }); return send(chat, r.ok ? '✅ መልእክትዎ ተልኳል — መልስ ሲመጣ እነግርዎታለሁ።' : bad(r), r.ok ? ik([[b('💬 ውይይቱን ክፈት', 'cth:' + r.id)]]) : undefined); };
+  /* ---------- አድሚን፦ እምነት፣ ማስታወቂያ፣ ሪፖርት ---------- */
+  async function adminTrust(chat) {
+    const r = await AD('GET', '/api/trust/admin/overview'); if (!r.ok) return send(chat, bad(r));
+    const reqs = r.requests.filter(q => q.status === 'pending').slice(0, 8), reps = r.reports.filter(x => x.status === 'open').slice(0, 8);
+    await send(chat, `🛡 <b>እምነት</b> — ✅ የባጅ ጥያቄ ${reqs.length} · 🚩 ክፍት ሪፖርት ${reps.length}`);
+    for (const q of reqs) await photo(chat, q.proof[0], `✅ ${B(q.label + '፦ ' + q.name)}\n${H(q.owner.name || '')} ${H(q.owner.email || '')}${q.note ? '\n' + H(q.note) : ''}\n🖼 ${q.proof.length} ማስረጃ`, ik([[b('✅ አጽድቅ', 'atrq:' + q.id + ':1'), b('❌ ውድቅ', 'atrq:' + q.id + ':0')]]));
+    for (const x of reps) await send(chat, `🚩 ${B(x.label + '፦ ' + x.name)}${x.count > 1 ? ' ×' + x.count : ''}\n${H(x.reason)}${x.note ? '\n' + H(x.note) : ''}`, ik([[b('🙈 አልተረጋገጠም', 'atrp:' + x.id + ':dismiss'), b('✔ ተፈትቷል', 'atrp:' + x.id + ':resolve')], [b('⛔ ደብቅ', 'atrph:' + x.id)]]));
+    if (!reqs.length && !reps.length) await send(chat, '✨ ምንም የሚጠብቅ የለም።');
+  }
+  FIN.atrqno = async (chat, uid, d, x) => { const r = await AD('POST', '/api/trust/admin/request/' + x.id, { approve: false, note: d.note || '' }); return send(chat, r.ok ? '✅ ውድቅ ተደርጓል — ባለቤቱ ተነግሯል' : bad(r)); };
+  FIN.bcast = async (chat, uid, d) => { ses(chat).bc = d.text; save(); return send(chat, `📣 <b>ቅድመ-እይታ</b>\n\n${H(d.text)}\n\nለሁሉም ተጠቃሚ (ዜና ያላጠፉ) ይላክ?`, ik([[b('✅ ለሁሉም ላክ', 'bcgo'), b('✖️ ተው', 'bcx')]])); };
+  async function broadcast(chat) {
+    const s = ses(chat), text = s.bc; s.bc = null; if (!text) return send(chat, 'መልእክት የለም');
+    if (Date.now() - (s.lastBc || 0) < 3600e3) return send(chat, '⏳ ማስታወቂያ በሰዓት አንድ ጊዜ ብቻ ይላካል።'); s.lastBc = Date.now(); save();
+    rebuild(); const targets = Object.entries(map).filter(([, uid]) => !isSusp(uid) && prefs(uid).news !== false).map(([ch]) => ch);
+    await send(chat, `📣 ወደ ${targets.length} ሰው በመላክ ላይ…`); let ok = 0;
+    for (const t of targets) { try { await tg('sendMessage', { chat_id: t, text: `📣 ${text}\n\n🔕 ዜና ለማቆም፦ /account → «📣 ዜና»`.slice(0, 3900), disable_web_page_preview: true }); ok++; } catch (e) { } await new Promise(r => setTimeout(r, 60)); }
+    return send(chat, `✅ ተልኳል፦ ${ok}/${targets.length}`);
+  }
+  function adminReportNow(chat) {
+    const st = getStore(), colx = p => st.docs[p] || {}, accts = Object.keys(st.docs).filter(p => /^data\/users\/[\w-]+$/.test(p)).map(p => (st.docs[p].acct || {}).ts || 0);
+    return send(chat, require('./scheduler').adminReport(colx, Date.now(), accts.filter(t => t > Date.now() - 864e5).length));
+  }
+  const langMenu = chat => send(chat, '🌐 ቋንቋ / Language / Afaan / ቋንቋ', ik([BOT_LANGS.map(([k, n]) => b((lang(chat) === k ? '✓ ' : '') + n, 'lg:' + k))]));
+
   async function action(chat, uid, a) {
     switch (a) {
       case 'market': return marketHome(chat, uid); case 'shops': return listShops(chat, uid); case 'jobs': return jobsMenu(chat); case 'pages': return listPages(chat, uid, 1);
       case 'cart': return showCart(chat); case 'orders': return listOrders(chat, uid); case 'me': return hub(chat, uid); case 'help': return send(chat, HELP, menuKb(chat));
       case 'search': return startFlow(chat, 'search', [{ k: 'q', q: '🔎 የሚፈልጉትን ዕቃ ስም ይጻፉ፦', t: 'text', min: 2, max: 60 }]);
       case 'admin': return isAdmin(chat) ? adminHub(chat) : send(chat, '⛔ አድሚን ብቻ');
+      case 'near': return nearStart(chat); case 'alerts': return alertsMenu(chat, uid); case 'messages': return msgList(chat, uid);
     }
   }
   async function onText(chat, text, msg) {
     const t = text.trim(), s = ses(chat), uid = uidOf(chat);
     if (/^\/cancel\b/.test(t)) { s.flow = null; s.auth = null; save(); return home(chat, '✖️ ተሰርዟል።'); }
     if (/^\/myid\b/.test(t)) return send(chat, `🆔 Chat ID፦ <code>${chat}</code>`);
-    if (/^\/(start|menu|login)\b/.test(t)) { s.flow = null; if (uid) return home(chat, `🇪🇹 <b>ኢትዮ ዲጂታል ማርኬት</b>\nእንኳን ደህና መጡ ${H(userOf(uid).name)}!`); s.auth = null; return authStart(chat); }
+    const dl = /^\/start\s+([sgpwej])_([\w-]{4,40})$/.exec(t); if (dl) s.deep = { t: dl[1], id: dl[2] };       // deep link — ከመግባት በኋላም ይከፈታል
+    if (t === '✖️ ተው') { s.await = null; s.flow = null; save(); return home(chat); }
+    if (uid && /^\/lang\b/.test(t)) return langMenu(chat);
+    if (uid && /^\/(search|near|alerts|messages)\b/.test(t)) return action(chat, uid, /^\/(\w+)/.exec(t)[1]);
+    if (/^\/(start|menu|login)\b/.test(t)) { s.flow = null; if (uid) return home(chat, `🇪🇹 <b>ኢትዮ ዲጂታል ማርኬት</b>\n${tx(chat, 'welcome')} ${H(userOf(uid).name)}!`); s.auth = null; return authStart(chat); }
     if (/^\/account\b/.test(t) && uid) return accountMenu(chat, uid);
     if (/^\/logout\b/.test(t) && uid) return send(chat, '🚪 ከአካውንትዎ መውጣት ይፈልጋሉ?', ik([[b('✅ አዎ ውጣ', 'loc'), b('✖️ አይ', 'acc')]]));
     if (/^\/help\b/.test(t) || t === '❓ እገዛ') return send(chat, HELP, menuKb(chat));
@@ -568,11 +666,31 @@ module.exports = function bot(c) {
     if (k === 'noop') return;
     if (k === 'login') return authStart(chat);
     if (k === 'rst') { const a = ses(chat).auth; if (a && a.stage === 'pw') { a.stage = 'resetpw'; save(); return send(chat, '🆘 ስልክዎ በ Telegram ስለተረጋገጠ አዲስ የይለፍ ቃል መፍጠር ይችላሉ።\n🔐 አዲስ የይለፍ ቃል ይጻፉ (ቢያንስ 8 ቁምፊ — መልዕክቱ ይሰረዛል)፦'); } return authStart(chat); }
-    if (!uid && !(isAdmin(chat) && /^(ad|avp|ast|arf|arl|ash|apt|amod|apay|asl|arfl|adis|ashp)/.test(k))) return authStart(chat);
-    if (/^(ad|avp|ast|arf|arl|ash|ashr|apt|amod|apay|asl|arfl|adis|ashp)$/.test(k) && !isAdmin(chat)) return send(chat, '⛔ አድሚን ብቻ');
+    if (!uid && !(isAdmin(chat) && /^(ad|avp|ast|arf|arl|ash|apt|amod|apay|asl|arfl|adis|ashp|atr|abc|bcgo|bcx|arp)/.test(k))) return authStart(chat);
+    if (/^(ad|avp|ast|arf|arl|ash|ashr|apt|amod|apay|asl|arfl|adis|ashp|atr|atrq|atrp|atrph|abc|bcgo|bcx|arp)$/.test(k) && !isAdmin(chat)) return send(chat, '⛔ አድሚን ብቻ');
     const s = ses(chat);
     switch (k) {
       case 'f': return flowCb(chat, data);
+      case 'nb': return nearby(chat, uid, a); case 'nbk': return send(chat, '📍 ምን ይፈልጋሉ?', NB_KB);
+      case 'geoset': s.await = 'set'; save(); return send(chat, '📍 የንግድዎን ቦታ (ሱቅ/ገጽ/አሰሪ) ለማስቀመጥ በንግድዎ ቦታ ሆነው ያጋሩ።\n🔒 ርቀት ብቻ ነው ለህዝብ የሚታየው።', GEO_KB);
+      case 'geosetw': s.await = 'setw'; save(); return send(chat, '📍 የሙያ ቦታዎን ያጋሩ። ቦታው ~1 ኪ.ሜ ተደብዝዞ ነው የሚቀመጠው (ለህዝብ ኪ.ሜ ብቻ)።', GEO_KB);
+      case 'geoclr': { const r = await POST('/api/geo/clear', uid); return send(chat, r.ok ? `✅ ቦታ ጠፍቷል (${r.cleared})` : bad(r)); }
+      case 'alerts': return alertsMenu(chat, uid); case 'aln': return alertFlow(chat, ''); case 'alq': { const q = s.lastQ; if (!q) return alertFlow(chat, ''); const r = await POST('/api/alerts', uid, { kind: 'products', q }); return send(chat, r.ok ? `✅ «${H(q)}» ሲመዘገብ እነግርዎታለሁ።` : bad(r), ik([[b('🔔 ማንቂያዎቼ', 'alerts')]])); }
+      case 'aldel': { const r = await DEL('/api/alerts/' + a, uid); await send(chat, r.ok ? '🗑 ማንቂያው ተሰርዟል' : bad(r)); return alertsMenu(chat, uid); }
+      case 'messages': return msgList(chat, uid); case 'cth': return msgOpen(chat, uid, a);
+      case 'cr': return startFlow(chat, 'chatsend', [{ k: 'text', q: '↩️ መልስዎን ይጻፉ፦', t: 'long', min: 1, max: 1000 }], { id: a });
+      case 'cst': return startFlow(chat, 'chatstart', [{ k: 'text', q: '💬 መልእክትዎን ይጻፉ፦', t: 'long', min: 1, max: 1000 }], { t: a, id: x });
+      case 'lang': return langMenu(chat);
+      case 'lg': if (BOT_LANGS.some(l => l[0] === a)) { s.lang = a; save(); authApi.setPref(uid, 'lang', a); } return home(chat, tx(chat, 'langSet'));
+      case 'accnw': authApi.setPref(uid, 'news', prefs(uid).news === false); return accountMenu(chat, uid);
+      case 'accdg': authApi.setPref(uid, 'digest', prefs(uid).digest === false); return accountMenu(chat, uid);
+      case 'atr': return adminTrust(chat);
+      case 'atrq': if (x === '1') { const r = await AD('POST', '/api/trust/admin/request/' + a, { approve: true }); return send(chat, r.ok ? '✅ ባጅ ተሰጥቷል — ባለቤቱ ተነግሯል' : bad(r)); } return startFlow(chat, 'atrqno', [{ k: 'note', q: 'ውድቅ የተደረገበት ምክንያት (አማራጭ)፦', t: 'text', opt: true, max: 200 }], { id: a });
+      case 'atrp': { const r = await AD('POST', '/api/trust/admin/report/' + a, { action: x }); return send(chat, r.ok ? '✅ ተከናውኗል' : bad(r)); }
+      case 'atrph': return send(chat, '⛔ ይህ ነገር ከህዝብ ይደበቅ? (ባለቤቱ ይነገረዋል)', ik([[b('✅ አዎ ደብቅ', 'atrp:' + a + ':hide'), b('✖️ አይ', 'atr')]]));
+      case 'abc': return startFlow(chat, 'bcast', [{ k: 'text', q: '📣 ለሁሉም ተጠቃሚ የሚላክ መልእክት፦', t: 'long', min: 5, max: 1000 }], {}, '📣 ማስታወቂያ');
+      case 'bcgo': return broadcast(chat); case 'bcx': s.bc = null; return send(chat, '✖️ ተሰርዟል');
+      case 'arp': return adminReportNow(chat);
       case 'm': return action(chat, uid, a);
       case 'pr': return listProducts(chat, uid, { cat: a }, 1); case 'lp': return listProducts(chat, uid, s.lp || {}, Number(a) || 1);
       case 'p': return showProduct(chat, uid, a); case 'ac': return addCart(chat, uid, a, Number(x) || 1);
@@ -632,41 +750,12 @@ module.exports = function bot(c) {
       case 'apt': { const r = a === 'pg' ? await AD('POST', `/api/pages/admin/${x}/status`, { status: y }) : await AD('POST', `/api/people/admin/${a}/${x}/status`, { status: y }); return send(chat, r.ok ? '✅ ተቀይሯል' : bad(r)); }
     }
   }
-  /* ================= ኢንላይን ፍለጋ — በማንኛውም ቻት @botname ቃል ብለው ዕቃ ይፈልጉ ================= */
-  const PAGE = 24;
-  async function inlineQuery(iq) {
-    const q = String(iq.query || '').trim().slice(0, 60);
-    const page = Math.max(1, Number(iq.offset) || 1);
-    const r = await GET('/api/market/products' + qs({ q, page }));
-    const ok = r && r.ok && Array.isArray(r.items);
-    const results = !ok ? [] : r.items.map(p => {
-      const img = p.imgs && p.imgs[0] && /^https:/.test(baseUrl) ? web('/api/market/img/' + p.imgs[0]) : undefined;
-      const shop = p.shop && p.shop.name ? `\n🏪 ${H(p.shop.name)}${p.shop.city ? ' · 📍 ' + H(p.shop.city) : ''}` : '';
-      return {
-        type: 'article', id: String(p.id).slice(0, 64), title: clip(p.title, 60),
-        description: clip(`${ETB(p.price)} / ${p.unit || 'ኮፒ'}${p.stock != null ? ' · ክምችት ' + p.stock : ''}`, 100),
-        ...(img ? { thumbnail_url: img } : {}),
-        input_message_content: { message_text: `🛍 ${B(p.title)}\n💰 ${B(ETB(p.price))} / ${H(p.unit)}${shop}`, parse_mode: 'HTML', disable_web_page_preview: true },
-        reply_markup: ik([[u('📦 ዝርዝሩን ይመልከቱ', web('/p/' + p.id))]]),
-      };
-    });
-    const next = ok && r.items.length && page * PAGE < (r.total || 0) ? String(page + 1) : '';
-    return tg('answerInlineQuery', { inline_query_id: iq.id, results, next_offset: next, cache_time: 60, is_personal: false })
-      .catch(e => console.warn('bot inline:', e.message));
-  }
-
   async function handle(upd) {
     try {
-      if (upd.inline_query) return await inlineQuery(upd.inline_query);
-      if (upd.callback_query) {
-        const cq = upd.callback_query; tg('answerCallbackQuery', { callback_query_id: cq.id }).catch(() => { });
-        if (!cq.message) return; const chat = cq.message.chat.id;
-        if (cq.message.text) pend[chat] = cq.message.message_id;             // ጽሑፍ ከሆነ በቦታው ይስተካከላል
-        tg('sendChatAction', { chat_id: chat, action: 'typing' }).catch(() => { });
-        try { return await route(chat, String(cq.data || '')); } finally { delete pend[chat]; }
-      }
+      if (upd.callback_query) { const cq = upd.callback_query; tg('answerCallbackQuery', { callback_query_id: cq.id }).catch(() => { }); if (!cq.message) return; return await route(cq.message.chat.id, String(cq.data || '')); }
+      if (upd.inline_query) return await inline(upd.inline_query);
       const m = upd.message; if (!m || !m.chat || m.chat.type !== 'private') return; const chat = m.chat.id;
-      tg('sendChatAction', { chat_id: chat, action: 'typing' }).catch(() => { });
+      if (m.location) return await onLocation(chat, m);
       if (m.contact) return await authContact(chat, m);
       if (m.photo) return ses(chat).flow ? await flowPhoto(chat, m) : send(chat, '📷 ፎቶ ለመጠቀም መጀመሪያ ተገቢውን ቅጽ (ለምሳሌ ዕቃ መጨመር) ይክፈቱ።');
       if (typeof m.text === 'string') return await onText(chat, m.text, m);

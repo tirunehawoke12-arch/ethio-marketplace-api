@@ -222,9 +222,7 @@ async function configureWebhook() {
       allowed_updates: ['message', 'callback_query', 'inline_query'],
       drop_pending_updates: false
     });
-    tg('setMyShortDescription', { short_description: '🛍 ዕቃ ይግዙ · ይሽጡ · ሥራ ያግኙ — ኢትዮ ዲጂታል ማርኬት' }).catch(() => { });
-    tg('setMyDescription', { description: 'እንኳን ደህና መጡ! ይህ ቦት የኢትዮ ዲጂታል ማርኬት ሙሉ አገልግሎት ነው፦ ገበያ፣ ሱቆች፣ ሥራ፣ የራስዎ ገጽ፣ ትዕዛዝ እና ክፍያ። ለመጀመር /start ይጫኑ።' }).catch(() => { });
-    tg('setMyCommands', { commands: [{ command: 'menu', description: 'ዋና ማውጫ' }, { command: 'account', description: 'አካውንቴ' }, { command: 'logout', description: 'ውጣ' }, { command: 'login', description: 'ግባ / ተመዝገብ' }, { command: 'cancel', description: 'የጀመሩትን ሰርዝ' }, { command: 'help', description: 'እገዛ' }, { command: 'myid', description: 'Chat ID' }] }).catch(() => { });
+    tg('setMyCommands', { commands: [{ command: 'menu', description: 'ዋና ማውጫ' }, { command: 'search', description: 'ፈልግ' }, { command: 'near', description: 'በአቅራቢያዬ' }, { command: 'alerts', description: 'ማንቂያዎቼ' }, { command: 'messages', description: 'መልእክቶች' }, { command: 'account', description: 'አካውንቴ' }, { command: 'lang', description: 'ቋንቋ / Language' }, { command: 'logout', description: 'ውጣ' }, { command: 'login', description: 'ግባ / ተመዝገብ' }, { command: 'cancel', description: 'የጀመሩትን ሰርዝ' }, { command: 'help', description: 'እገዛ' }, { command: 'myid', description: 'Chat ID' }] }).catch(() => { });
     console.log('Image storage:', require('./imgstore').create().driver === 's3' ? 'S3/R2 (external)' : 'Postgres (set S3_* to move images out)');
     console.log('Telegram webhook configured:', result, `${PUBLIC_BASE_URL}/api/telegram/webhook`);
   } catch (e) {
@@ -265,7 +263,7 @@ const bump = p => { store.rev[p] = (store.rev[p] || REV0) + 1; persist(); };
 const validPath = p => typeof p === 'string' && p.length < 200 && /^[\w@+.:~\/-]+$/.test(p) && !p.includes('..');
 function can(tok, p, write, id) {
   if (tok && tok.k === 'admin') return true;
-  { const t0 = String(p).split('/')[0]; if (t0 === 'mk' || t0 === 'pp' || t0 === 'pg' || t0 === 'tr' || t0 === 'ch' || t0[0] === '_') return false; }   // ገበያ እና ምስል መረጃ በልዩ API ብቻ
+  { const t0 = String(p).split('/')[0]; if (t0 === 'mk' || t0 === 'pp' || t0 === 'pg' || t0 === 'tr' || t0 === 'ch' || t0 === 'al' || t0[0] === '_') return false; }   // ገበያ እና ምስል መረጃ በልዩ API ብቻ
   const m = /^data\/users\/([\w-]+)$/.exec(p);
   if (m) return !!tok && tok.u === m[1];                       // የግል ውሂብ፦ ባለቤት ብቻ
   if (!tok) return false;
@@ -431,10 +429,14 @@ require('./search')({ app, col, S: (v, n) => String(v == null ? '' : v).trim().s
 require('./pages')({ app, col, bump, pool, persist, limit, notifyUser, notifyAdmin, ...mkApi });
 require('./chat')({ app, col, limit, notifyUser, notifyAdmin, ...mkApi });
 require('./trust')({ app, col, limit, notifyUser, notifyAdmin, ...mkApi });
+require('./geo')({ app, col, limit, ...mkApi });
+const alertsApi = require('./alerts')({ app, col, limit, bump, pool, persist, notifyUser, baseUrl: PUBLIC_BASE_URL, ...mkApi });
+if (process.env.NODE_ENV !== 'test') require('./scheduler').start({ col, saveMany: mkApi.saveMany, notifyUser, notifyAdmin, alerts: alertsApi, baseUrl: PUBLIC_BASE_URL,
+  prefsOf: uid => (store.docs['data/users/' + uid] || {}).prefs || {}, users: () => usersOf().map(p => ({ uid: p.split('/')[2], ts: ((store.docs[p] || {}).acct || {}).ts || 0 })).filter(x => store.docs['data/users/' + x.uid].acct) });
 
 const authApi = require('./auth')({ app, col, bump, pool, pgUpsert, persist, readTok, limit, tokFor, findUid, isSusp, accountKey, normPhoneET, tg, randDigits, id, safeOtpMatch, clean, saveDB, getDb: () => db, getStore: () => store, PUBLIC_BASE_URL, BOT_USERNAME, OTP_TTL, LINK_TTL, notifyAdmin });
 
-botApi = require('./bot')({ tg, tokFor, port: PORT, baseUrl: PUBLIC_BASE_URL, adminChat: adminChatId, bindAdmin, adminPhone: normPhoneET(ADMIN_PHONE), token: TOKEN, getDb: () => db, getStore: () => store, accKey, findUid, normPhoneET, authApi, pool, pgUpsert, isSusp });
+botApi = require('./bot')({ tg, tokFor, port: PORT, baseUrl: PUBLIC_BASE_URL, adminChat: adminChatId, bindAdmin, adminPhone: normPhoneET(ADMIN_PHONE), token: TOKEN, botUsername: BOT_USERNAME, getDb: () => db, getStore: () => store, accKey, findUid, normPhoneET, authApi, pool, pgUpsert, isSusp });
 
 async function initStorage() {
   if (!pool) return;
