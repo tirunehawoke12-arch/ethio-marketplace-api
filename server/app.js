@@ -219,9 +219,11 @@ async function configureWebhook() {
     const result = await tg('setWebhook', {
       url: `${PUBLIC_BASE_URL}/api/telegram/webhook`,
       secret_token: WEBHOOK_SECRET,
-      allowed_updates: ['message', 'callback_query'],
+      allowed_updates: ['message', 'callback_query', 'inline_query'],
       drop_pending_updates: false
     });
+    tg('setMyShortDescription', { short_description: '🛍 ዕቃ ይግዙ · ይሽጡ · ሥራ ያግኙ — ኢትዮ ዲጂታል ማርኬት' }).catch(() => { });
+    tg('setMyDescription', { description: 'እንኳን ደህና መጡ! ይህ ቦት የኢትዮ ዲጂታል ማርኬት ሙሉ አገልግሎት ነው፦ ገበያ፣ ሱቆች፣ ሥራ፣ የራስዎ ገጽ፣ ትዕዛዝ እና ክፍያ። ለመጀመር /start ይጫኑ።' }).catch(() => { });
     tg('setMyCommands', { commands: [{ command: 'menu', description: 'ዋና ማውጫ' }, { command: 'account', description: 'አካውንቴ' }, { command: 'logout', description: 'ውጣ' }, { command: 'login', description: 'ግባ / ተመዝገብ' }, { command: 'cancel', description: 'የጀመሩትን ሰርዝ' }, { command: 'help', description: 'እገዛ' }, { command: 'myid', description: 'Chat ID' }] }).catch(() => { });
     console.log('Image storage:', require('./imgstore').create().driver === 's3' ? 'S3/R2 (external)' : 'Postgres (set S3_* to move images out)');
     console.log('Telegram webhook configured:', result, `${PUBLIC_BASE_URL}/api/telegram/webhook`);

@@ -29,12 +29,23 @@ module.exports = function bot(c) {
   const restore = d => { if (d && typeof d === 'object') Object.assign(S, d); };
 
   /* ---------- መላኪያ ---------- */
-  const send = (chat, text, kb) => tg('sendMessage', { chat_id: chat, text: String(text).slice(0, 3900), parse_mode: 'HTML', disable_web_page_preview: true, ...(kb ? { reply_markup: kb } : {}) }).catch(e => console.warn('bot send:', e.message));
+  /* ቁልፍ ሲነካ የመጀመሪያው መልዕክት ጽሑፍ ከሆነ በቦታው ይስተካከላል (ቻቱ አይጨናነቅም)። */
+  const pend = {};
+  const send = (chat, text, kb) => {
+    const body = { chat_id: chat, text: String(text).slice(0, 3900), parse_mode: 'HTML', disable_web_page_preview: true };
+    const mid = pend[chat]; delete pend[chat];
+    if (mid && kb && kb.inline_keyboard) {
+      return tg('editMessageText', { ...body, message_id: mid, reply_markup: kb })
+        .catch(e => /not modified/i.test(e.message) ? null : tg('sendMessage', { ...body, reply_markup: kb }).catch(err => console.warn('bot send:', err.message)));
+    }
+    return tg('sendMessage', { ...body, ...(kb ? { reply_markup: kb } : {}) }).catch(e => console.warn('bot send:', e.message));
+  };
   async function photo(chat, id, caption, kb) {
     if (!id || !/^https:/.test(baseUrl)) return send(chat, caption, kb);
     try { return await tg('sendPhoto', { chat_id: chat, photo: web('/api/market/img/' + id), caption: String(caption).slice(0, 1000), parse_mode: 'HTML', ...(kb ? { reply_markup: kb } : {}) }); } catch (e) { return send(chat, caption, kb); }
   }
-  const menuKb = chat => ({ keyboard: isAdmin(chat) ? [...MENU, ['🛡 አድሚን']] : MENU, resize_keyboard: true, is_persistent: true });
+  const webAppRow = () => (/^https:/.test(baseUrl) ? [[{ text: '📱 መተግበሪያውን ክፈት', web_app: { url: baseUrl } }]] : []);
+  const menuKb = chat => ({ keyboard: [...(isAdmin(chat) ? [...MENU, ['🛡 አድሚን']] : MENU), ...webAppRow()], resize_keyboard: true, is_persistent: true });
   const home = (chat, text) => send(chat, text || '🏠 ዋና ማውጫ — ከታች ካሉት ቁልፎች ይምረጡ።', menuKb(chat));
 
   /* ---------- ወደ ድረ-ገጹ API (በተጠቃሚው ቶከን) ---------- */
@@ -209,7 +220,7 @@ module.exports = function bot(c) {
   async function showProduct(chat, uid, id) {
     const r = await GET('/api/market/product/' + id, uid); if (!r.ok) return send(chat, bad(r));
     const p = r.product, sh = r.shop;
-    const cap = `${B(p.title)}\n💰 ${B(ETB(p.price))} / ${H(p.unit)}\n📦 ክምችት፦ ${p.stock}\n${p.desc ? '\n' + H(clip(p.desc, 450)) + '\n' : ''}\n🏪 ${H(sh.name)} · 📍 ${H(sh.city)}${sh.rating ? ` · ⭐ ${sh.rating} (${sh.reviews})` : ''}${(r.reviews || []).slice(0, 2).map(v => `\n💬 ${'★'.repeat(v.rating)} ${H(clip(v.text, 80))}`).join('')}`;
+    const cap = `${B(p.title)}\n💰 ${B(ETB(p.price))} / ${H(p.unit)}\n📦 ክምችት፦ ${p.stock}\n${p.desc ? '\n<blockquote>' + H(clip(p.desc, 450)) + '</blockquote>\n' : ''}\n🏪 ${H(sh.name)} · 📍 ${H(sh.city)}${sh.rating ? ` · ⭐ ${sh.rating} (${sh.reviews})` : ''}${(r.reviews || []).slice(0, 2).map(v => `\n💬 ${'★'.repeat(v.rating)} ${H(clip(v.text, 80))}`).join('')}`;
     const kb = ik([[1, 2, 3, 5].map(n => b('➕' + n, `ac:${p.id}:${n}`)), [b('🏪 ሱቁን ክፈት', 'sh:' + sh.id), b('🛒 ጋሪ', 'cart')], [u('🌐 በድረ-ገጽ', web('/p/' + p.id))]]);
     return photo(chat, p.imgs && p.imgs[0], cap, kb);
   }
@@ -621,10 +632,41 @@ module.exports = function bot(c) {
       case 'apt': { const r = a === 'pg' ? await AD('POST', `/api/pages/admin/${x}/status`, { status: y }) : await AD('POST', `/api/people/admin/${a}/${x}/status`, { status: y }); return send(chat, r.ok ? '✅ ተቀይሯል' : bad(r)); }
     }
   }
+  /* ================= ኢንላይን ፍለጋ — በማንኛውም ቻት @botname ቃል ብለው ዕቃ ይፈልጉ ================= */
+  const PAGE = 24;
+  async function inlineQuery(iq) {
+    const q = String(iq.query || '').trim().slice(0, 60);
+    const page = Math.max(1, Number(iq.offset) || 1);
+    const r = await GET('/api/market/products' + qs({ q, page }));
+    const ok = r && r.ok && Array.isArray(r.items);
+    const results = !ok ? [] : r.items.map(p => {
+      const img = p.imgs && p.imgs[0] && /^https:/.test(baseUrl) ? web('/api/market/img/' + p.imgs[0]) : undefined;
+      const shop = p.shop && p.shop.name ? `\n🏪 ${H(p.shop.name)}${p.shop.city ? ' · 📍 ' + H(p.shop.city) : ''}` : '';
+      return {
+        type: 'article', id: String(p.id).slice(0, 64), title: clip(p.title, 60),
+        description: clip(`${ETB(p.price)} / ${p.unit || 'ኮፒ'}${p.stock != null ? ' · ክምችት ' + p.stock : ''}`, 100),
+        ...(img ? { thumbnail_url: img } : {}),
+        input_message_content: { message_text: `🛍 ${B(p.title)}\n💰 ${B(ETB(p.price))} / ${H(p.unit)}${shop}`, parse_mode: 'HTML', disable_web_page_preview: true },
+        reply_markup: ik([[u('📦 ዝርዝሩን ይመልከቱ', web('/p/' + p.id))]]),
+      };
+    });
+    const next = ok && r.items.length && page * PAGE < (r.total || 0) ? String(page + 1) : '';
+    return tg('answerInlineQuery', { inline_query_id: iq.id, results, next_offset: next, cache_time: 60, is_personal: false })
+      .catch(e => console.warn('bot inline:', e.message));
+  }
+
   async function handle(upd) {
     try {
-      if (upd.callback_query) { const cq = upd.callback_query; tg('answerCallbackQuery', { callback_query_id: cq.id }).catch(() => { }); if (!cq.message) return; return await route(cq.message.chat.id, String(cq.data || '')); }
+      if (upd.inline_query) return await inlineQuery(upd.inline_query);
+      if (upd.callback_query) {
+        const cq = upd.callback_query; tg('answerCallbackQuery', { callback_query_id: cq.id }).catch(() => { });
+        if (!cq.message) return; const chat = cq.message.chat.id;
+        if (cq.message.text) pend[chat] = cq.message.message_id;             // ጽሑፍ ከሆነ በቦታው ይስተካከላል
+        tg('sendChatAction', { chat_id: chat, action: 'typing' }).catch(() => { });
+        try { return await route(chat, String(cq.data || '')); } finally { delete pend[chat]; }
+      }
       const m = upd.message; if (!m || !m.chat || m.chat.type !== 'private') return; const chat = m.chat.id;
+      tg('sendChatAction', { chat_id: chat, action: 'typing' }).catch(() => { });
       if (m.contact) return await authContact(chat, m);
       if (m.photo) return ses(chat).flow ? await flowPhoto(chat, m) : send(chat, '📷 ፎቶ ለመጠቀም መጀመሪያ ተገቢውን ቅጽ (ለምሳሌ ዕቃ መጨመር) ይክፈቱ።');
       if (typeof m.text === 'string') return await onText(chat, m.text, m);
