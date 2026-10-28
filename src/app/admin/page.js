@@ -1,4 +1,5 @@
 'use client';
+import AdminOps from '@/components/AdminOps';
 import { useCallback, useEffect, useState } from 'react';
 import { api, ETB, get, post, setTok } from '@/lib/api';
 import { errText } from '@/lib/consts';
@@ -7,6 +8,12 @@ import { ExpandCard } from '@/components/Expand';
 import AccountViewer from '@/components/AccountViewer';
 import Trust from '@/components/AdminTrust';
 import RequireAuth from '@/components/RequireAuth';
+import Ico from '@/components/admin/Ico';
+import AdminHome from '@/components/admin/AdminHome';
+import AdminSearch from '@/components/admin/AdminSearch';
+import AdminProducts from '@/components/admin/AdminProducts';
+import AdminComms from '@/components/admin/AdminComms';
+import AdminGrowth from '@/components/admin/AdminGrowth';
 
 const AUTO = { match: ['✅ ራስ-ሰር ፍተሻ ተዛምዷል', 'msg-ok'], mismatch: ['❌ ራስ-ሰር ፍተሻ አይመሳሰልም', 'msg-err'], notfound: ['❓ በአረጋጋጩ አልተገኘም', 'msg-err'], unknown: ['⚠️ ማረጋገጥ አልተቻለም', 'muted'], error: ['⚠️ ፍተሻው አልተሳካም', 'muted'] };
 const Order = ({ o, children, onCheck }) => (
@@ -73,8 +80,8 @@ function Market() {
     </div>
   );
 }
-function Accounts() {
-  const [L, setL] = useState(null), [q, setQ] = useState(''), [armed, setArmed] = useState(''), [detail, setDetail] = useState(null);
+function Accounts({ uid: uid0, q: q0 }) {
+  const [L, setL] = useState(null), [q, setQ] = useState(q0 || ''), [armed, setArmed] = useState(''), [detail, setDetail] = useState(uid0 || null);
   const load = useCallback(() => get('/api/admin/accounts').then(r => setL(r.accounts || [])), []);
   useEffect(() => { load(); }, [load]);
   async function act(a, u) { const key = a + u; if (a === 'view') return setDetail(u); if (armed !== key) { setArmed(key); setTimeout(() => setArmed(''), 4000); return; } setArmed('');
@@ -111,8 +118,33 @@ function Pages() {
   return (<div>{d.items.length === 0 && <div className="card muted text-center">ገጽ የለም</div>}{d.items.map(x => (<div key={x.id} className="card mb-2"><div className="flex items-center gap-2"><div className="min-w-0 flex-1"><b className="block truncate">{x.title} <span className="tag">{x.kind}</span></b><span className="muted block truncate">{x.owner.email} · {x.owner.phone}</span></div><StatusTag s={x.status} /><button className="btn-ghost !min-h-[40px] !px-3" onClick={() => view(x.id)} aria-label="ሙሉ መረጃ">👁</button><button className="btn-ghost !min-h-[40px] !px-3" onClick={() => st(x.id, x.status === 'suspended' ? 'active' : 'suspended')}>{x.status === 'suspended' ? '✅' : '⛔'}</button></div>
     {open[x.id] && open[x.id].ok && <div className="mt-3 space-y-2">{open[x.id].page.sections.map(s => <div key={s.id} className="rounded-2xl bg-brand-light p-3"><b>{s.icon} {s.title}</b>{s.fields.filter(f => !(Array.isArray(f.value) ? !f.value.length : f.value === '')).map(f => <p key={f.id} className="text-sm"><span className="muted">{f.priv ? '🔒 ' : ''}{f.label}፦</span> {f.type === 'image' ? f.value.map(i => <a key={i} className="mr-2 font-bold text-brand underline" target="_blank" rel="noopener" href={`/api/market/img/${i}`}>ፎቶ</a>) : show(f.value)}</p>)}</div>)}</div>}</div>))}</div>);
 }
+const NAV = [['home', 'ዋና ማዕከል', 'home'], ['market', 'ገበያ እና ክፍያ', 'store'], ['products', 'ዕቃዎች', 'box'], ['accounts', 'አካውንቶች', 'users'], ['people', 'ሰዎች እና ሥራ', 'briefcase'], ['pages', 'ገጾች', 'globe'], ['trust', 'እምነት', 'shield'], ['comms', 'ማስታወቂያ', 'megaphone'], ['growth', 'ኩፖን እና ሪፈራል', 'tag'], ['ops', 'ትንታኔ እና ምትኬ', 'chart']];
 function Admin() {
-  const [t, setT] = useState('market'), tabs = [['market', '🛍️ ገበያ'], ['accounts', '👥 አካውንቶች'], ['people', '💼 ሰዎች እና ሥራ'], ['pages', '🌐 ገጾች'], ['trust', '🛡 እምነት']];
-  return (<div className="mx-auto max-w-3xl"><PageTitle>🛡️ አድሚን</PageTitle><AdminSession /><div className="mb-4 flex gap-2 overflow-x-auto">{tabs.map(([k, l]) => <button key={k} className={t === k ? 'chip-on' : 'chip'} onClick={() => setT(k)}>{l}</button>)}</div>{t === 'market' && <Market />}{t === 'accounts' && <Accounts />}{t === 'people' && <People />}{t === 'pages' && <Pages />}{t === 'trust' && <Trust />}</div>);
+  const [t, setT] = useState('home'), [hub, setHub] = useState(null), [live, setLive] = useState(true), [f, setF] = useState({}), [spin, setSpin] = useState(false);
+  const go = useCallback((k, x) => { setT(k); setF(x || {}); try { history.replaceState(null, '', '#' + k); } catch (e) { } window.scrollTo({ top: 0 }); }, []);
+  useEffect(() => { const h = location.hash.slice(1); if (NAV.some(n => n[0] === h)) setT(h); }, []);
+  const load = useCallback(async () => { setSpin(true); setHub(await get('/api/admin/hub')); setTimeout(() => setSpin(false), 400); }, []);
+  useEffect(() => { load(); if (!live) return; const i = setInterval(() => { if (!document.hidden) load(); }, 30000); return () => clearInterval(i); }, [load, live]);
+  const qz = hub && hub.ok ? hub.queue : {}, B = { market: (qz.shops | 0) + (qz.payments | 0) + (qz.settle | 0) + (qz.refunds | 0) + (qz.disputes | 0), trust: (qz.badges | 0) + (qz.reports | 0), ops: hub && hub.ok ? hub.health.errors : 0 };
+  const pick = (tab, x) => go(tab, tab === 'accounts' ? { uid: x.id } : { q: x.title });
+  const Item = ({ k, l, i, cls }) => (<button key={k} onClick={() => go(k)} aria-current={t === k ? 'page' : undefined} className={cls + ' ' + (t === k ? 'bg-brand text-white shadow-soft' : 'hover:bg-brand-light dark:hover:bg-brand/20')}><Ico n={i} s={19} /><span className="flex-1 whitespace-nowrap text-left">{l}</span>{B[k] > 0 && <b className={'rounded-full px-1.5 text-[11px] ' + (t === k ? 'bg-white text-brand' : 'bg-red-600 text-white')}>{B[k]}</b>}</button>);
+  return (
+    <div className="mx-auto max-w-6xl">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <h1 className="flex items-center gap-2 text-xl"><Ico n="shield" className="text-brand" s={24} />አድሚን</h1>
+        <AdminSearch onPick={pick} />
+        <button className={'btn-soft ' + (live ? '!text-emerald-700' : '')} onClick={() => setLive(!live)} title="በየ30 ሰከንድ ራስ-ሰር አድስ"><span className={'h-2 w-2 rounded-full ' + (live ? 'animate-pulse bg-emerald-500' : 'bg-gray-400')} />{live ? 'ቀጥታ' : 'ቆሟል'}</button>
+        <button className="btn-soft" onClick={load} aria-label="አድስ"><Ico n="refresh" s={16} className={spin ? 'animate-spin' : ''} /></button>
+      </div>
+      <nav className="-mx-3 mb-4 flex gap-2 overflow-x-auto px-3 pb-1 md:hidden" aria-label="አድሚን ምናሌ">{NAV.map(([k, l, i]) => <Item key={k} k={k} l={l} i={i} cls="chip flex items-center gap-2 !px-3 !py-2 text-sm font-bold transition" />)}</nav>
+      <div className="md:grid md:grid-cols-[230px_minmax(0,1fr)] md:gap-5">
+        <aside className="hidden md:block"><nav className="card sticky top-20 space-y-1 !p-2" aria-label="አድሚን ምናሌ">{NAV.map(([k, l, i]) => <Item key={k} k={k} l={l} i={i} cls="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-bold transition" />)}</nav></aside>
+        <section className="min-w-0" key={t + JSON.stringify(f)}>
+          {t === 'home' && <><AdminHome hub={hub} go={go} /><div className="mt-4"><AdminSession /></div></>}
+          {t === 'market' && <Market />}{t === 'products' && <AdminProducts q={f.q} />}{t === 'accounts' && <Accounts uid={f.uid} q={f.q} />}{t === 'people' && <People />}{t === 'pages' && <Pages />}{t === 'trust' && <Trust />}{t === 'comms' && <AdminComms />}{t === 'growth' && <AdminGrowth />}{t === 'ops' && <AdminOps />}
+        </section>
+      </div>
+    </div>
+  );
 }
 export default function Page() { return <RequireAuth admin><Admin /></RequireAuth>; }

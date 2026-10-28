@@ -1,6 +1,8 @@
 import './globals.css';
 import { AppProvider } from '@/lib/app';
 import Header from '@/components/Header';
+import SiteBanner from '@/components/SiteBanner';
+import RefCapture from '@/components/RefCapture';
 import BottomNav from '@/components/BottomNav';
 import Footer from '@/components/Footer';
 import PwaRegister from '@/components/PwaRegister';
@@ -39,11 +41,13 @@ export default function RootLayout({ children }) {
       <body>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(LD) }} />
         <LangProvider><AppProvider>
+          <SiteBanner />
           <Header />
           <main className="mx-auto max-w-6xl px-3 pb-6 pt-4">{children}</main>
           <Footer />
           <BottomNav />
           <PwaRegister />
+          <RefCapture />
         </AppProvider></LangProvider>
       </body>
     </html>

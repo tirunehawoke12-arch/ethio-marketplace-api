@@ -20,7 +20,7 @@ function Order({ id }) {
     <div className="mx-auto max-w-2xl space-y-3">
       <div className="card"><div className="flex items-center justify-between"><b>🏪 {o.shopName}</b><span className="tag">#{o.id.slice(0, 6)}</span></div>
         <OrderStepper status={o.status} /><p className="rounded-2xl border-l-4 border-gold bg-gold/10 p-3 text-sm">{NEXT[o.status]}</p>
-        <div className="mt-3">{o.items.map(i => <div key={i.pid} className="flex justify-between py-1 text-sm"><span>{i.title} × {i.qty}</span><b>{ETB(i.price * i.qty)}</b></div>)}{o.fee > 0 && <div className="flex justify-between text-sm"><span>ማድረሻ</span><b>{ETB(o.fee)}</b></div>}<div className="mt-1 flex justify-between border-t border-line pt-2 text-lg"><b>ጠቅላላ</b><b className="text-brand">{ETB(o.total)}</b></div></div>
+        <div className="mt-3">{o.items.map(i => <div key={i.pid} className="flex justify-between py-1 text-sm"><span>{i.title} × {i.qty}</span><b>{ETB(i.price * i.qty)}</b></div>)}{o.fee > 0 && <div className="flex justify-between text-sm"><span>ማድረሻ</span><b>{ETB(o.fee)}</b></div>}{o.discount > 0 && <div className="flex justify-between text-sm text-emerald-700"><span>🎟 ኩፖን {o.coupon}</span><b>−{ETB(o.discount)}</b></div>}<div className="mt-1 flex justify-between border-t border-line pt-2 text-lg"><b>ጠቅላላ</b><b className="text-brand">{ETB(o.total)}</b></div></div>
         <p className="mt-3 rounded-2xl bg-brand-light p-3 text-sm">{o.delivery.type === 'delivery' ? '🚚 ' + o.delivery.address : '🏬 በአካል መውሰድ' + (o.shopAddress ? ' — ' + o.shopAddress : '')}{o.shopPhone && <><br />🏪 {o.shopPhone}</>}</p>
       </div>
 

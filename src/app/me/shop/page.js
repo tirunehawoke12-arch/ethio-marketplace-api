@@ -9,6 +9,7 @@ import { ExpandCard, ExpandGroup, Facts, Gallery, MoreText } from '@/components/
 import RequireAuth from '@/components/RequireAuth';
 import ShopWizard, { shopToForm } from '@/components/ShopWizard';
 
+import CouponsManager from '@/components/CouponsManager';
 function Dash({ d, reload, onEdit }) {
   const s = d.shop, [orders, setOrders] = useState(null), [m, setM] = useState(''), [ship, setShip] = useState({});
   const loadO = useCallback(() => get('/api/market/seller/orders').then(r => setOrders(r.orders || [])), []);
@@ -29,6 +30,7 @@ function Dash({ d, reload, onEdit }) {
           <Gallery ids={p.imgs} /><MoreText text={p.desc} limit={200} />
           <Facts items={[['🏷', 'ምድብ', p.category], ['📦', 'ክምችት', p.stock], ['💰', 'ዋጋ', `${ETB(p.price)}${p.unit ? ' / ' + p.unit : ''}`]]} />
         </ExpandCard>))}</ExpandGroup> : <Empty>እስካሁን ዕቃ አልዘረዘሩም — «➕ አዲስ ዕቃ» ይጫኑ።</Empty>}
+      <CouponsManager />
       <h2 className="pt-1 text-lg">📥 የገቡ ትዕዛዞች</h2><Msg m={m} />
       {!orders ? <Spinner /> : orders.length ? <ExpandGroup className="grid items-start gap-3">{orders.map(o => (
         <ExpandCard key={o.id} defaultOpen={['paid', 'preparing'].includes(o.status)} href={`/orders/${o.id}`} cta="ሙሉ ትዕዛዝ"

@@ -7,7 +7,7 @@ const crypto = require('crypto');
 const imgstore = require('./imgstore');
 const payverify = require('./payverify');
 module.exports = function market(ctx) {
-  const { app, col, bump, pool, pgUpsert, persist, readTok, limit } = ctx;
+  const { app, col, bump, pool, pgUpsert, persist, readTok, limit } = ctx; const hooks = ctx.hooks = ctx.hooks || {};   // hooks.coupon — በ coupons.js ይመዘገባል
   const pv = ctx.payverify || payverify.create(), refKey = payverify.refKey;
   const imgs = ctx.imgs || imgstore.create();      // S3/R2 ከተቀናበረ ምስሎች ከ Postgres ውጭ ይቀመጣሉ
   const rc = ctx.receipts, tell = (uid, t, btn) => { try { ctx.notifyUser && ctx.notifyUser(uid, t, btn); } catch (e) { } }, rbtn = (o, k) => (rc ? { url: rc.url(o.id, k), label: '🧾 ደረሰኝ አውርድ' } : undefined), tellAdmin = (t, btn) => { try { ctx.notifyAdmin && ctx.notifyAdmin(t, btn); } catch (e) { } }, KB = (...r) => ({ rows: [r.map(([t, d]) => ({ text: t, callback_data: d }))] });
@@ -72,7 +72,7 @@ module.exports = function market(ctx) {
     return res;
   }
   const orderView = (o, role) => {                             // ማን ምን ያያል
-    const base = { id: o.id, shopId: o.shopId, shopName: o.shopName, items: o.items, subtotal: o.subtotal, fee: o.fee, total: o.total, status: o.status, history: o.history, delivery: { type: o.delivery.type }, payment: o.payment ? { method: o.payment.method, ref: o.payment.ref, ts: o.payment.ts, note: o.payment.note, rejected: o.payment.rejected } : null, tracking: o.tracking || '', dispute: o.dispute || null, reviewed: !!o.reviewed, ts: o.ts };
+    const base = { id: o.id, shopId: o.shopId, shopName: o.shopName, items: o.items, subtotal: o.subtotal, fee: o.fee, discount: o.discount || 0, coupon: o.coupon ? o.coupon.code : '', total: o.total, status: o.status, history: o.history, delivery: { type: o.delivery.type }, payment: o.payment ? { method: o.payment.method, ref: o.payment.ref, ts: o.payment.ts, note: o.payment.note, rejected: o.payment.rejected } : null, tracking: o.tracking || '', dispute: o.dispute || null, reviewed: !!o.reviewed, ts: o.ts };
     const paidUp = ['paid', 'preparing', 'shipped', 'delivered', 'settled', 'disputed', 'refund_pending'].includes(o.status);
     if (role === 'buyer') { const s = col(P.shops)[o.shopId]; base.delivery = o.delivery; base.shopPhone = s && s.phone; base.shopAddress = s && s.address; }
     if (role === 'seller') { base.commission = o.commission; base.sellerNet = o.sellerNet; if (paidUp) { base.delivery = o.delivery; base.buyer = { name: userInfo(o.buyerUid).name }; } }
@@ -183,9 +183,12 @@ module.exports = function market(ctx) {
       if (type === 'pickup' && !s.delivery.pickup) return bad(res, 400, 'no_pickup:' + s.name);
       (groups[s.id] = groups[s.id] || []).push(p); }
     const pct = cfg().commissionPct, ch = [], ids = [];
+    const sub0 = sid => Math.round(groups[sid].reduce((a, p) => a + p.price * want[p.id], 0) * 100) / 100; let cq = null; const code = S(req.body.coupon, 24);
+    if (code) { cq = hooks.coupon ? hooks.coupon.quote(code, u.uid, Object.keys(groups).map(sid => ({ shopId: sid, subtotal: sub0(sid) }))) : { ok: false, error: 'coupon_invalid' }; if (!cq.ok) return bad(res, 400, cq.error); }
     for (const sid of Object.keys(groups)) { const s = col(P.shops)[sid]; const its = groups[sid].map(p => ({ pid: p.id, title: p.title, price: p.price, qty: want[p.id], img: p.imgs[0] || '' }));
-      const subtotal = Math.round(its.reduce((a, i) => a + i.price * i.qty, 0) * 100) / 100, fee = type === 'delivery' ? s.delivery.fee : 0, commission = Math.round(subtotal * pct) / 100;
-      const o = { id: nid(), buyerUid: u.uid, shopId: sid, shopName: s.name, items: its, subtotal, fee, total: Math.round((subtotal + fee) * 100) / 100, commission, sellerNet: Math.round((subtotal - commission + fee) * 100) / 100, delivery: { type, address, phone, note: S(d.note, 200) }, history: [], ts: Date.now() };
+      const subtotal = Math.round(its.reduce((a, i) => a + i.price * i.qty, 0) * 100) / 100, fee = type === 'delivery' ? s.delivery.fee : 0, disc = cq ? Math.min(subtotal, cq.per[sid] || 0) : 0, site = !!(cq && cq.coupon.scope === 'site');
+      const comm0 = Math.round(subtotal * pct) / 100, commission = site ? Math.round((comm0 - disc) * 100) / 100 : Math.round((subtotal - disc) * pct) / 100, sellerNetV = site ? subtotal - comm0 + fee : subtotal - disc - commission + fee;   // የጣቢያ ኩፖን በመድረኩ ይሸፈናል፤ የሱቅ ኩፖን በሻጩ
+      const o = { id: nid(), buyerUid: u.uid, shopId: sid, shopName: s.name, items: its, subtotal, fee, total: Math.round((subtotal + fee - disc) * 100) / 100, commission, sellerNet: Math.round(sellerNetV * 100) / 100, ...(disc ? { discount: disc, coupon: { id: cq.coupon.id, code: cq.coupon.code, scope: cq.coupon.scope } } : {}), delivery: { type, address, phone, note: S(d.note, 200) }, history: [], ts: Date.now() };
       push(o, 'placed', 'buyer', ''); col(P.orders)[o.id] = o; ids.push(o.id); ch.push([P.orders, o.id]); groups[sid].forEach(p => { p.stock -= want[p.id]; ch.push([P.products, p.id]); }); }
     try { await saveMany(ch); ids.forEach(id => { const o = col(P.orders)[id], s = col(P.shops)[o.shopId]; tell(s.uid, `🛒 አዲስ ትዕዛዝ ${short(o)} — ${o.items.map(i => i.title + '×' + i.qty).join('፣ ')} (${money(o.total)})።\nገዥው ክፍያ እስኪፈጽም እና አድሚን እስኪያረጋግጥ ይጠብቁ።`); tell(u.uid, `✅ ትዕዛዝዎ ${short(o)} ተመዝግቧል (${money(o.total)})።\n💳 ክፍያ ይፈጽሙ እና የማጣቀሻ ቁጥር በድረ-ገጹ ያስገቡ።`); }); res.json({ ok: true, orders: ids }); } catch (e) { bad(res, 503, 'storage'); }
   });
@@ -292,5 +295,5 @@ module.exports = function market(ctx) {
     if (!adminOnly(req, res)) return; const o = col(P.orders)[req.params.id]; if (!A[req.params.act] || !o) return bad(res, 404, 'not_found');
     const r = await applyAdmin(o, req.params.act, req.body || {}); if (!r.ok) return bad(res, r.code, r.error); res.json({ ok: true, status: r.status });
   });
-  return { who, saveMany, bad, S, N, phoneET, adminOnly, nid, userInfo };
+  return { who, saveMany, bad, S, N, phoneET, adminOnly, nid, userInfo, hooks };
 };

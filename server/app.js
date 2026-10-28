@@ -263,7 +263,7 @@ const bump = p => { store.rev[p] = (store.rev[p] || REV0) + 1; persist(); };
 const validPath = p => typeof p === 'string' && p.length < 200 && /^[\w@+.:~\/-]+$/.test(p) && !p.includes('..');
 function can(tok, p, write, id) {
   if (tok && tok.k === 'admin') return true;
-  { const t0 = String(p).split('/')[0]; if (t0 === 'mk' || t0 === 'pp' || t0 === 'pg' || t0 === 'tr' || t0 === 'ch' || t0 === 'al' || t0[0] === '_') return false; }   // ገበያ እና ምስል መረጃ በልዩ API ብቻ
+  { const t0 = String(p).split('/')[0]; if (t0 === 'mk' || t0 === 'pp' || t0 === 'pg' || t0 === 'tr' || t0 === 'ch' || t0 === 'al' || t0 === 'rf' || t0[0] === '_') return false; }   // ገበያ እና ምስል መረጃ በልዩ API ብቻ
   const m = /^data\/users\/([\w-]+)$/.exec(p);
   if (m) return !!tok && tok.u === m[1];                       // የግል ውሂብ፦ ባለቤት ብቻ
   if (!tok) return false;
@@ -425,11 +425,16 @@ function notifyAdmin(text, btn) { sendTg(adminChatId(), `🛡️ አድሚን\n\
 const receipts = require('./receipt')({ app, col, secret: TOKEN_SECRET, baseUrl: PUBLIC_BASE_URL });
 const mkApi = require('./market')({ app, col, bump, pool, pgUpsert, persist, readTok, limit, notifyUser, notifyAdmin, receipts });
 require('./people')({ app, col, limit, notifyUser, notifyAdmin, ...mkApi });
-require('./search')({ app, col, S: (v, n) => String(v == null ? '' : v).trim().slice(0, n) });
+let opsApi = null;
+require('./search')({ app, col, S: (v, n) => String(v == null ? '' : v).trim().slice(0, n), onSearch: (q, n) => opsApi && opsApi.recordSearch(q, n) });
 require('./pages')({ app, col, bump, pool, persist, limit, notifyUser, notifyAdmin, ...mkApi });
 require('./chat')({ app, col, limit, notifyUser, notifyAdmin, ...mkApi });
 require('./trust')({ app, col, limit, notifyUser, notifyAdmin, ...mkApi });
 require('./geo')({ app, col, limit, ...mkApi });
+const couponsApi = require('./coupons')({ app, col, limit, ...mkApi });
+require('./referral')({ app, col, limit, notifyUser, coupons: couponsApi, baseUrl: PUBLIC_BASE_URL, getStore: () => store, ...mkApi });
+opsApi = require('./ops')({ app, col, getStore: () => store, ...mkApi });
+require('./admin-hub')({ app, col, getStore: () => store, notifyUser, audit, ops: opsApi, health: { db: !!pool, telegram: !!TOKEN, email: !!(process.env.RESEND_API_KEY || process.env.BREVO_API_KEY || process.env.SMTP_HOST), s3: !!process.env.S3_ENDPOINT }, ...mkApi });
 const alertsApi = require('./alerts')({ app, col, limit, bump, pool, persist, notifyUser, baseUrl: PUBLIC_BASE_URL, ...mkApi });
 if (process.env.NODE_ENV !== 'test') require('./scheduler').start({ col, saveMany: mkApi.saveMany, notifyUser, notifyAdmin, alerts: alertsApi, baseUrl: PUBLIC_BASE_URL,
   prefsOf: uid => (store.docs['data/users/' + uid] || {}).prefs || {}, users: () => usersOf().map(p => ({ uid: p.split('/')[2], ts: ((store.docs[p] || {}).acct || {}).ts || 0 })).filter(x => store.docs['data/users/' + x.uid].acct) });
@@ -437,6 +442,7 @@ if (process.env.NODE_ENV !== 'test') require('./scheduler').start({ col, saveMan
 const authApi = require('./auth')({ app, col, bump, pool, pgUpsert, persist, readTok, limit, tokFor, findUid, isSusp, accountKey, normPhoneET, tg, randDigits, id, safeOtpMatch, clean, saveDB, getDb: () => db, getStore: () => store, PUBLIC_BASE_URL, BOT_USERNAME, OTP_TTL, LINK_TTL, notifyAdmin });
 
 botApi = require('./bot')({ tg, tokFor, port: PORT, baseUrl: PUBLIC_BASE_URL, adminChat: adminChatId, bindAdmin, adminPhone: normPhoneET(ADMIN_PHONE), token: TOKEN, botUsername: BOT_USERNAME, getDb: () => db, getStore: () => store, accKey, findUid, normPhoneET, authApi, pool, pgUpsert, isSusp });
+app.use((err, req, res, next) => opsApi.errorMw(err, req, res, next));      // ያልተያዙ የመንገድ ስህተቶች → አድሚን መዝገብ
 
 async function initStorage() {
   if (!pool) return;

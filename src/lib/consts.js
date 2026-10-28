@@ -16,8 +16,10 @@ const ERR = {
 export function errText(e) {
   e = String(e || ''); if (e.startsWith('out_of_stock')) return 'በቂ ክምችት የለም፦ ' + e.split(':')[1]; if (e.startsWith('wrong_step')) return 'ይህ እርምጃ አሁን አይፈቀድም (ሁኔታው ተቀይሯል)፤ ገጹን ያድሱ';
   if (e.startsWith('no_delivery')) return 'ይህ ሱቅ ማድረስ አያደርግም፦ ' + e.split(':')[1]; if (e.startsWith('no_pickup')) return 'ይህ ሱቅ በአካል መውሰድ አይፈቅድም፦ ' + e.split(':')[1]; if (e.startsWith('required_missing')) return 'ያልተሞላ አስፈላጊ መስክ፦ ' + e.split(':').slice(1).join(':'); if (e.startsWith('unavailable')) return 'አልተገኘም፦ ' + e.split(':')[1];
-  return ERR[e] || 'ስህተት፦ ' + e;
+  if (e.startsWith('coupon_min')) return 'ይህ ኩፖን ከ' + e.split(':')[1] + ' ብር በላይ ለሆነ ግዢ ብቻ ነው';
+  return ERR[e] || EXTRA[e] || 'ስህተት፦ ' + e;
 }
+const EXTRA = { coupon_invalid: 'ኩፖኑ ትክክል አይደለም ወይም ተሰናክሏል', coupon_expired: 'የኩፖኑ ጊዜ አልፏል', coupon_used_up: 'ኩፖኑ ሙሉ በሙሉ ተጠቅሟል', coupon_user_limit: 'ይህን ኩፖን ቀድመው ተጠቅመውታል', coupon_not_applicable: 'ኩፖኑ ለዚህ ጋሪ አይሰራም', code_taken: 'ይህ ኮድ ቀድሞ ተይዟል', bad_code: 'ኮዱ ቢያንስ 4 ፊደል/ቁጥር መሆን አለበት (ወይም ትክክል አይደለም)', bad_value: 'የቅናሽ መጠን ትክክል አይደለም (ከ1–90% ወይም ብር)', bad_date: 'ቀኑ ትክክል አይደለም', no_shop: 'መጀመሪያ ሱቅ ይክፈቱ', own_code: 'የራስዎን ኮድ መጠቀም አይቻልም', already_claimed: 'ኮድ ቀድመው ተቀብለዋል', too_late: 'ጋባዥ ኮድ ከተመዘገቡ በ7 ቀን ውስጥ ብቻ ይቀበላል' };
 export const SITE = (process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || 'https://www.ethiodigitalmarket.pro.et').replace(/\/+$/, '');
 
 export const BOT = 'Ethio_Digital_marketing_Bot';
