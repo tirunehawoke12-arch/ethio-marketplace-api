@@ -29,7 +29,7 @@ test('ተማሪ ፍሰት፦ ስም+ID፣ ከ Telegram ውጭ ውድቅ፣ ID �
   assert.equal((await auth(signed({ id: 2 }), 'አበበ', 'S001')).json.error, 'id_in_use');                    // ሌላ ተማሪ የዚህን ID መጠቀም አይችልም
   assert.equal((await auth(signed({ id: 1 }), 'ትዕግስት', 'S002')).json.error, 'tg_other_id');                // አንድ አካውንት ሁለት ID አይጠቀምም
   assert.equal((await h.call('GET', '/api/learn/read', { headers: { 'x-learn': 'nope' } })).code, 401);
-  const rd = (await h.call('GET', '/api/learn/read', { headers: { 'x-learn': ok.token } })).json; assert.equal(rd.slides[0].blocks.length, 3); assert.match(rd.mark, /S001/);      // የውሸት ምስል እና ባዶ ጽሑፍ ተጣሩ
+  const rd = (await h.call('GET', '/api/learn/read', { headers: { 'x-learn': ok.token } })).json; assert.equal(rd.slides[0].blocks.length, 3); assert.equal(rd.mark, undefined);      // የውሸት ምስል እና ባዶ ጽሑፍ ተጣሩ
   assert.equal((await h.call('GET', '/api/learn/media/:id', { params: { id: m }, query: { s: ok.token } })).body.length > 0, true); assert.equal((await h.call('GET', '/api/learn/media/:id', { params: { id: m }, query: { s: 'x' } })).code, 401);
   await h.call('POST', '/api/learn/decks/:id/reset', { tok: T, params: { id }, body: { sid: 'S001' } }); assert.equal((await h.call('GET', '/api/learn/read', { headers: { 'x-learn': ok.token } })).code, 401);   // ሲፈታ ክፍለ ጊዜው ይሞታል
   assert.equal((await auth(signed({ id: 2 }), 'አበበ', 'S001')).json.ok, true);                                  // ከተፈታ በኋላ ሌላ አካውንት ይችላል

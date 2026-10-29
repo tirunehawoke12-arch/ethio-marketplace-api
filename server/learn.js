@@ -3,10 +3,10 @@
    መምህር፦ .pptx ይጭናል (በአሳሹ ወደ ጽሑፍ+ምስል ተቀይሮ) + የተማሪ ዝርዝር (ስም፣ ID) + የመክፈቻ መስኮት
    ተማሪ፦ በቦቱ «📖 ክፈት» (web_app) → Telegram initData በሰርቨር (HMAC) ይረጋገጣል → ስም + ID ከዝርዝሩ ጋር → «ፋይሉን ክፈት» → ተከታታይ ንባብ (scroll)
    ጥበቃ፦ initData ከሌለ ምንም አይከፈትም፤ ID ከመጀመሪያው Telegram አካውንት ጋር ይታሰራል (መምህር ብቻ ይፈታል)፤
-          ምስሎች ከክፍለ-ጊዜ ጋር ብቻ፤ ሙከራ ገደብ፤ ማን መቼ እንዳየ ይመዘገባል። (ስክሪን ፎቶን 100% መከልከል አይቻልም — watermark ይከታተላል) */
+          ምስሎች ከክፍለ-ጊዜ ጋር ብቻ፤ ሙከራ ገደብ፤ ማን መቼ እንዳየ ይመዘገባል። (ስክሪን ፎቶን 100% መከልከል አይቻልም) */
 const crypto = require('crypto'), AM = require('./amnorm'), imgstore = require('./imgstore');
 const D = 'ln/decks', M = 'ln/media', V = 'ln/views', SESSION = 3 * 3600e3, AUTH_AGE = 24 * 3600e3;
-const LIM = { decks: 10, slides: 200, blocks: 120, text: 1500, rows: 40, media: 60, mediaBytes: 9 * 1048576, roster: 600 };
+const LIM = { decks: 10, slides: 300, blocks: 120, text: 1500, rows: 40, media: 150, mediaBytes: 24 * 1048576, roster: 600 };
 
 function checkInitData(initData, botToken, now = Date.now()) {          // https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
   try {
@@ -97,7 +97,7 @@ module.exports = function learn(ctx) {
   app.get('/api/learn/read', async (req, res) => {
     res.set({ 'cache-control': 'no-store', 'x-robots-tag': 'noindex' }); const x = sessOf(req.headers['x-learn']); if (!x) return bad(res, 401, 'session_expired');
     const id = x.d.id + ':' + x.s.sid, v = col(V)[id] || (col(V)[id] = { id, deck: x.d.id, sid: x.s.sid, name: x.s.name, first: now(), n: 0, max: 0 }); v.n++; v.last = now(); saveMany([[V, id]]).catch(() => { });
-    res.json({ ok: true, title: x.d.title, slides: x.d.slides, mark: x.s.name.split(/\s+/)[0] + ' · ' + x.s.sid });
+    res.json({ ok: true, title: x.d.title, slides: x.d.slides });
   });
   app.post('/api/learn/progress', (req, res) => { const x = sessOf(req.headers['x-learn']); if (!x) return bad(res, 401, 'session_expired'); const v = col(V)[x.d.id + ':' + x.s.sid]; if (v) { v.max = Math.max(v.max | 0, Math.min(N(req.body.max) | 0, x.d.slides.length)); v.last = now(); saveMany([[V, v.id]]).catch(() => { }); } res.json({ ok: true }); });
   app.get('/api/learn/media/:id', async (req, res) => {
