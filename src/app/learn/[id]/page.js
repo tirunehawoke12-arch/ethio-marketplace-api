@@ -69,16 +69,19 @@ function Reader({ id, auth }) {
 }
 
 export default function Learn({ params }) {
-  const id = params.id, [phase, setPhase] = useState('boot'), [info, setInfo] = useState(null), [tg, setTg] = useState(null), [f, setF] = useState({ name: '', sid: '' }), [err, setErr] = useState(''), [busy, setBusy] = useState(false), [auth, setAuth] = useState(null);
+  const [id, setId] = useState((params && params.id) || ''), [phase, setPhase] = useState('boot'), [info, setInfo] = useState(null), [tg, setTg] = useState(null), [f, setF] = useState({ name: '', sid: '' }), [err, setErr] = useState(''), [busy, setBusy] = useState(false), [auth, setAuth] = useState(null);
   useEffect(() => {
-    let dead = false; lf('/public/' + id).then(r => !dead && setInfo(r));
-    const init = () => { const w = window.Telegram && window.Telegram.WebApp; if (dead) return; if (!w || !w.initData) { setPhase('outside'); return; } try { w.ready(); w.expand(); w.disableVerticalSwipes && w.disableVerticalSwipes(); if (!localStorage.getItem('etm_theme')) document.documentElement.classList.toggle('dark', w.colorScheme === 'dark'); } catch (e) { } setTg(w); setPhase('form'); };
+    let dead = false, cur = id;
+    const init = () => { const w = window.Telegram && window.Telegram.WebApp; if (dead) return; if (!w || !w.initData) { if (cur) lf('/public/' + cur).then(r => !dead && setInfo(r)); setPhase('outside'); return; }
+      const sp = String((w.initDataUnsafe && w.initDataUnsafe.start_param) || ''); if (/^d_[\w-]{4,40}$/.test(sp)) { cur = sp.slice(2); setId(cur); }          // ቀጥተኛ mini-app አገናኝ (t.me/ቦት/ስም?startapp=d_…)
+      if (!cur) { setPhase('nolink'); return; } lf('/public/' + cur).then(r => !dead && setInfo(r)); try { w.ready(); w.expand(); w.disableVerticalSwipes && w.disableVerticalSwipes(); if (!localStorage.getItem('etm_theme')) document.documentElement.classList.toggle('dark', w.colorScheme === 'dark'); } catch (e) { } setTg(w); setPhase('form'); };
     if (window.Telegram && window.Telegram.WebApp) init(); else { const s = document.createElement('script'); s.src = 'https://telegram.org/js/telegram-web-app.js'; s.onload = init; s.onerror = () => !dead && setPhase('outside'); document.head.appendChild(s); }
     return () => { dead = true; };
-  }, [id]);
+  }, []);
   const submit = useCallback(async e => { e.preventDefault(); setBusy(true); setErr(''); const r = await lf('/auth', { body: { deck: id, initData: tg.initData, name: f.name, sid: f.sid } }); setBusy(false); if (!r.ok) return setErr(msg(r.error)); setAuth(r); setPhase('ready'); }, [id, tg, f]);
   if (phase === 'boot') return <Shell><p className="muted py-20 text-center">⏳ በመጫን ላይ…</p></Shell>;
   if (phase === 'outside') return <Shell><div className="card text-center"><p className="text-4xl">🔒</p><h1 className="mt-2 text-xl">{info && info.title ? info.title : 'ፋይል'}</h1><p className="mt-2">ይህ ፋይል በ Telegram ቦት ውስጥ ብቻ ይከፈታል።</p>{info && info.bot && <a className="btn-primary mt-4 w-full" href={`https://t.me/${info.bot}?start=d_${id}`}>✈️ በ Telegram ክፈት</a>}</div></Shell>;
+  if (phase === 'nolink') return <Shell><div className="card text-center"><p className="text-4xl">🔗</p><p className="mt-2">የፋይሉን አገናኝ ከመምህርዎ ያግኙ እና እንደገና ይክፈቱ።</p></div></Shell>;
   if (phase === 'reading') return <Reader id={id} auth={auth} />;
   if (phase === 'ready') return <Shell><div className="card text-center"><p className="text-4xl">✅</p><h1 className="mt-2 text-xl">ሰላም {auth.name}!</h1><p className="mt-1 font-bold">{auth.title}</p><p className="muted mt-1">{auth.slides} ገጾች · ወደ ታች በማንሸራተት ያንብቡ</p>
     <button className="btn-primary mt-5 w-full !min-h-[56px] text-lg" onClick={() => setPhase('reading')}>📖 ፋይሉን ክፈት</button></div></Shell>;

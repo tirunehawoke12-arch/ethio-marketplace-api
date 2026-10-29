@@ -20,7 +20,7 @@ const sidNorm = x => String(x || '').toUpperCase().replace(/[\s\-_/.]/g, '');
 const firstOf = n => AM.norm(String(n || '').trim().split(/\s+/)[0] || '');
 
 module.exports = function learn(ctx) {
-  const { app, col, limit, who, saveMany, bad, S, N, nid, token, botUsername = '', baseUrl = '', pool, persist, bump, now = () => Date.now() } = ctx;
+  const { app, col, limit, who, saveMany, bad, S, N, nid, token, botUsername = '', miniShort = '', baseUrl = '', pool, persist, bump, now = () => Date.now() } = ctx;
   const imgs = ctx.imgs || imgstore.create(), sess = new Map();
   const ti = setInterval(() => { for (const [k, v] of sess) if (v.exp < now()) sess.delete(k); }, 10 * 60e3); ti.unref && ti.unref();
   const mine = (req, res) => { const u = who(req, res); if (!u) return null; if (u.admin) { bad(res, 403, 'admin_cannot'); return null; } return u; };
@@ -31,7 +31,7 @@ module.exports = function learn(ctx) {
 
   /* ---------- መምህር ---------- */
   const brief = d => ({ id: d.id, title: d.title, status: d.status, slides: (d.slides || []).length, students: (d.roster || []).length, bound: (d.roster || []).filter(r => r.tg).length, opens: ymd(d.opens), closes: ymd(d.closes), isOpen: open(d), ts: d.ts });
-  app.get('/api/learn/decks', (req, res) => { const u = mine(req, res); if (!u) return; res.json({ ok: true, bot: botUsername, items: Object.values(col(D)).filter(d => d.uid === u.uid).sort((a, b) => b.ts - a.ts).map(brief) }); });
+  app.get('/api/learn/decks', (req, res) => { const u = mine(req, res); if (!u) return; res.json({ ok: true, bot: botUsername, short: miniShort, items: Object.values(col(D)).filter(d => d.uid === u.uid).sort((a, b) => b.ts - a.ts).map(brief) }); });
   app.post('/api/learn/decks', async (req, res) => {
     const u = mine(req, res); if (!u) return; if (!limit('ld' + u.uid, 30, 3600e3)) return bad(res, 429, 'slow_down'); const title = S(req.body.title, 120); if (title.length < 2) return bad(res, 400, 'missing_fields');
     if (Object.values(col(D)).filter(d => d.uid === u.uid).length >= LIM.decks) return bad(res, 400, 'too_many');
@@ -39,7 +39,7 @@ module.exports = function learn(ctx) {
   });
   app.get('/api/learn/decks/:id', (req, res) => {
     const u = mine(req, res); if (!u) return; const d = own(u, req.params.id); if (!d) return bad(res, 404, 'not_found'); const views = Object.values(col(V)).filter(v => v.deck === d.id);
-    res.json({ ok: true, bot: botUsername, deck: { ...brief(d), desc: d.desc || '' }, roster: d.roster.map(r => { const v = views.find(x => x.sid === r.id) || {}; return { name: r.name, id: r.id, bound: !!r.tg, opened: v.n | 0, last: v.last || 0, max: v.max | 0 }; }), slidesN: d.slides.length });
+    res.json({ ok: true, bot: botUsername, short: miniShort, deck: { ...brief(d), desc: d.desc || '' }, roster: d.roster.map(r => { const v = views.find(x => x.sid === r.id) || {}; return { name: r.name, id: r.id, bound: !!r.tg, opened: v.n | 0, last: v.last || 0, max: v.max | 0 }; }), slidesN: d.slides.length });
   });
   app.post('/api/learn/decks/:id/media', async (req, res) => {
     const u = mine(req, res); if (!u) return; const d = own(u, req.params.id); if (!d) return bad(res, 404, 'not_found'); if (!limit('lm' + u.uid, 200, 3600e3)) return bad(res, 429, 'slow_down');
