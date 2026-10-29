@@ -633,6 +633,13 @@ module.exports = function bot(c) {
   }
   const langMenu = chat => send(chat, '🌐 ቋንቋ / Language / Afaan / ቋንቋ', ik([BOT_LANGS.map(([k, n]) => b((lang(chat) === k ? '✓ ' : '') + n, 'lg:' + k))]));
 
+  /* ---------- ተማሪ ፋይል (mini app) — መለያ ሳይከፍቱ በ `t.me/ቦት?start=d_<id>` ---------- */
+  async function learnStart(chat, id) {
+    const r = await GET('/api/learn/public/' + id); if (!r.ok) return send(chat, '❌ ይህ ፋይል አልተገኘም ወይም ተሰርዟል።');
+    if (!r.open) return send(chat, `📖 ${B(r.title)}\n\n⏳ ፋይሉ አሁን ክፍት አይደለም። መምህርዎን ይጠይቁ።`);
+    const url = web('/learn/' + id), cap = `📖 ${B(r.title)}\n\n👇 ከታች ይጫኑ፤ ስምዎን እና የተማሪ ID ያስገቡ፤ ከዚያ «ፋይሉን ክፈት» ይጫኑ።\n🔒 ፋይሉ በዚህ Telegram ውስጥ ብቻ ይከፈታል፤ መልእክቱ ሊተላለፍ አይችልም።`;
+    return tg('sendMessage', { chat_id: chat, text: cap, parse_mode: 'HTML', protect_content: true, reply_markup: /^https:/.test(baseUrl) ? { inline_keyboard: [[{ text: '📖 ክፈት', web_app: { url } }]] } : undefined });
+  }
   async function action(chat, uid, a) {
     switch (a) {
       case 'market': return marketHome(chat, uid); case 'shops': return listShops(chat, uid); case 'jobs': return jobsMenu(chat); case 'pages': return listPages(chat, uid, 1);
@@ -646,6 +653,7 @@ module.exports = function bot(c) {
     const t = text.trim(), s = ses(chat), uid = uidOf(chat);
     if (/^\/cancel\b/.test(t)) { s.flow = null; s.auth = null; save(); return home(chat, '✖️ ተሰርዟል።'); }
     if (/^\/myid\b/.test(t)) return send(chat, `🆔 Chat ID፦ <code>${chat}</code>`);
+    const ld = /^\/start\s+d_([\w-]{4,40})$/.exec(t); if (ld) return learnStart(chat, ld[1]);
     const dl = /^\/start\s+([sgpwej])_([\w-]{4,40})$/.exec(t); if (dl) s.deep = { t: dl[1], id: dl[2] };       // deep link — ከመግባት በኋላም ይከፈታል
     if (t === '✖️ ተው') { s.await = null; s.flow = null; save(); return home(chat); }
     if (uid && /^\/lang\b/.test(t)) return langMenu(chat);

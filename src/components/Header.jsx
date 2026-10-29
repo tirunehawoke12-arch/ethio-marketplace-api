@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useApp } from '@/lib/app';
 import { useUnread } from '@/lib/chat';
 import { useT } from '@/lib/i18n';
@@ -8,7 +8,9 @@ import ThemeLang from '@/components/ThemeLang';
 
 export default function Header() {
   const { user, isAdmin, cartCount, logout } = useApp(); const router = useRouter(); const unread = useUnread(); const { t } = useT();
+  const path = usePathname();
   const search = e => { e.preventDefault(); const q = new FormData(e.target).get('q'); router.push('/search?q=' + encodeURIComponent(q || '')); };
+  if (path && path.startsWith('/learn')) return null;       // ተማሪ አንባቢ (mini app) ያለ ድረ-ገጽ ምናሌ
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-white/85 backdrop-blur-xl dark:border-[#25352c] dark:bg-[#111b16]/85">
       <div className="mx-auto flex max-w-6xl items-center gap-3 px-3 py-2.5">

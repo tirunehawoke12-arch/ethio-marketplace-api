@@ -263,7 +263,7 @@ const bump = p => { store.rev[p] = (store.rev[p] || REV0) + 1; persist(); };
 const validPath = p => typeof p === 'string' && p.length < 200 && /^[\w@+.:~\/-]+$/.test(p) && !p.includes('..');
 function can(tok, p, write, id) {
   if (tok && tok.k === 'admin') return true;
-  { const t0 = String(p).split('/')[0]; if (t0 === 'mk' || t0 === 'pp' || t0 === 'pg' || t0 === 'tr' || t0 === 'ch' || t0 === 'al' || t0 === 'rf' || t0[0] === '_') return false; }   // ገበያ እና ምስል መረጃ በልዩ API ብቻ
+  { const t0 = String(p).split('/')[0]; if (t0 === 'mk' || t0 === 'pp' || t0 === 'pg' || t0 === 'tr' || t0 === 'ch' || t0 === 'al' || t0 === 'rf' || t0 === 'ln' || t0[0] === '_') return false; }   // ገበያ እና ምስል መረጃ በልዩ API ብቻ
   const m = /^data\/users\/([\w-]+)$/.exec(p);
   if (m) return !!tok && tok.u === m[1];                       // የግል ውሂብ፦ ባለቤት ብቻ
   if (!tok) return false;
@@ -431,6 +431,7 @@ require('./pages')({ app, col, bump, pool, persist, limit, notifyUser, notifyAdm
 require('./chat')({ app, col, limit, notifyUser, notifyAdmin, ...mkApi });
 require('./trust')({ app, col, limit, notifyUser, notifyAdmin, ...mkApi });
 require('./geo')({ app, col, limit, ...mkApi });
+require('./learn')({ app, col, limit, pool, persist, bump, token: TOKEN, botUsername: BOT_USERNAME, baseUrl: PUBLIC_BASE_URL, ...mkApi });
 const couponsApi = require('./coupons')({ app, col, limit, ...mkApi });
 require('./referral')({ app, col, limit, notifyUser, coupons: couponsApi, baseUrl: PUBLIC_BASE_URL, getStore: () => store, ...mkApi });
 opsApi = require('./ops')({ app, col, getStore: () => store, ...mkApi });

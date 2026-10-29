@@ -19,7 +19,7 @@ self.addEventListener('fetch', e => {
     return;
   }
   if (r.mode === 'navigate') {
-    if (/^\/(admin|login|register|checkout|cart|me)(\/|$)/.test(u.pathname)) { e.respondWith(fetch(r).catch(() => caches.match('/offline.html'))); return; }   // የግል ገጾች አይቀመጡም
+    if (/^\/(admin|login|register|checkout|cart|me|learn)(\/|$)/.test(u.pathname)) { e.respondWith(fetch(r).catch(() => caches.match('/offline.html'))); return; }   // የግል ገጾች አይቀመጡም
     e.respondWith(fetch(r).then(res => { if (res.ok) { const cp = res.clone(); caches.open(PAGES).then(c => { c.put(r, cp); trim(PAGES, 40); }); } return res; }).catch(async () => (await caches.match(r)) || caches.match('/offline.html')));
   }
 });

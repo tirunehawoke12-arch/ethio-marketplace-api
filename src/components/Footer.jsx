@@ -1,9 +1,11 @@
 'use client';
 import Link from 'next/link';
 import { useT } from '@/lib/i18n';
+import { usePathname } from 'next/navigation';
 
 export default function Footer() {
-  const { t } = useT();
+  const { t } = useT(), path = usePathname();
+  if (path && path.startsWith('/learn')) return null;
   return (
     <footer className="mx-auto mt-10 max-w-6xl px-4 pb-28 pt-6 text-sm md:pb-10">
       <div className="card">

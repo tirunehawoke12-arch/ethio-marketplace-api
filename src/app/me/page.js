@@ -34,7 +34,7 @@ function Hub() {
           actions={<Link className="btn-ghost w-full" href={`/me/jobs/${j.id}`}>✏️ አርትዕ</Link>}>
           <Facts items={[['🏷', 'ዘርፍ', j.category], ['📍', 'ቦታ', [j.city, j.region].filter(Boolean).join(', ')], ['⏰', 'ማብቂያ', j.deadline], ['👥', 'ክፍት ቦታ', j.openings]]} /><MoreText text={j.description} limit={200} />
         </ExpandCard>))}</ExpandGroup> : <div className="card muted">እስካሁን ሥራ አላስታወቁም</div>}</>)}
-      <div className="grid grid-cols-2 gap-2 pt-2"><Link className="btn-ghost" href="/orders">📦 ትዕዛዞቼ</Link><Link className="btn-ghost" href="/me/private">🪪 የግል መረጃ</Link><Link className="btn-ghost col-span-2" href="/me/invite">🎁 ጓደኛ ጋብዝ</Link></div>
+      <div className="grid grid-cols-2 gap-2 pt-2"><Link className="btn-ghost" href="/orders">📦 ትዕዛዞቼ</Link><Link className="btn-ghost" href="/me/private">🪪 የግል መረጃ</Link><Link className="btn-ghost" href="/me/invite">🎁 ጓደኛ ጋብዝ</Link><Link className="btn-ghost" href="/me/learn">📖 የተማሪ ፋይሎች</Link></div>
     </div>
   );
 }
