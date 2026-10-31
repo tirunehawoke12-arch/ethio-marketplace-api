@@ -9,7 +9,7 @@ function harness() {
   const call = async (m, path, { tok, body, params, query, headers } = {}) => { const r = routes.find(x => x.m === m && x.p === path); const out = { code: 200 }; const res = { status(c) { out.code = c; return this; }, json(j) { out.json = j; return this; }, set() { return this; }, send(b) { out.body = b; return this; }, sendStatus(c) { out.code = c; return this; } }; await r.h[r.h.length - 1]({ tok, body: body || {}, params: params || {}, ip: '1', headers: headers || {}, query: query || {} }, res); return out; };
   return { call, col };
 }
-const T = { u: 't1', k: 'user' }, PNG = 'data:image/png;base64,' + Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(40)]).toString('base64');
+const T = { k: 'admin' }, PNG = 'data:image/png;base64,' + Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(40)]).toString('base64');
 async function setup(h) {
   const id = (await h.call('POST', '/api/learn/decks', { tok: T, body: { title: 'ባዮሎጂ 9' } })).json.id;
   const m = (await h.call('POST', '/api/learn/decks/:id/media', { tok: T, params: { id }, body: { dataUrl: PNG } })).json.id;
@@ -35,9 +35,46 @@ test('ተማሪ ፍሰት፦ ስም+ID፣ ከ Telegram ውጭ ውድቅ፣ ID �
   assert.equal((await auth(signed({ id: 2 }), 'አበበ', 'S001')).json.ok, true);                                  // ከተፈታ በኋላ ሌላ አካውንት ይችላል
   const det = (await h.call('GET', '/api/learn/decks/:id', { tok: T, params: { id } })).json.roster.find(r => r.id === 'S001'); assert.equal(det.bound, true);
 });
-test('መስኮት እና ባለቤትነት፦ የተዘጋ ፋይል አይከፈትም፤ ሌላ መምህር አያይም', async () => {
+test('መስኮት እና ባለቤትነት፦ የተዘጋ ፋይል አይከፈትም፤ አድሚን ያልሆነ አያስተዳድርም', async () => {
   const h = harness(); const { id } = await setup(h); await h.call('POST', '/api/learn/decks/:id/settings', { tok: T, params: { id }, body: { closes: '2020-01-01' } });
   assert.equal((await h.call('POST', '/api/learn/auth', { body: { deck: id, initData: signed({ id: 1 }), name: 'አበበ', sid: 'S001' } })).json.error, 'deck_closed');
-  h.col('data/users/o2').acct = { email: 'o@x.com', phone: '0912', ts: 1 }; assert.equal((await h.call('GET', '/api/learn/decks/:id', { tok: { u: 'o2', k: 'user' }, params: { id } })).code, 404);
+  h.col('data/users/o2').acct = { email: 'o@x.com', phone: '0912', ts: 1 }; assert.equal((await h.call('GET', '/api/learn/decks/:id', { tok: { u: 'o2', k: 'user' }, params: { id } })).code, 403); assert.equal((await h.call('POST', '/api/learn/decks', { tok: { u: 'o2', k: 'user' }, body: { title: 'xx' } })).code, 403);      // መምህር = አድሚን ብቻ
   assert.equal((await h.call('DELETE', '/api/learn/decks/:id', { tok: T, params: { id } })).json.ok, true); assert.equal((await h.call('GET', '/api/learn/public/:id', { params: { id } })).code, 404);
+});
+test('ቤተ-መጽሐፍት፦ ተማሪው የተፈቀዱለትን ብዙ ፋይሎች ብቻ ያያል', async () => {
+  const h = harness(); const a = (await setup(h)).id;
+  const b = (await h.call('POST', '/api/learn/decks', { tok: T, body: { title: 'ኬሚስትሪ' } })).json.id, c = (await h.call('POST', '/api/learn/decks', { tok: T, body: { title: 'ሌላ ክፍል' } })).json.id;
+  await h.call('POST', '/api/learn/decks/:id/content', { tok: T, params: { id: b }, body: { slides: [{ title: 'x', blocks: [{ k: 'p', t: 'ሰላም' }] }] } });
+  await h.call('POST', '/api/learn/decks/:id/settings', { tok: T, params: { id: b }, body: { status: 'on', roster: 'አበበ በቀለ, S001' } });
+  await h.call('POST', '/api/learn/decks/:id/settings', { tok: T, params: { id: c }, body: { status: 'on', roster: 'ትዕግስት አለሙ, S002' } });
+  const lib = (init, name, sid) => h.call('POST', '/api/learn/library', { body: { initData: init, name, sid } });
+  assert.equal((await lib('', 'አበበ', 'S001')).json.error, 'telegram_only');
+  const r = (await lib(signed({ id: 1 }), 'አበበ', 'S001')).json; assert.equal(r.items.length, 2); assert.deepEqual(r.items.map(x => x.id).sort(), [a, b].sort());
+  assert.equal((await lib(signed({ id: 1 }), 'አበበ', 'S002')).json.error, 'wrong_credentials');
+  await h.call('POST', '/api/learn/auth', { body: { deck: a, initData: signed({ id: 1 }), name: 'አበበ', sid: 'S001' } });
+  const o = (await lib(signed({ id: 9 }), 'አበበ', 'S001')).json; assert.deepEqual(o.items.map(x => x.id), [b]);      // በ a ተይዟል፣ b አልተያዘም
+});
+
+test('ክፍያ ያለው ፋይል፦ ካታሎግ → ጥያቄ → አድሚን ያጸድቃል → ስም+ID ተሰጥቶ በቤተ-መጽሐፍት ይታያል', async () => {
+  const h = harness(), U = { u: 'o2', k: 'user' }; h.col('data/users/o2').acct = { email: 'o@x.com', phone: '0912', ts: 1 }; const { id } = await setup(h);
+  await h.call('POST', '/api/learn/decks/:id/settings', { tok: T, params: { id }, body: { price: 150, cat: 'PDF', desc: 'ማስታወሻ', listed: true } });
+  assert.equal((await h.call('GET', '/api/learn/catalog')).json.items.length, 1); assert.equal((await h.call('GET', '/api/learn/catalog')).json.items[0].price, 150);
+  const buy = b => h.call('POST', '/api/learn/buy', { tok: U, body: { deck: id, name: 'ሰላም ተስፋዬ', phone: '0911000000', ...b } });
+  assert.equal((await buy({})).json.error, 'payment_proof_required'); assert.equal((await h.call('POST', '/api/learn/buy', { body: { deck: id } })).code, 401);
+  assert.equal((await buy({ method: 'telebirr', ref: 'ABC12345' })).json.status, 'pending'); assert.equal((await buy({ method: 'telebirr', ref: 'ZZZ99999' })).json.error, 'already_requested');
+  assert.equal((await h.call('GET', '/api/learn/admin/requests', { tok: U })).code, 403);
+  const rq = (await h.call('GET', '/api/learn/admin/requests', { tok: T })).json; assert.equal(rq.items.length, 1); assert.equal((await h.call('GET', '/api/learn/my', { tok: U })).json.items[0].link, '');
+  const ap = (await h.call('POST', '/api/learn/admin/requests/:id/:act', { tok: T, params: { id: rq.items[0].id, act: 'approve' } })).json; assert.equal(ap.ok, true); assert.match(ap.sid, /^ST\d{4}$/);
+  const my = (await h.call('GET', '/api/learn/my', { tok: U })).json; assert.equal(my.student.sid, ap.sid); assert.equal(my.student.name, 'ሰላም'); assert.match(my.items[0].link, /d_/);
+  const lib = (await h.call('POST', '/api/learn/library', { body: { initData: signed({ id: 5 }), name: 'ሰላም', sid: ap.sid.toLowerCase() } })).json; assert.equal(lib.items.length, 1);
+  assert.equal((await h.call('POST', '/api/learn/admin/requests/:id/:act', { tok: T, params: { id: rq.items[0].id, act: 'approve' } })).code, 409);
+  await h.call('POST', '/api/learn/decks/:id/settings', { tok: T, params: { id }, body: { listed: false } }); assert.equal((await h.call('GET', '/api/learn/catalog')).json.items.length, 0);
+});
+test('ክፍያ ማጣቀሻ ድግግሞሽ እና ውድቅ', async () => {
+  const h = harness(), U = { u: 'o2', k: 'user' }, U3 = { u: 'o3', k: 'user' }; h.col('data/users/o2').acct = { email: 'o@x.com', phone: '0912', ts: 1 }; h.col('data/users/o3').acct = { email: 'p@x.com', phone: '0913', ts: 1 }; const { id } = await setup(h);
+  await h.call('POST', '/api/learn/decks/:id/settings', { tok: T, params: { id }, body: { price: 50, listed: true } });
+  await h.call('POST', '/api/learn/buy', { tok: U, body: { deck: id, name: 'አልማዝ', method: 'CBE', ref: 'REF-0001' } });
+  assert.equal((await h.call('POST', '/api/learn/buy', { tok: U3, body: { deck: id, name: 'ዮሐንስ', method: 'CBE', ref: 'ref 0001' } })).json.error, 'duplicate_reference');
+  const rid = (await h.call('GET', '/api/learn/admin/requests', { tok: T })).json.items[0].id; assert.equal((await h.call('POST', '/api/learn/admin/requests/:id/:act', { tok: T, params: { id: rid, act: 'reject' }, body: { reason: 'አልተገኘም' } })).json.ok, true);
+  assert.equal((await h.call('POST', '/api/learn/buy', { tok: U, body: { deck: id, name: 'አልማዝ', method: 'CBE', ref: 'REF-0002' } })).json.status, 'pending');      // ከውድቅ በኋላ እንደገና ይቻላል
 });

@@ -431,7 +431,7 @@ require('./pages')({ app, col, bump, pool, persist, limit, notifyUser, notifyAdm
 require('./chat')({ app, col, limit, notifyUser, notifyAdmin, ...mkApi });
 require('./trust')({ app, col, limit, notifyUser, notifyAdmin, ...mkApi });
 require('./geo')({ app, col, limit, ...mkApi });
-require('./learn')({ app, col, limit, pool, persist, bump, token: TOKEN, botUsername: BOT_USERNAME, miniShort: (process.env.TELEGRAM_MINIAPP_SHORT || '').replace(/[^\w]/g, ''), baseUrl: PUBLIC_BASE_URL, ...mkApi });
+require('./learn')({ app, col, limit, pool, persist, bump, notifyUser, notifyAdmin, token: TOKEN, botUsername: BOT_USERNAME, miniShort: (process.env.TELEGRAM_MINIAPP_SHORT || '').replace(/[^\w]/g, ''), baseUrl: PUBLIC_BASE_URL, ...mkApi });
 const couponsApi = require('./coupons')({ app, col, limit, ...mkApi });
 require('./referral')({ app, col, limit, notifyUser, coupons: couponsApi, baseUrl: PUBLIC_BASE_URL, getStore: () => store, ...mkApi });
 opsApi = require('./ops')({ app, col, getStore: () => store, ...mkApi });

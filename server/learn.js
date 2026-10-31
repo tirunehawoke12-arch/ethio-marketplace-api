@@ -5,8 +5,8 @@
    ጥበቃ፦ initData ከሌለ ምንም አይከፈትም፤ ID ከመጀመሪያው Telegram አካውንት ጋር ይታሰራል (መምህር ብቻ ይፈታል)፤
           ምስሎች ከክፍለ-ጊዜ ጋር ብቻ፤ ሙከራ ገደብ፤ ማን መቼ እንዳየ ይመዘገባል። (ስክሪን ፎቶን 100% መከልከል አይቻልም) */
 const crypto = require('crypto'), AM = require('./amnorm'), imgstore = require('./imgstore');
-const D = 'ln/decks', M = 'ln/media', V = 'ln/views', SESSION = 3 * 3600e3, AUTH_AGE = 24 * 3600e3;
-const LIM = { decks: 10, slides: 300, blocks: 120, text: 1500, rows: 40, media: 150, mediaBytes: 24 * 1048576, roster: 600 };
+const D = 'ln/decks', M = 'ln/media', V = 'ln/views', R = 'ln/reqs', ST = 'ln/studs', CATS = ['አጭር ማስታወሻ', 'ጥያቄዎች', 'ፒፒቲ', 'PDF', 'ሰነድ'], SESSION = 3 * 3600e3, AUTH_AGE = 24 * 3600e3;
+const LIM = { decks: 300, slides: 300, blocks: 120, text: 1500, rows: 40, media: 150, mediaBytes: 24 * 1048576, roster: 600 };
 
 function checkInitData(initData, botToken, now = Date.now()) {          // https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
   try {
@@ -20,26 +20,26 @@ const sidNorm = x => String(x || '').toUpperCase().replace(/[\s\-_/.]/g, '');
 const firstOf = n => AM.norm(String(n || '').trim().split(/\s+/)[0] || '');
 
 module.exports = function learn(ctx) {
-  const { app, col, limit, who, saveMany, bad, S, N, nid, token, botUsername = '', miniShort = '', baseUrl = '', pool, persist, bump, now = () => Date.now() } = ctx;
+  const { app, col, limit, who, adminOnly, notifyUser = () => { }, notifyAdmin = () => { }, saveMany, bad, S, N, nid, token, botUsername = '', miniShort = '', baseUrl = '', pool, persist, bump, now = () => Date.now() } = ctx;
   const imgs = ctx.imgs || imgstore.create(), sess = new Map();
   const ti = setInterval(() => { for (const [k, v] of sess) if (v.exp < now()) sess.delete(k); }, 10 * 60e3); ti.unref && ti.unref();
-  const mine = (req, res) => { const u = who(req, res); if (!u) return null; if (u.admin) { bad(res, 403, 'admin_cannot'); return null; } return u; };
-  const own = (u, id) => { const d = col(D)[id]; return d && d.uid === u.uid ? d : null; };
+  const mine = (req, res) => (adminOnly(req, res) ? { uid: 'admin', admin: true } : null);          // መምህር = አድሚን ብቻ
+  const own = (u, id) => col(D)[id] || null;
   const open = d => d.status === 'on' && (!d.opens || d.opens <= now()) && (!d.closes || d.closes >= now());
   const ymd = (t) => (t ? new Date(t + 3 * 3600e3).toISOString().slice(0, 10) : '');
   async function drop(path, id) { delete col(path)[id]; if (pool) await pool.query('DELETE FROM kv WHERE path=$1 AND id=$2', [path, id]); else persist && persist(); bump && bump(path); }
 
   /* ---------- መምህር ---------- */
-  const brief = d => ({ id: d.id, title: d.title, status: d.status, slides: (d.slides || []).length, students: (d.roster || []).length, bound: (d.roster || []).filter(r => r.tg).length, opens: ymd(d.opens), closes: ymd(d.closes), isOpen: open(d), ts: d.ts });
-  app.get('/api/learn/decks', (req, res) => { const u = mine(req, res); if (!u) return; res.json({ ok: true, bot: botUsername, short: miniShort, items: Object.values(col(D)).filter(d => d.uid === u.uid).sort((a, b) => b.ts - a.ts).map(brief) }); });
+  const brief = d => ({ price: d.price | 0, cat: d.cat || '', listed: !!d.listed, id: d.id, title: d.title, status: d.status, slides: (d.slides || []).length, students: (d.roster || []).length, bound: (d.roster || []).filter(r => r.tg).length, opens: ymd(d.opens), closes: ymd(d.closes), isOpen: open(d), ts: d.ts });
+  app.get('/api/learn/decks', (req, res) => { const u = mine(req, res); if (!u) return; res.json({ ok: true, bot: botUsername, short: miniShort, items: Object.values(col(D)).sort((a, b) => b.ts - a.ts).map(brief) }); });
   app.post('/api/learn/decks', async (req, res) => {
     const u = mine(req, res); if (!u) return; if (!limit('ld' + u.uid, 30, 3600e3)) return bad(res, 429, 'slow_down'); const title = S(req.body.title, 120); if (title.length < 2) return bad(res, 400, 'missing_fields');
-    if (Object.values(col(D)).filter(d => d.uid === u.uid).length >= LIM.decks) return bad(res, 400, 'too_many');
+    if (Object.keys(col(D)).length >= LIM.decks) return bad(res, 400, 'too_many');
     const d = { id: nid(), uid: u.uid, title, status: 'off', slides: [], roster: [], ts: now() }; col(D)[d.id] = d; try { await saveMany([[D, d.id]]); res.json({ ok: true, id: d.id }); } catch (e) { bad(res, 503, 'storage'); }
   });
   app.get('/api/learn/decks/:id', (req, res) => {
     const u = mine(req, res); if (!u) return; const d = own(u, req.params.id); if (!d) return bad(res, 404, 'not_found'); const views = Object.values(col(V)).filter(v => v.deck === d.id);
-    res.json({ ok: true, bot: botUsername, short: miniShort, deck: { ...brief(d), desc: d.desc || '' }, roster: d.roster.map(r => { const v = views.find(x => x.sid === r.id) || {}; return { name: r.name, id: r.id, bound: !!r.tg, opened: v.n | 0, last: v.last || 0, max: v.max | 0 }; }), slidesN: d.slides.length });
+    res.json({ ok: true, bot: botUsername, short: miniShort, cats: CATS, deck: { ...brief(d), desc: d.desc || '' }, roster: d.roster.map(r => { const v = views.find(x => x.sid === r.id) || {}; return { name: r.name, id: r.id, bound: !!r.tg, opened: v.n | 0, last: v.last || 0, max: v.max | 0 }; }), slidesN: d.slides.length });
   });
   app.post('/api/learn/decks/:id/media', async (req, res) => {
     const u = mine(req, res); if (!u) return; const d = own(u, req.params.id); if (!d) return bad(res, 404, 'not_found'); if (!limit('lm' + u.uid, 200, 3600e3)) return bad(res, 429, 'slow_down');
@@ -62,6 +62,7 @@ module.exports = function learn(ctx) {
   });
   app.post('/api/learn/decks/:id/settings', async (req, res) => {
     const u = mine(req, res); if (!u) return; const d = own(u, req.params.id); if (!d) return bad(res, 404, 'not_found'); const b = req.body;
+    if (b.price !== undefined) d.price = Math.max(0, Math.min(1e6, Math.round(N(b.price)) || 0)); if (b.cat !== undefined) d.cat = CATS.includes(b.cat) ? b.cat : ''; if (b.desc !== undefined) d.desc = S(b.desc, 400); if (b.listed !== undefined) d.listed = !!b.listed;
     if (b.title !== undefined) { const t = S(b.title, 120); if (t.length < 2) return bad(res, 400, 'missing_fields'); d.title = t; } if (b.status !== undefined) d.status = b.status === 'on' ? 'on' : 'off';
     if (b.opens !== undefined) d.opens = /^\d{4}-\d{2}-\d{2}$/.test(b.opens) ? Date.parse(b.opens + 'T00:00:00+03:00') : 0; if (b.closes !== undefined) d.closes = /^\d{4}-\d{2}-\d{2}$/.test(b.closes) ? Date.parse(b.closes + 'T23:59:59+03:00') : 0;
     if (b.roster !== undefined) {
@@ -92,6 +93,67 @@ module.exports = function learn(ctx) {
     if (r.tg && r.tg !== tg.id) return bad(res, 403, 'id_in_use'); const other = d.roster.find(x => x.tg === tg.id && x.id !== r.id); if (other) return bad(res, 403, 'tg_other_id');
     const done = async () => { const t = crypto.randomBytes(24).toString('hex'); sess.set(t, { deck: d.id, sid: r.id, name: r.name, tg: tg.id, exp: now() + SESSION }); res.json({ ok: true, token: t, name: r.name.split(/\s+/)[0], sid: r.id, title: d.title, slides: d.slides.length }); };
     if (!r.tg) { r.tg = tg.id; r.bound = now(); saveMany([[D, d.id]]).then(done, () => bad(res, 503, 'storage')); } else done();
+  });
+  app.post('/api/learn/library', (req, res) => {          // ተማሪው ስም+ID ካስገባ በኋላ የተፈቀዱለትን ሁሉንም (ክፍት) ፋይሎች ይዘረዝራል
+    res.set('cache-control', 'no-store'); const tg = checkInitData(req.body.initData, token, now()); if (!tg) return bad(res, 401, 'telegram_only');
+    if (!limit('la' + tg.id, 12, 15 * 60e3)) return bad(res, 429, 'slow_down');
+    const name = firstOf(req.body.name), sid = sidNorm(req.body.sid); if (!name || !sid) return bad(res, 403, 'wrong_credentials');
+    let blocked = false, items = [];
+    for (const d of Object.values(col(D))) {
+      if (!open(d) || !Array.isArray(d.roster)) continue; const r = d.roster.find(x => x.id === sid); if (!r || firstOf(r.name) !== name) continue;
+      if ((r.tg && r.tg !== tg.id) || d.roster.some(x => x.tg === tg.id && x.id !== r.id)) { blocked = true; continue; }
+      const v = col(V)[d.id + ':' + r.id], n = (d.slides || []).length; items.push({ id: d.id, title: d.title, slides: n, pct: v && n ? Math.min(100, Math.round(((v.max | 0) / n) * 100)) : 0, ts: d.ts || 0 });
+    }
+    if (!items.length) return bad(res, 403, blocked ? 'id_in_use' : 'wrong_credentials');
+    items.sort((a, b) => b.ts - a.ts); res.json({ ok: true, name: name, items: items.slice(0, 60).map(({ ts, ...o }) => o) });
+  });
+
+  /* ---------- ክፍያ ያላቸው ፋይሎች፦ ካታሎግ · ግዢ ጥያቄ · አድሚን ማጽደቅ ---------- */
+  const rkey = x => String(x == null ? '' : x).toUpperCase().replace(/[\s\-_.]/g, '');
+  const catItem = d => ({ id: d.id, title: d.title, desc: d.desc || '', cat: d.cat || '', price: d.price | 0, slides: (d.slides || []).length });
+  const listable = d => d.listed && open(d) && (d.slides || []).length > 0;
+  const link = id => botUsername ? (miniShort ? `https://t.me/${botUsername}/${miniShort}?startapp=d_${id}` : `https://t.me/${botUsername}?start=d_${id}`) : '';
+  const allIds = () => { const s = new Set(); for (const d of Object.values(col(D))) for (const r of d.roster || []) s.add(r.id); for (const x of Object.values(col(ST))) s.add(x.sid); return s; };
+  const newSid = () => { const used = allIds(); for (let i = 0; i < 400; i++) { const id = 'ST' + String(1000 + crypto.randomInt(9000)); if (!used.has(id)) return id; } return 'ST' + Date.now().toString(36).toUpperCase().slice(-6); };
+  app.get('/api/learn/catalog', (req, res) => { res.set('cache-control', 'no-store'); res.json({ ok: true, cats: CATS, items: Object.values(col(D)).filter(listable).sort((a, b) => b.ts - a.ts).map(catItem) }); });
+  app.get('/api/learn/my', (req, res) => {
+    const u = who(req, res); if (!u) return; if (u.admin) return res.json({ ok: true, student: null, items: [] }); res.set('cache-control', 'no-store'); const st = col(ST)[u.uid];
+    res.json({ ok: true, bot: botUsername, home: botUsername ? (miniShort ? `https://t.me/${botUsername}/${miniShort}` : `https://t.me/${botUsername}?start=lib`) : '', student: st ? { name: st.name.split(/\s+/)[0], sid: st.sid } : null,
+      items: Object.values(col(R)).filter(r => r.uid === u.uid).sort((a, b) => b.ts - a.ts).map(r => { const d = col(D)[r.deck] || {}; return { id: r.id, deck: r.deck, title: d.title || '(ተሰርዟል)', cat: d.cat || '', price: r.price, status: r.status, reason: r.reason || '', link: r.status === 'approved' ? link(r.deck) : '' }; }) });
+  });
+  async function grant(r, d) {          // ተማሪውን በፋይሉ ዝርዝር ውስጥ መመዝገብ (ስም + ID)
+    let st = col(ST)[r.uid]; if (!st) st = col(ST)[r.uid] = { id: r.uid, uid: r.uid, name: r.name, sid: newSid(), ts: now() };
+    d.roster = d.roster || []; if (!d.roster.some(x => x.id === st.sid)) { if (d.roster.length >= LIM.roster) throw new Error('roster_full'); d.roster.push({ name: st.name, id: st.sid }); }
+    r.status = 'approved'; r.sid = st.sid; r.done = now(); await saveMany([[D, d.id], [R, r.id], [ST, st.id]]); return st;
+  }
+  app.post('/api/learn/buy', async (req, res) => {
+    const u = who(req, res); if (!u) return; if (u.admin) return bad(res, 403, 'admin_cannot'); if (!limit('lb' + u.uid, 10, 3600e3)) return bad(res, 429, 'slow_down'); const b = req.body || {};
+    const d = col(D)[S(b.deck, 24)]; if (!d || !listable(d)) return bad(res, 404, 'not_found');
+    const prev = Object.values(col(R)).find(r => r.uid === u.uid && r.deck === d.id && r.status !== 'rejected'); if (prev) return bad(res, 409, prev.status === 'approved' ? 'already_have' : 'already_requested');
+    const st = col(ST)[u.uid], name = st ? st.name : S(b.name, 60), price = d.price | 0; if (name.length < 2) return bad(res, 400, 'missing_fields');
+    const method = S(b.method, 20), ref = S(b.ref, 40); if (price > 0) { if (!method || ref.length < 4) return bad(res, 400, 'payment_proof_required'); const k = rkey(ref); if (Object.values(col(R)).some(x => x.status !== 'rejected' && x.ref && rkey(x.ref) === k)) return bad(res, 409, 'duplicate_reference'); }
+    const r = { id: nid(), uid: u.uid, deck: d.id, name, phone: S(b.phone, 20), method, ref, note: S(b.note, 200), price, status: 'pending', ts: now() }; col(R)[r.id] = r;
+    try {
+      if (price === 0) { await grant(r, d); return res.json({ ok: true, status: 'approved' }); }
+      await saveMany([[R, r.id]]); res.json({ ok: true, status: 'pending' });
+      try { notifyAdmin(`🎓 አዲስ የመማሪያ ክፍያ ጥያቄ\n${name} · ${r.phone}\n📖 ${d.title} — ${price} ብር\n💳 ${method} · ማጣቀሻ ${ref}`); } catch (e) { }
+    } catch (e) { delete col(R)[r.id]; bad(res, e.message === 'roster_full' ? 400 : 503, e.message === 'roster_full' ? 'too_many' : 'storage'); }
+  });
+  app.get('/api/learn/admin/requests', (req, res) => {
+    if (!mine(req, res)) return; const s = S(req.query.status, 10) || 'pending';
+    res.json({ ok: true, items: Object.values(col(R)).filter(r => s === 'all' || r.status === s).sort((a, b) => b.ts - a.ts).slice(0, 300).map(r => { const d = col(D)[r.deck] || {}; return { id: r.id, name: r.name, phone: r.phone, title: d.title || '(ተሰርዟል)', price: r.price, method: r.method, ref: r.ref, note: r.note, status: r.status, sid: r.sid || '', ts: r.ts, reason: r.reason || '' }; }), pending: Object.values(col(R)).filter(r => r.status === 'pending').length });
+  });
+  app.post('/api/learn/admin/requests/:id/:act', async (req, res) => {
+    if (!mine(req, res)) return; const r = col(R)[req.params.id]; if (!r) return bad(res, 404, 'not_found'); if (r.status !== 'pending') return bad(res, 409, 'wrong_step:' + r.status); const d = col(D)[r.deck];
+    try {
+      if (req.params.act === 'approve') {
+        if (!d) return bad(res, 404, 'not_found'); const st = await grant(r, d);
+        try { notifyUser(r.uid, `🎓 ክፍያዎ ተረጋግጧል!\n📖 ${d.title}\n\n👤 ስም፦ ${st.name.split(/\s+/)[0]}\n🆔 የተማሪ ID፦ ${st.sid}\n\nበ Telegram ውስጥ ብቻ ይነበባል፤ በድረ-ገጹ «🎓 የተማሪዎች መማሪያ» ገጽ ላይ አገናኙን ያገኛሉ።`); } catch (e) { }
+        return res.json({ ok: true, sid: st.sid });
+      }
+      if (req.params.act === 'reject') { r.status = 'rejected'; r.reason = S(req.body && req.body.reason, 200); r.done = now(); await saveMany([[R, r.id]]); try { notifyUser(r.uid, `❌ የመማሪያ ክፍያዎ አልተረጋገጠም (${d ? d.title : ''})${r.reason ? '፦ ' + r.reason : ''}። ትክክለኛ ማጣቀሻ ቁጥር ጋር እንደገና ይሞክሩ።`); } catch (e) { } return res.json({ ok: true }); }
+      bad(res, 400, 'bad_action');
+    } catch (e) { bad(res, e.message === 'roster_full' ? 400 : 503, e.message === 'roster_full' ? 'too_many' : 'storage'); }
   });
   const sessOf = (t) => { const s = sess.get(String(t || '')); if (!s || s.exp < now()) { sess.delete(String(t || '')); return null; } const d = col(D)[s.deck]; return d && open(d) ? { s, d } : null; };
   app.get('/api/learn/read', async (req, res) => {

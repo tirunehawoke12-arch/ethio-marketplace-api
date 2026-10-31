@@ -16,11 +16,11 @@ async function shrink(bytes, mime) {          // ምስሉን ወደ ≤ ~380KB 
 const ago = t => (t ? new Date(t).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 
 function Manage({ id }) {
-  const [d, setD] = useState(null), [f, setF] = useState({ title: '', opens: '', closes: '', roster: '' }), [m, setM] = useState(''), [ok, setOk] = useState(false), [prog, setProg] = useState(''), [sure, setSure] = useState(false), [imgAll, setImgAll] = useState(false);
-  const load = useCallback(async () => { const r = await get('/api/learn/decks/' + id); setD(r); if (r.ok) setF(x => ({ ...x, title: r.deck.title, opens: r.deck.opens, closes: r.deck.closes, roster: r.roster.map(s => s.name + ', ' + s.id).join('\n') })); }, [id]);
+  const [d, setD] = useState(null), [f, setF] = useState({ title: '', opens: '', closes: '', roster: '', price: 0, cat: '', desc: '', listed: false }), [m, setM] = useState(''), [ok, setOk] = useState(false), [prog, setProg] = useState(''), [sure, setSure] = useState(false), [imgAll, setImgAll] = useState(false);
+  const load = useCallback(async () => { const r = await get('/api/learn/decks/' + id); setD(r); if (r.ok) setF(x => ({ ...x, title: r.deck.title, opens: r.deck.opens, closes: r.deck.closes, price: r.deck.price || 0, cat: r.deck.cat || '', desc: r.deck.desc || '', listed: !!r.deck.listed, roster: r.roster.map(s => s.name + ', ' + s.id).join('\n') })); }, [id]);
   useEffect(() => { load(); }, [load]);
   const say = (t, good) => { setM(t); setOk(!!good); };
-  async function save(extra) { const r = await post(`/api/learn/decks/${id}/settings`, { title: f.title, opens: f.opens, closes: f.closes, roster: f.roster, ...(extra || {}) }); say(r.ok ? '✅ ተቀምጧል' : errText(r.error), r.ok); if (r.ok) load(); }
+  async function save(extra) { const r = await post(`/api/learn/decks/${id}/settings`, { title: f.title, opens: f.opens, closes: f.closes, roster: f.roster, price: f.price, cat: f.cat, desc: f.desc, listed: f.listed, ...(extra || {}) }); say(r.ok ? '✅ ተቀምጧል' : errText(r.error), r.ok); if (r.ok) load(); }
   async function sendImg(dataUrl) { const r = await post(`/api/learn/decks/${id}/media`, { dataUrl }); return r.ok ? r.id : null; }
   async function upload(e) {
     const file = e.target.files && e.target.files[0]; e.target.value = ''; if (!file) return; setM(''); setProg('⏳ ፋይሉን በማንበብ ላይ…');
@@ -51,7 +51,7 @@ function Manage({ id }) {
     } catch (x) { setProg(''); say('❌ ይህ ፋይል መነበብ አልቻለም — PDF ወይም .pptx (PowerPoint 2007+) መሆኑን እና በይነመረብ መኖሩን ያረጋግጡ።'); }
   }
   async function reset(sid) { await post(`/api/learn/decks/${id}/reset`, { sid }); load(); }
-  async function del() { const r = await api('DELETE', '/api/learn/decks/' + id); if (r.ok) location.href = '/me/learn'; else say(errText(r.error)); }
+  async function del() { const r = await api('DELETE', '/api/learn/decks/' + id); if (r.ok) location.href = '/admin/learn'; else say(errText(r.error)); }
   if (!d) return <Spinner />; if (!d.ok) return <p className="msg-err">{errText(d.error)}</p>;
   const dk = d.deck, link = d.bot ? (d.short ? `https://t.me/${d.bot}/${d.short}?startapp=d_${id}` : `https://t.me/${d.bot}?start=d_${id}`) : '';
   return (
@@ -66,6 +66,11 @@ function Manage({ id }) {
         <textarea className="input mt-2 font-mono text-sm" rows={8} value={f.roster} onChange={e => setF({ ...f, roster: e.target.value })} placeholder={'አበበ በቀለ, S001\nትዕግስት አለሙ, S002'} />
         <div className="mt-2 grid grid-cols-2 gap-2"><label className="text-sm font-bold">ከ (ቀን)<input type="date" className="input mt-1" value={f.opens} onChange={e => setF({ ...f, opens: e.target.value })} /></label><label className="text-sm font-bold">እስከ (ቀን)<input type="date" className="input mt-1" value={f.closes} onChange={e => setF({ ...f, closes: e.target.value })} /></label></div>
         <label className="label">ርዕስ</label><input className="input" value={f.title} onChange={e => setF({ ...f, title: e.target.value })} /><button className="btn-primary mt-3 w-full" onClick={() => save()}>💾 አስቀምጥ</button></div>
+      <div className="card"><b>🎓 በድረ-ገጹ «የተማሪዎች መማሪያ» ላይ መሸጥ</b><p className="muted mt-1">ተማሪዎች ክፍያ ከፍለው ሲጠይቁ እርስዎ ያጸድቃሉ፤ ስም + ID ተሰጥቷቸው በ Telegram ብቻ ያነባሉ።</p>
+        <label className="mt-2 flex items-center gap-2 text-sm font-bold"><input type="checkbox" className="h-5 w-5 accent-brand" checked={f.listed} onChange={e => setF({ ...f, listed: e.target.checked })} />በካታሎግ ላይ አሳይ</label>
+        <div className="mt-2 grid grid-cols-2 gap-2"><label className="text-sm font-bold">ዋጋ (ብር፤ 0 = ነጻ)<input type="number" min="0" className="input mt-1" value={f.price} onChange={e => setF({ ...f, price: e.target.value })} /></label>
+          <label className="text-sm font-bold">ዓይነት<select className="input mt-1" value={f.cat} onChange={e => setF({ ...f, cat: e.target.value })}><option value="">—</option>{(d.cats || []).map(c => <option key={c} value={c}>{c}</option>)}</select></label></div>
+        <label className="label">አጭር መግለጫ</label><textarea className="input" rows={2} maxLength={400} value={f.desc} onChange={e => setF({ ...f, desc: e.target.value })} /><button className="btn-primary mt-3 w-full" onClick={() => save()}>💾 አስቀምጥ</button></div>
       <Msg m={m} ok={ok} />
       <div className="card"><b>👥 ተማሪዎች ({d.roster.length})</b><p className="muted mt-1">🔗 = ID ከአንድ Telegram አካውንት ጋር ታስሯል (ሌላ ሰው መጠቀም አይችልም)። ተማሪ ስልኩን ከቀየረ «አስፈታ» ይጫኑ።</p>
         <div className="mt-2 divide-y divide-line dark:divide-[#25352c]">{d.roster.map(s => <div key={s.id} className="flex items-center gap-2 py-2 text-sm"><div className="min-w-0 flex-1"><b className="block truncate">{s.name}</b><span className="muted">{s.id} · ተከፍቷል {s.opened}× · ስላይድ {s.max}/{d.slidesN} · {ago(s.last)}</span></div>{s.bound ? <button className="btn-soft" onClick={() => reset(s.id)}>🔗 አስፈታ</button> : <span className="muted">○</span>}</div>)}{!d.roster.length && <p className="muted py-2">ዝርዝር ገና ባዶ ነው</p>}</div></div>
@@ -73,4 +78,4 @@ function Manage({ id }) {
     </div>
   );
 }
-export default function Page({ params }) { return <RequireAuth><Manage id={params.id} /></RequireAuth>; }
+export default function Page({ params }) { return <RequireAuth admin><Manage id={params.id} /></RequireAuth>; }

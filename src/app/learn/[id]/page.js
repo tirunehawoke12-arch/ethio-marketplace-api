@@ -18,7 +18,7 @@ const TH = {
 };
 const FONT = '"Noto Sans Ethiopic","Noto Serif Ethiopic","Abyssinica SIL","Nyala",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
 
-function Reader({ id, auth }) {
+function Reader({ id, auth, onBack }) {
   const [d, setD] = useState(null), [fs, setFs] = useState(18), [toc, setToc] = useState(false), [hid, setHid] = useState(false), [pct, setPct] = useState(0), [th, setTh] = useState('light');
   const refs = useRef([]), max = useRef(0), sent = useRef(0), key = 'ln_pos_' + id + '_' + auth.sid, C = TH[th];
   useEffect(() => { (async () => { setD(await lf('/read', { token: auth.token })); })(); try { const f = Number(localStorage.getItem('ln_fs')); if (f >= 14 && f <= 30) setFs(f); const t = localStorage.getItem('ln_th'); if (TH[t]) setTh(t); else if (document.documentElement.classList.contains('dark')) setTh('dark'); } catch (e) { } }, [auth.token]);
@@ -51,7 +51,7 @@ function Reader({ id, auth }) {
       <style>{'@media print{.ln-root{display:none!important}} .ln-noselect{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}'}</style>
       <div className="fixed inset-x-0 top-0 z-40 h-1" style={{ background: C.line }}><div className="h-full transition-all" style={{ width: pct + '%', background: '#0a8a56' }} /></div>
       <header className="sticky top-0 z-30 px-3 py-2 backdrop-blur" style={{ background: C.bg + 'ee', borderBottom: `1px solid ${C.line}` }}>
-        <div className="mx-auto flex max-w-2xl items-center gap-2"><button className="rounded-xl px-3 py-2 text-sm font-bold" style={btn} onClick={() => setToc(!toc)} aria-label="ማውጫ">☰</button><b className="min-w-0 flex-1 truncate">{d.title}</b><span className="text-xs" style={{ color: C.mute }}>{pct}%</span>
+        <div className="mx-auto flex max-w-2xl items-center gap-2">{onBack && <button className="rounded-xl px-3 py-2 text-sm font-bold" style={btn} onClick={onBack} aria-label="ወደ ፋይሎች">‹</button>}<button className="rounded-xl px-3 py-2 text-sm font-bold" style={btn} onClick={() => setToc(!toc)} aria-label="ማውጫ">☰</button><b className="min-w-0 flex-1 truncate">{d.title}</b><span className="text-xs" style={{ color: C.mute }}>{pct}%</span>
           <button className="rounded-xl px-2.5 py-2 text-sm font-bold" style={btn} onClick={() => setSize(fs - 1)} aria-label="ትንሽ">A−</button><button className="rounded-xl px-2.5 py-2 text-sm font-bold" style={btn} onClick={() => setSize(fs + 1)} aria-label="ትልቅ">A+</button><button className="rounded-xl px-2.5 py-2 text-sm" style={btn} onClick={cycle} aria-label={C.name} title={C.name}>{C.icon}</button></div>
         {toc && <ol className="mx-auto mt-2 max-h-[55vh] max-w-2xl space-y-0.5 overflow-y-auto rounded-2xl p-2 text-sm" style={{ background: C.soft }}>{d.slides.map((s, i) => <li key={i}><button className="w-full rounded-xl px-2 py-1.5 text-left" onClick={() => { setToc(false); refs.current[i] && refs.current[i].scrollIntoView({ behavior: 'smooth' }); }}><span style={{ color: C.mute, marginRight: 8 }}>{i + 1}</span>{s.title || 'ገጽ ' + (i + 1)}</button></li>)}</ol>}
       </header>
@@ -69,26 +69,32 @@ function Reader({ id, auth }) {
 }
 
 export default function Learn({ params }) {
-  const [id, setId] = useState((params && params.id) || ''), [phase, setPhase] = useState('boot'), [info, setInfo] = useState(null), [tg, setTg] = useState(null), [f, setF] = useState({ name: '', sid: '' }), [err, setErr] = useState(''), [busy, setBusy] = useState(false), [auth, setAuth] = useState(null);
+  const [id, setId] = useState((params && params.id) || ''), [phase, setPhase] = useState('boot'), [info, setInfo] = useState(null), [tg, setTg] = useState(null), [f, setF] = useState({ name: '', sid: '' }), [err, setErr] = useState(''), [busy, setBusy] = useState(false), [auth, setAuth] = useState(null), [lib, setLib] = useState(null), [openId, setOpenId] = useState('');
   useEffect(() => {
     let dead = false, cur = id;
     const init = () => { const w = window.Telegram && window.Telegram.WebApp; if (dead) return; if (!w || !w.initData) { if (cur) lf('/public/' + cur).then(r => !dead && setInfo(r)); setPhase('outside'); return; }
-      const sp = String((w.initDataUnsafe && w.initDataUnsafe.start_param) || ''); if (/^d_[\w-]{4,40}$/.test(sp)) { cur = sp.slice(2); setId(cur); }          // ቀጥተኛ mini-app አገናኝ (t.me/ቦት/ስም?startapp=d_…)
-      if (!cur) { setPhase('nolink'); return; } lf('/public/' + cur).then(r => !dead && setInfo(r)); try { w.ready(); w.expand(); w.disableVerticalSwipes && w.disableVerticalSwipes(); if (!localStorage.getItem('etm_theme')) document.documentElement.classList.toggle('dark', w.colorScheme === 'dark'); } catch (e) { } setTg(w); setPhase('form'); };
+      let sp = String((w.initDataUnsafe && w.initDataUnsafe.start_param) || '');
+      if (!sp) { try { const q = new URLSearchParams((location.hash || '').replace(/^#/, '')).get('tgWebAppStartParam') || new URLSearchParams(location.search).get('tgWebAppStartParam') || new URLSearchParams(location.search).get('startapp') || ''; sp = q; } catch (e) {} }
+      if (!sp) { try { sp = sessionStorage.getItem('ln_sp') || ''; } catch (e) {} }
+      try { if (sp) sessionStorage.setItem('ln_sp', sp); } catch (e) {} if (/^d_[\w-]{4,40}$/.test(sp)) { cur = sp.slice(2); setId(cur); }          // ቀጥተኛ mini-app አገናኝ (t.me/ቦት/ስም?startapp=d_…)
+      if (cur) lf('/public/' + cur).then(r => !dead && setInfo(r)); try { w.ready(); w.expand(); w.disableVerticalSwipes && w.disableVerticalSwipes(); if (!localStorage.getItem('etm_theme')) document.documentElement.classList.toggle('dark', w.colorScheme === 'dark'); } catch (e) { } setTg(w); setPhase('form'); };
     if (window.Telegram && window.Telegram.WebApp) init(); else { const s = document.createElement('script'); s.src = 'https://telegram.org/js/telegram-web-app.js'; s.onload = init; s.onerror = () => !dead && setPhase('outside'); document.head.appendChild(s); }
     return () => { dead = true; };
   }, []);
-  const submit = useCallback(async e => { e.preventDefault(); setBusy(true); setErr(''); const r = await lf('/auth', { body: { deck: id, initData: tg.initData, name: f.name, sid: f.sid } }); setBusy(false); if (!r.ok) return setErr(msg(r.error)); setAuth(r); setPhase('ready'); }, [id, tg, f]);
+  const submit = useCallback(async e => { e.preventDefault(); setBusy(true); setErr(''); const r = await lf('/library', { body: { initData: tg.initData, name: f.name, sid: f.sid } }); setBusy(false); if (!r.ok) return setErr(msg(r.error)); const items = [...r.items].sort((a, b) => (a.id === id ? -1 : 0) - (b.id === id ? -1 : 0)); setLib({ ...r, items }); setPhase('library'); }, [id, tg, f]);
+  const pick = useCallback(async d => { setBusy(true); setErr(''); const r = await lf('/auth', { body: { deck: d.id, initData: tg.initData, name: f.name, sid: f.sid } }); setBusy(false); if (!r.ok) return setErr(msg(r.error)); setOpenId(d.id); setAuth(r); setPhase('ready'); }, [tg, f]);
   if (phase === 'boot') return <Shell><p className="muted py-20 text-center">⏳ በመጫን ላይ…</p></Shell>;
   if (phase === 'outside') return <Shell><div className="card text-center"><p className="text-4xl">🔒</p><h1 className="mt-2 text-xl">{info && info.title ? info.title : 'ፋይል'}</h1><p className="mt-2">ይህ ፋይል በ Telegram ቦት ውስጥ ብቻ ይከፈታል።</p>{info && info.bot && <a className="btn-primary mt-4 w-full" href={`https://t.me/${info.bot}?start=d_${id}`}>✈️ በ Telegram ክፈት</a>}</div></Shell>;
+  if (phase === 'library') return <Shell><div className="card"><p className="text-center text-4xl">📚</p><h1 className="mt-2 text-center text-xl">ሰላም {lib.name}!</h1><p className="muted mt-1 text-center">{lib.items.length === 1 ? 'የተፈቀደልዎት ፋይል' : `የተፈቀዱልዎት ${lib.items.length} ፋይሎች`}</p>{err && <p className="msg-err mt-3">{err}</p>}
+    <div className="mt-4 space-y-2">{lib.items.map(d => <button key={d.id} disabled={busy} onClick={() => pick(d)} className="w-full rounded-2xl border p-4 text-left" style={{ borderColor: '#d6e6dd' }}><b className="block">{d.id === id ? '⭐ ' : '📖 '}{d.title}</b><span className="muted text-sm">{d.slides} ገጾች{d.pct ? ` · ${d.pct}% ተነብቧል` : ''}</span></button>)}</div></div></Shell>;
   if (phase === 'nolink') return <Shell><div className="card text-center"><p className="text-4xl">🔗</p><p className="mt-2">የፋይሉን አገናኝ ከመምህርዎ ያግኙ እና እንደገና ይክፈቱ።</p></div></Shell>;
-  if (phase === 'reading') return <Reader id={id} auth={auth} />;
+  if (phase === 'reading') return <Reader key={openId} id={openId || id} auth={auth} onBack={lib ? () => setPhase('library') : null} />;
   if (phase === 'ready') return <Shell><div className="card text-center"><p className="text-4xl">✅</p><h1 className="mt-2 text-xl">ሰላም {auth.name}!</h1><p className="mt-1 font-bold">{auth.title}</p><p className="muted mt-1">{auth.slides} ገጾች · ወደ ታች በማንሸራተት ያንብቡ</p>
-    <button className="btn-primary mt-5 w-full !min-h-[56px] text-lg" onClick={() => setPhase('reading')}>📖 ፋይሉን ክፈት</button></div></Shell>;
+    <button className="btn-primary mt-5 w-full !min-h-[56px] text-lg" onClick={() => setPhase('reading')}>📖 ፋይሉን ክፈት</button>{lib && lib.items.length > 1 && <button className="mt-2 w-full text-sm underline" onClick={() => setPhase('library')}>‹ ሌሎች ፋይሎቼ</button>}</div></Shell>;
   const closed = info && info.ok && !info.open;
-  return <Shell><form className="card" onSubmit={submit}><p className="text-center text-4xl">📖</p><h1 className="mt-2 text-center text-xl">{info && info.title ? info.title : 'ፋይል'}</h1><p className="muted mt-1 text-center">ለመቀጠል ስምዎን እና የተማሪ ID ያስገቡ</p>
+  return <Shell><form className="card" onSubmit={submit}><p className="text-center text-4xl">📖</p><h1 className="mt-2 text-center text-xl">{info && info.title ? info.title : 'ፋይሎቼ'}</h1><p className="muted mt-1 text-center">ለመቀጠል ስምዎን እና የተማሪ ID ያስገቡ</p>
     {closed && <p className="msg-err mt-3">{ERR.deck_closed}</p>}
     <label className="label">የመጀመሪያ ስም</label><input className="input" autoComplete="off" value={f.name} onChange={e => setF({ ...f, name: e.target.value })} placeholder="ለምሳሌ፦ አበበ" required />
     <label className="label">የተማሪ ID</label><input className="input uppercase" autoComplete="off" value={f.sid} onChange={e => setF({ ...f, sid: e.target.value })} placeholder="ለምሳሌ፦ S001" required />
-    {err && <p className="msg-err mt-3">{err}</p>}<button className="btn-primary mt-4 w-full" disabled={busy || closed || !f.name.trim() || !f.sid.trim()}>{busy ? '⏳…' : 'ቀጥል ›'}</button></form></Shell>;
+    {err && <p className="msg-err mt-3">{err}</p>}<button className="btn-primary mt-4 w-full" disabled={busy || !f.name.trim() || !f.sid.trim()}>{busy ? '⏳…' : 'ቀጥል ›'}</button></form></Shell>;
 }

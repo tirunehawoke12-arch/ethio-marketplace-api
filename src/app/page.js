@@ -26,6 +26,7 @@ export default async function Home() {
 
       <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">{TRUST.map(([i, t, d]) => <div key={t} className="card !rounded-2xl !p-3"><p className="text-2xl">{i}</p><p className="mt-1 text-sm font-extrabold"><T k={t} /></p><p className="muted !text-xs"><T k={d} /></p></div>)}</div>
 
+      <Link href="/study" className="card mt-5 flex items-center gap-3 !bg-brand-light transition hover:-translate-y-0.5 hover:shadow-lift dark:!bg-brand/20"><span className="text-4xl">🎓</span><span className="min-w-0 flex-1"><b className="block text-lg">የተማሪዎች መማሪያ</b><span className="muted text-sm">ማስታወሻ፣ ጥያቄዎች፣ ፒፒቲ፣ PDF — ክፈሉ እና በ Telegram ያንብቡ</span></span><span className="text-xl font-black text-brand">›</span></Link>
       <div className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-6">{[['/market', '🛍', 'ዕቃዎች'], ['/shops', '🏪', 'ሱቆች'], ['/shops?kind=' + encodeURIComponent('ሆቴል እና ማረፊያ'), '🏨', 'ሆቴሎች'], ['/sites', '🌐', 'ገጾች'], ['/jobs?t=workers', '🧑‍🔧', 'ሙያተኞች'], ['/employers', '🏢', 'አሰሪዎች'], ['/jobs', '💼', 'ሥራ']].map(([hr, i, t]) => <Link key={hr} href={hr} className="card !rounded-2xl !p-3 text-center transition hover:-translate-y-1 hover:shadow-lift"><span className="block text-3xl">{i}</span><span className="mt-1 block text-sm font-extrabold">{t}</span></Link>)}</div>
 
       {h.cats && h.cats.length > 0 && <div className="mt-5 flex gap-2 overflow-x-auto pb-1">{h.cats.map(c => <Link key={c.c} href={`/market?cat=${encodeURIComponent(c.c)}`} className="chip">{c.c} <span className="text-mute">({c.n})</span></Link>)}</div>}

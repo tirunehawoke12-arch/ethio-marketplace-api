@@ -14,6 +14,7 @@ import AdminSearch from '@/components/admin/AdminSearch';
 import AdminProducts from '@/components/admin/AdminProducts';
 import AdminComms from '@/components/admin/AdminComms';
 import AdminGrowth from '@/components/admin/AdminGrowth';
+import AdminLearn from '@/components/AdminLearn';
 
 const AUTO = { match: ['✅ ራስ-ሰር ፍተሻ ተዛምዷል', 'msg-ok'], mismatch: ['❌ ራስ-ሰር ፍተሻ አይመሳሰልም', 'msg-err'], notfound: ['❓ በአረጋጋጩ አልተገኘም', 'msg-err'], unknown: ['⚠️ ማረጋገጥ አልተቻለም', 'muted'], error: ['⚠️ ፍተሻው አልተሳካም', 'muted'] };
 const Order = ({ o, children, onCheck }) => (
@@ -118,7 +119,7 @@ function Pages() {
   return (<div>{d.items.length === 0 && <div className="card muted text-center">ገጽ የለም</div>}{d.items.map(x => (<div key={x.id} className="card mb-2"><div className="flex items-center gap-2"><div className="min-w-0 flex-1"><b className="block truncate">{x.title} <span className="tag">{x.kind}</span></b><span className="muted block truncate">{x.owner.email} · {x.owner.phone}</span></div><StatusTag s={x.status} /><button className="btn-ghost !min-h-[40px] !px-3" onClick={() => view(x.id)} aria-label="ሙሉ መረጃ">👁</button><button className="btn-ghost !min-h-[40px] !px-3" onClick={() => st(x.id, x.status === 'suspended' ? 'active' : 'suspended')}>{x.status === 'suspended' ? '✅' : '⛔'}</button></div>
     {open[x.id] && open[x.id].ok && <div className="mt-3 space-y-2">{open[x.id].page.sections.map(s => <div key={s.id} className="rounded-2xl bg-brand-light p-3"><b>{s.icon} {s.title}</b>{s.fields.filter(f => !(Array.isArray(f.value) ? !f.value.length : f.value === '')).map(f => <p key={f.id} className="text-sm"><span className="muted">{f.priv ? '🔒 ' : ''}{f.label}፦</span> {f.type === 'image' ? f.value.map(i => <a key={i} className="mr-2 font-bold text-brand underline" target="_blank" rel="noopener" href={`/api/market/img/${i}`}>ፎቶ</a>) : show(f.value)}</p>)}</div>)}</div>}</div>))}</div>);
 }
-const NAV = [['home', 'ዋና ማዕከል', 'home'], ['market', 'ገበያ እና ክፍያ', 'store'], ['products', 'ዕቃዎች', 'box'], ['accounts', 'አካውንቶች', 'users'], ['people', 'ሰዎች እና ሥራ', 'briefcase'], ['pages', 'ገጾች', 'globe'], ['trust', 'እምነት', 'shield'], ['comms', 'ማስታወቂያ', 'megaphone'], ['growth', 'ኩፖን እና ሪፈራል', 'tag'], ['ops', 'ትንታኔ እና ምትኬ', 'chart']];
+const NAV = [['home', 'ዋና ማዕከል', 'home'], ['market', 'ገበያ እና ክፍያ', 'store'], ['products', 'ዕቃዎች', 'box'], ['accounts', 'አካውንቶች', 'users'], ['people', 'ሰዎች እና ሥራ', 'briefcase'], ['pages', 'ገጾች', 'globe'], ['trust', 'እምነት', 'shield'], ['comms', 'ማስታወቂያ', 'megaphone'], ['growth', 'ኩፖን እና ሪፈራል', 'tag'], ['learn', 'የተማሪዎች መማሪያ', 'book'], ['ops', 'ትንታኔ እና ምትኬ', 'chart']];
 function Admin() {
   const [t, setT] = useState('home'), [hub, setHub] = useState(null), [live, setLive] = useState(true), [f, setF] = useState({}), [spin, setSpin] = useState(false);
   const go = useCallback((k, x) => { setT(k); setF(x || {}); try { history.replaceState(null, '', '#' + k); } catch (e) { } window.scrollTo({ top: 0 }); }, []);
@@ -141,7 +142,7 @@ function Admin() {
         <aside className="hidden md:block"><nav className="card sticky top-20 space-y-1 !p-2" aria-label="አድሚን ምናሌ">{NAV.map(([k, l, i]) => <Item key={k} k={k} l={l} i={i} cls="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-bold transition" />)}</nav></aside>
         <section className="min-w-0" key={t + JSON.stringify(f)}>
           {t === 'home' && <><AdminHome hub={hub} go={go} /><div className="mt-4"><AdminSession /></div></>}
-          {t === 'market' && <Market />}{t === 'products' && <AdminProducts q={f.q} />}{t === 'accounts' && <Accounts uid={f.uid} q={f.q} />}{t === 'people' && <People />}{t === 'pages' && <Pages />}{t === 'trust' && <Trust />}{t === 'comms' && <AdminComms />}{t === 'growth' && <AdminGrowth />}{t === 'ops' && <AdminOps />}
+          {t === 'market' && <Market />}{t === 'products' && <AdminProducts q={f.q} />}{t === 'accounts' && <Accounts uid={f.uid} q={f.q} />}{t === 'people' && <People />}{t === 'pages' && <Pages />}{t === 'trust' && <Trust />}{t === 'learn' && <AdminLearn />}{t === 'comms' && <AdminComms />}{t === 'growth' && <AdminGrowth />}{t === 'ops' && <AdminOps />}
         </section>
       </div>
     </div>
