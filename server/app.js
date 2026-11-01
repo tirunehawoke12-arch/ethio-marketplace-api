@@ -10,6 +10,7 @@ const ADMIN_PHONE = process.env.ADMIN_PHONE || '0946705941';
 const mailer = require('./mailer');
 const app = express();
 app.disable('x-powered-by');
+app.use('/api/learn', express.json({ limit: '5mb' }));      // ብዙ ገጽ ያለው ፋይል ይዘት
 app.use(express.json({ limit: '1mb' }));
 // የድሮው ገጽ አጠቃላይ የዳታቤዝ/የክፍለ-ጊዜ API ተዘግቷል (ያለ OTP አካውንት መፍጠር እንዳይቻል)። ለሙከራ ብቻ LEGACY_DB=1
 app.use(['/api/db', '/api/session', '/api/account'], (req, res, next) => (process.env.LEGACY_DB === '1' ? next() : res.status(404).json({ ok: false, error: 'not_found' })));

@@ -29,12 +29,15 @@ function Manage({ id }) {
       if (isPdf) {
         const pdf = await readPdf(buf, (i, n) => setProg(`📄 ገጽ ${i}/${n} በማንበብ ላይ…`)), scanned = pdf.avgChars < 25, all = imgAll || scanned; if (scanned && !imgAll) notes.push('ፋይሉ የተቃኘ (ጽሑፍ የሌለው) ይመስላል — ገጾቹ በምስል ገብተዋል።');
         if (pdf.decoration) notes.push('በአብዛኛው ገጽ ላይ ምስል ስላለ (የንድፍ ማስጌጫ ይመስላል) የገጽ ምስሎች ግን ገብተዋል።');
-        for (let i = 0; i < pdf.pages.length; i++) {
-          const p = pdf.pages[i], blocks = all ? [] : p.blocks.slice(); setProg(`🖼 ገጽ ${i + 1}/${pdf.pages.length} በማስገባት ላይ…`);
-          let pg = null;          // የገጹ ሙሉ ምስል (እንደ WPS ተመሳሳይ ስፋት/ቁመት) — ተማሪው «ገጽ» እይታ ላይ ያየዋል
-          if (imgs >= 145) over = true; else { const u = await pdf.render(i, 1000, 170000); pg = u ? await sendImg(u) : null; if (pg) imgs++; }
-          out.push({ title: p.title || (all ? 'ገጽ ' + (i + 1) : ''), ...(pg ? { pg } : {}), blocks });
+        const N = pdf.pages.length, res = new Array(N).fill(null), fly = new Set(); let done = 0;          // ማንበብ ተከታታይ፣ መላክ በአንድ ጊዜ 4 (ፈጣን)
+        for (let i = 0; i < N; i++) {
+          if (imgs >= 695) { over = true; continue; } imgs++; setProg(`🖼 ገጽ ${i + 1}/${N}…`);
+          const u = await pdf.render(i, 950, 130000); if (!u) { imgs--; continue; }
+          const pr = sendImg(u).then(mid => { res[i] = mid; setProg(`🖼 ገጽ ${++done}/${N} ተልኳል…`); fly.delete(pr); }); fly.add(pr);
+          if (fly.size >= 4) await Promise.race(fly);
         }
+        await Promise.all(fly);
+        for (let i = 0; i < N; i++) { const p = pdf.pages[i], blocks = all ? [] : p.blocks.slice(); out.push({ title: p.title || (all ? 'ገጽ ' + (i + 1) : ''), ...(res[i] ? { pg: res[i] } : {}), blocks }); }
         if (over) notes.push('የምስል ገደብ ደርሷል — የተቀሩት ገጾች በጽሑፍ ብቻ ገብተዋል።');
       } else {
         const { slides, warnings } = await parsePptx(buf), done = new Map(); let n = 0; const total = slides.reduce((a, s) => a + s.images.length, 0);

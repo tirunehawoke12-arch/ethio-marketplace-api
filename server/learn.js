@@ -6,7 +6,7 @@
           ምስሎች ከክፍለ-ጊዜ ጋር ብቻ፤ ሙከራ ገደብ፤ ማን መቼ እንዳየ ይመዘገባል። (ስክሪን ፎቶን 100% መከልከል አይቻልም) */
 const crypto = require('crypto'), AM = require('./amnorm'), imgstore = require('./imgstore');
 const D = 'ln/decks', M = 'ln/media', V = 'ln/views', R = 'ln/reqs', ST = 'ln/studs', CATS = ['አጭር ማስታወሻ', 'ጥያቄዎች', 'ፒፒቲ', 'PDF', 'ሰነድ'], SESSION = 3 * 3600e3, AUTH_AGE = 24 * 3600e3;
-const LIM = { decks: 300, slides: 300, blocks: 120, text: 1500, rows: 40, media: 150, mediaBytes: 24 * 1048576, roster: 600 };
+const LIM = { decks: 300, slides: 600, blocks: 120, text: 1500, rows: 40, media: 700, mediaBytes: 120 * 1048576, roster: 600 };
 
 function checkInitData(initData, botToken, now = Date.now()) {          // https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
   try {
@@ -42,7 +42,7 @@ module.exports = function learn(ctx) {
     res.json({ ok: true, bot: botUsername, short: miniShort, cats: CATS, deck: { ...brief(d), desc: d.desc || '' }, roster: d.roster.map(r => { const v = views.find(x => x.sid === r.id) || {}; return { name: r.name, id: r.id, bound: !!r.tg, opened: v.n | 0, last: v.last || 0, max: v.max | 0 }; }), slidesN: d.slides.length });
   });
   app.post('/api/learn/decks/:id/media', async (req, res) => {
-    const u = mine(req, res); if (!u) return; const d = own(u, req.params.id); if (!d) return bad(res, 404, 'not_found'); if (!limit('lm' + u.uid, 200, 3600e3)) return bad(res, 429, 'slow_down');
+    const u = mine(req, res); if (!u) return; const d = own(u, req.params.id); if (!d) return bad(res, 404, 'not_found'); if (!limit('lm' + u.uid, 2000, 3600e3)) return bad(res, 429, 'slow_down');
     const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(req.body.dataUrl || '')); if (!m || m[2].length > 520000) return bad(res, 400, 'bad_image');
     const mine_ = Object.values(col(M)).filter(x => x.deck === d.id); if (mine_.length >= LIM.media || mine_.reduce((a, x) => a + x.sz, 0) > LIM.mediaBytes) return bad(res, 400, 'too_many');
     const b = Buffer.from(m[2], 'base64'), hex = b.slice(0, 12).toString('hex'); if (!((m[1] === 'image/jpeg' && hex.startsWith('ffd8ff')) || (m[1] === 'image/png' && hex.startsWith('89504e47')) || (m[1] === 'image/webp' && b.slice(0, 4).toString() === 'RIFF'))) return bad(res, 400, 'bad_image');
