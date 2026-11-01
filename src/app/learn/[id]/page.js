@@ -19,9 +19,9 @@ const TH = {
 const FONT = '"Noto Sans Ethiopic","Noto Serif Ethiopic","Abyssinica SIL","Nyala",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
 
 function Reader({ id, auth, onBack }) {
-  const [d, setD] = useState(null), [fs, setFs] = useState(18), [toc, setToc] = useState(false), [hid, setHid] = useState(false), [pct, setPct] = useState(0), [th, setTh] = useState('light');
+  const [d, setD] = useState(null), [fs, setFs] = useState(18), [toc, setToc] = useState(false), [hid, setHid] = useState(false), [pct, setPct] = useState(0), [th, setTh] = useState('light'), [view, setView] = useState('page');
   const refs = useRef([]), max = useRef(0), sent = useRef(0), key = 'ln_pos_' + id + '_' + auth.sid, C = TH[th];
-  useEffect(() => { (async () => { setD(await lf('/read', { token: auth.token })); })(); try { const f = Number(localStorage.getItem('ln_fs')); if (f >= 14 && f <= 30) setFs(f); const t = localStorage.getItem('ln_th'); if (TH[t]) setTh(t); else if (document.documentElement.classList.contains('dark')) setTh('dark'); } catch (e) { } }, [auth.token]);
+  useEffect(() => { (async () => { setD(await lf('/read', { token: auth.token })); })(); try { const f = Number(localStorage.getItem('ln_fs')); if (f >= 14 && f <= 30) setFs(f); const vw = localStorage.getItem('ln_vw'); if (vw === 'text' || vw === 'page') setView(vw); const t = localStorage.getItem('ln_th'); if (TH[t]) setTh(t); else if (document.documentElement.classList.contains('dark')) setTh('dark'); } catch (e) { } }, [auth.token]);
   useEffect(() => { const b = document.body, old = b.style.background; b.style.background = C.bg; return () => { b.style.background = old; }; }, [C.bg]);
   useEffect(() => { const v = () => setHid(document.visibilityState === 'hidden'), k = e => { if ((e.ctrlKey || e.metaKey) && /^[cpsua]$/i.test(e.key)) e.preventDefault(); };
     document.addEventListener('visibilitychange', v); window.addEventListener('keydown', k); return () => { document.removeEventListener('visibilitychange', v); window.removeEventListener('keydown', k); }; }, []);
@@ -34,6 +34,7 @@ function Reader({ id, auth, onBack }) {
     return () => { io.disconnect(); clearInterval(t); };
   }, [d, key, auth.token]);
   const setSize = n => { const v = Math.max(14, Math.min(30, n)); setFs(v); try { localStorage.setItem('ln_fs', String(v)); } catch (e) { } };
+  const hasPg = !!(d && d.ok && d.slides.some(s => s.pg)), pageMode = hasPg && view === 'page', flip = () => { const n = view === 'page' ? 'text' : 'page'; setView(n); try { localStorage.setItem('ln_vw', n); } catch (e) { } };
   const cycle = () => { const k = Object.keys(TH), n = k[(k.indexOf(th) + 1) % k.length]; setTh(n); try { localStorage.setItem('ln_th', n); } catch (e) { } };
   if (!d) return <Shell><p className="muted py-20 text-center">⏳ በመጫን ላይ…</p></Shell>;
   if (!d.ok) return <Shell><p className="msg-err">{msg(d.error)}</p></Shell>;
@@ -52,15 +53,17 @@ function Reader({ id, auth, onBack }) {
       <div className="fixed inset-x-0 top-0 z-40 h-1" style={{ background: C.line }}><div className="h-full transition-all" style={{ width: pct + '%', background: '#0a8a56' }} /></div>
       <header className="sticky top-0 z-30 px-3 py-2 backdrop-blur" style={{ background: C.bg + 'ee', borderBottom: `1px solid ${C.line}` }}>
         <div className="mx-auto flex max-w-2xl items-center gap-2">{onBack && <button className="rounded-xl px-3 py-2 text-sm font-bold" style={btn} onClick={onBack} aria-label="ወደ ፋይሎች">‹</button>}<button className="rounded-xl px-3 py-2 text-sm font-bold" style={btn} onClick={() => setToc(!toc)} aria-label="ማውጫ">☰</button><b className="min-w-0 flex-1 truncate">{d.title}</b><span className="text-xs" style={{ color: C.mute }}>{pct}%</span>
-          <button className="rounded-xl px-2.5 py-2 text-sm font-bold" style={btn} onClick={() => setSize(fs - 1)} aria-label="ትንሽ">A−</button><button className="rounded-xl px-2.5 py-2 text-sm font-bold" style={btn} onClick={() => setSize(fs + 1)} aria-label="ትልቅ">A+</button><button className="rounded-xl px-2.5 py-2 text-sm" style={btn} onClick={cycle} aria-label={C.name} title={C.name}>{C.icon}</button></div>
+          {hasPg && <button className="rounded-xl px-2.5 py-2 text-sm font-bold" style={btn} onClick={flip} aria-label="እይታ">{pageMode ? '🔤' : '📄'}</button>}{!pageMode && <button className="rounded-xl px-2.5 py-2 text-sm font-bold" style={btn} onClick={() => setSize(fs - 1)} aria-label="ትንሽ">A−</button>}{!pageMode && <button className="rounded-xl px-2.5 py-2 text-sm font-bold" style={btn} onClick={() => setSize(fs + 1)} aria-label="ትልቅ">A+</button>}<button className="rounded-xl px-2.5 py-2 text-sm" style={btn} onClick={cycle} aria-label={C.name} title={C.name}>{C.icon}</button></div>
         {toc && <ol className="mx-auto mt-2 max-h-[55vh] max-w-2xl space-y-0.5 overflow-y-auto rounded-2xl p-2 text-sm" style={{ background: C.soft }}>{d.slides.map((s, i) => <li key={i}><button className="w-full rounded-xl px-2 py-1.5 text-left" onClick={() => { setToc(false); refs.current[i] && refs.current[i].scrollIntoView({ behavior: 'smooth' }); }}><span style={{ color: C.mute, marginRight: 8 }}>{i + 1}</span>{s.title || 'ገጽ ' + (i + 1)}</button></li>)}</ol>}
       </header>
-      <article className={'ln-noselect mx-auto max-w-2xl px-5 pb-28 pt-6 transition-opacity ' + (hid ? 'opacity-0' : '')} style={{ fontSize: fs + 'px', lineHeight: 1.9, letterSpacing: '0.005em', wordBreak: 'break-word' }}>
+      <article className={'ln-noselect mx-auto pb-28 transition-opacity ' + (pageMode ? 'max-w-5xl px-0 pt-2 ' : 'max-w-3xl px-4 pt-6 ') + (hid ? 'opacity-0' : '')} style={{ fontSize: fs + 'px', lineHeight: 1.9, letterSpacing: '0.005em', wordBreak: 'normal', overflowWrap: 'break-word' }}>
         {d.slides.map((s, i) => (
+          pageMode && s.pg ? <section key={i} data-i={i} ref={n => (refs.current[i] = n)} style={{ scrollMarginTop: 56, marginBottom: 6 }}><img src={`/api/learn/media/${s.pg}?s=${auth.token}`} alt={'ገጽ ' + (i + 1)} loading={i < 2 ? 'eager' : 'lazy'} draggable={false} onContextMenu={e => e.preventDefault()} style={{ width: '100%', height: 'auto', display: 'block', WebkitTouchCallout: 'none' }} /><div style={{ fontSize: 11, textAlign: 'center', color: C.mute, padding: '2px 0 6px' }}>{i + 1} / {d.slides.length}</div></section> :
           <section key={i} data-i={i} ref={n => (refs.current[i] = n)} style={{ scrollMarginTop: 70, paddingBottom: '1.6em', marginBottom: '1.6em', borderBottom: i < d.slides.length - 1 ? `1px solid ${C.line}` : 'none' }}>
             <div style={{ fontSize: '0.62em', letterSpacing: '0.08em', color: C.mute, marginBottom: '0.8em' }}>{i + 1} / {d.slides.length}</div>
             {s.blocks.some(b => b.k === 'h') ? null : <h2 style={{ fontSize: '1.4em', fontWeight: 800, lineHeight: 1.45, margin: '0 0 0.7em' }}>{s.title || 'ገጽ ' + (i + 1)}</h2>}
             {s.blocks.map(block)}
+            {s.pg && !s.blocks.some(b => b.k === 'p' || b.k === 'li' || b.k === 'tbl') && <img src={`/api/learn/media/${s.pg}?s=${auth.token}`} alt="" loading="lazy" draggable={false} style={{ width: '100%', borderRadius: 14 }} />}
           </section>))}
         <p style={{ textAlign: 'center', color: C.mute, padding: '1em 0' }}>🏁 የፋይሉ መጨረሻ</p>
       </article>

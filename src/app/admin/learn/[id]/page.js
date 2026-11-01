@@ -28,12 +28,12 @@ function Manage({ id }) {
       const buf = await file.arrayBuffer(), isPdf = /\.pdf$/i.test(file.name) || new Uint8Array(buf.slice(0, 5)).join() === '37,80,68,70,45', out = [], notes = []; let imgs = 0, over = false;
       if (isPdf) {
         const pdf = await readPdf(buf, (i, n) => setProg(`📄 ገጽ ${i}/${n} በማንበብ ላይ…`)), scanned = pdf.avgChars < 25, all = imgAll || scanned; if (scanned && !imgAll) notes.push('ፋይሉ የተቃኘ (ጽሑፍ የሌለው) ይመስላል — ገጾቹ በምስል ገብተዋል።');
-        if (pdf.decoration) notes.push('በአብዛኛው ገጽ ላይ ምስል ስላለ (የንድፍ ማስጌጫ ይመስላል) ምስሎች አልተጨመሩም፤ ጽሑፍ ብቻ ገብቷል።');
+        if (pdf.decoration) notes.push('በአብዛኛው ገጽ ላይ ምስል ስላለ (የንድፍ ማስጌጫ ይመስላል) የገጽ ምስሎች ግን ገብተዋል።');
         for (let i = 0; i < pdf.pages.length; i++) {
           const p = pdf.pages[i], blocks = all ? [] : p.blocks.slice(); setProg(`🖼 ገጽ ${i + 1}/${pdf.pages.length} በማስገባት ላይ…`);
-          const wantImg = all || (p.hasImg && !pdf.decoration) || p.chars < 12;
-          if (wantImg) { if (imgs >= 145) over = true; else { const u = await pdf.render(i, all ? 1100 : 1000); const mid = u ? await sendImg(u) : null; if (mid) { imgs++; blocks.push({ k: 'img', m: mid, alt: 'ገጽ ' + (i + 1) }); } } }
-          out.push({ title: p.title || (all ? 'ገጽ ' + (i + 1) : ''), blocks });
+          let pg = null;          // የገጹ ሙሉ ምስል (እንደ WPS ተመሳሳይ ስፋት/ቁመት) — ተማሪው «ገጽ» እይታ ላይ ያየዋል
+          if (imgs >= 145) over = true; else { const u = await pdf.render(i, 1000, 170000); pg = u ? await sendImg(u) : null; if (pg) imgs++; }
+          out.push({ title: p.title || (all ? 'ገጽ ' + (i + 1) : ''), ...(pg ? { pg } : {}), blocks });
         }
         if (over) notes.push('የምስል ገደብ ደርሷል — የተቀሩት ገጾች በጽሑፍ ብቻ ገብተዋል።');
       } else {

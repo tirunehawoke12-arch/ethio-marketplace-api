@@ -57,7 +57,7 @@ module.exports = function learn(ctx) {
       if (b.k === 'h' || b.k === 'p') blocks.push({ k: b.k, t: S(b.t, LIM.text) }); else if (b.k === 'li') blocks.push({ k: 'li', t: S(b.t, LIM.text), l: Math.max(0, Math.min(3, N(b.l) | 0)) });
       else if (b.k === 'tbl') blocks.push({ k: 'tbl', rows: (Array.isArray(b.rows) ? b.rows : []).slice(0, LIM.rows).map(r => (Array.isArray(r) ? r : []).slice(0, 12).map(c => S(c, 300))) });
       else if (b.k === 'img' && ok.has(b.m)) blocks.push({ k: 'img', m: b.m, alt: S(b.alt, 200) }); }
-      slides.push({ title: S(s.title, 200), blocks: blocks.filter(b => b.k !== 'p' && b.k !== 'h' && b.k !== 'li' ? true : b.t) }); }
+      slides.push({ title: S(s.title, 200), ...(ok.has(s.pg) ? { pg: s.pg } : {}), blocks: blocks.filter(b => b.k !== 'p' && b.k !== 'h' && b.k !== 'li' ? true : b.t) }); }
     d.slides = slides; try { await saveMany([[D, d.id]]); res.json({ ok: true, slides: slides.length }); } catch (e) { bad(res, 503, 'storage'); }
   });
   app.post('/api/learn/decks/:id/settings', async (req, res) => {
