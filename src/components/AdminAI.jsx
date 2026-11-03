@@ -1,11 +1,14 @@
 'use client';
 /* አድሚን፦ AI ረዳት — ማብሪያ/ማጥፊያ፣ ነጻ ገደብ፣ እቅድ እና ዋጋ፣ እውቀት (ፈጣሪ/ገበያ)፣ የክፍያ ጥያቄዎች፣ ተጠቃሚዎች */
 import { useCallback, useEffect, useState } from 'react';
-import { get, post } from '@/lib/api';
+import { get, post, tok } from '@/lib/api';
 import { errText } from '@/lib/consts';
 import { Empty, Msg, Spinner } from '@/components/ui';
 
 const when = t => (t ? new Date(t).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : '—');
+async function showProof(id) {
+  try { const r = await fetch('/api/ai/admin/proof/' + id, { headers: { authorization: 'Bearer ' + tok() } }); if (!r.ok) return alert('ማስረጃ አልተገኘም'); const u = URL.createObjectURL(await r.blob()); window.open(u, '_blank'); setTimeout(() => URL.revokeObjectURL(u), 120000); } catch (e) { alert('ማስረጃ መክፈት አልተቻለም'); }
+}
 const day = t => (t ? new Date(t).toISOString().slice(0, 10) : '—');
 
 function Requests({ onChange }) {
@@ -15,7 +18,7 @@ function Requests({ onChange }) {
   return (<div className="space-y-2"><div className="flex gap-2">{[['pending', '⏳ የሚጠብቁ'], ['approved', '✅ የጸደቁ'], ['rejected', '❌ ውድቅ']].map(([k, l]) => <button key={k} className={'chip ' + (st === k ? '!bg-brand !text-white' : '')} onClick={() => setSt(k)}>{l}</button>)}</div>
     <Msg m={m} ok={m.startsWith('✅')} />{!d ? <Spinner /> : d.items.length === 0 ? <Empty>ምንም የለም</Empty> : d.items.map(r => <div key={r.id} className="card !p-3 text-sm">
       <div className="flex justify-between gap-2"><b>🤖 {r.name || r.uid}</b><b className="text-brand">{r.price} ብር</b></div><p className="muted">{r.label} ({r.days} ቀን) · 📞 {r.phone || '—'} · {when(r.ts)}</p>
-      <p className="mt-1 rounded-xl bg-brand-light p-2 dark:bg-brand/20">💳 <b>{r.method}</b> · ማጣቀሻ፦ <b>{r.ref}</b></p>{r.reason && <p className="muted">ምክንያት፦ {r.reason}</p>}
+      <p className="mt-1 rounded-xl bg-brand-light p-2 dark:bg-brand/20">💳 <b>{r.method}</b> · ማጣቀሻ፦ <b>{r.ref}</b></p>{r.proof ? <button className="btn-soft mt-2 w-full" onClick={() => showProof(r.id)}>📎 የክፍያ ማስረጃ ክፈት</button> : <p className="msg-err mt-2">⚠️ ያለ ማስረጃ</p>}{r.reason && <p className="muted">ምክንያት፦ {r.reason}</p>}
       {r.status === 'pending' && <div className="mt-2 grid grid-cols-2 gap-2"><button className="btn-primary" onClick={() => act(r.id, 'approve')}>✅ አጽድቅ</button><button className="btn-ghost !text-red-700" onClick={() => act(r.id, 'reject')}>❌ ውድቅ</button></div>}</div>)}</div>);
 }
 
@@ -27,6 +30,7 @@ function Settings({ o, reload }) {
   return (<div className="space-y-3">
     <div className="card"><div className="flex items-center gap-3"><label className="flex flex-1 items-center gap-2 font-bold"><input type="checkbox" className="h-5 w-5 accent-brand" checked={!!f.enabled} onChange={e => set('enabled', e.target.checked)} />AI ክፍት ነው (ለሁሉም)</label></div>
       <label className="mt-2 flex items-center gap-2 text-sm font-bold"><input type="checkbox" className="h-5 w-5 accent-brand" checked={!!f.paywall} onChange={e => set('paywall', e.target.checked)} />ጥልቅ ርዕስ/ገደብ ሲያልፍ ክፍያ ጠይቅ (ከተዘጋ ሁሉም ነጻ)</label>
+      <label className="mt-2 flex items-center gap-2 text-sm font-bold"><input type="checkbox" className="h-5 w-5 accent-brand" checked={f.requireProof !== false} onChange={e => set('requireProof', e.target.checked)} />ክፍያ ሲጠይቁ ማስረጃ (screenshot/PDF) ግዴታ</label>
       <p className="muted mt-2 text-xs">አቅራቢ፦ {o.ready ? `${o.provider} · ${o.model}` : '⚠️ ቁልፍ አልተቀመጠም (Render ላይ GEMINI_API_KEY ወይም ANTHROPIC_API_KEY)'}</p></div>
     <div className="card"><b>📏 የቀን ገደቦች (ለአንድ ተጠቃሚ)</b><div className="mt-2 grid grid-cols-2 gap-2"><Num k="freeChatDay" l="ነጻ — መልእክት" /><Num k="paidChatDay" l="የተከፈለ — መልእክት" /><Num k="freePagesDay" l="ነጻ — የትርጉም ገጽ" /><Num k="paidPagesDay" l="የተከፈለ — የትርጉም ገጽ" /></div></div>
     <div className="card"><b>💳 እቅዶች እና ዋጋ</b><div className="mt-2 space-y-2">{f.plans.map((p, i) => <div key={i} className="grid grid-cols-[1fr_70px_80px_auto] items-end gap-2"><label className="text-xs font-bold">ስም<input className="input mt-1" value={p.label} onChange={e => plan(i, 'label', e.target.value)} /></label><label className="text-xs font-bold">ቀን<input type="number" className="input mt-1" value={p.days} onChange={e => plan(i, 'days', e.target.value)} /></label><label className="text-xs font-bold">ብር<input type="number" className="input mt-1" value={p.price} onChange={e => plan(i, 'price', e.target.value)} /></label>
@@ -54,6 +58,7 @@ export default function AdminAI() {
   if (!o) return <Spinner />; if (!o.ok) return <p className="msg-err">{errText(o.error)}</p>;
   return (<div className="space-y-3">
     <div className="grid grid-cols-3 gap-2 text-center"><div className="card !p-3"><b className="text-xl">{o.stats.chats}</b><p className="muted text-xs">መልእክቶች (ከጅምር)</p></div><div className="card !p-3"><b className="text-xl">{o.stats.paywalls}</b><p className="muted text-xs">ክፍያ ተጠይቋል</p></div><div className="card !p-3"><b className="text-xl">{o.revenue}</b><p className="muted text-xs">ብር (የጸደቀ)</p></div></div>
+    {o.stats.urgent > 0 && <p className="muted text-center text-xs">🩺 ነጻ የተመለሱ አጣዳፊ ጥያቄዎች፦ {o.stats.urgent}</p>}
     <div className="flex gap-2 overflow-x-auto">{[['reqs', `💳 ጥያቄዎች${o.pending ? ' (' + o.pending + ')' : ''}`], ['set', '⚙️ ቅንብር'], ['users', '👥 ተጠቃሚዎች']].map(([k, l]) => <button key={k} className={'chip shrink-0 ' + (tab === k ? '!bg-brand !text-white' : '')} onClick={() => setTab(k)}>{l}</button>)}</div>
     {tab === 'reqs' && <Requests onChange={load} />}{tab === 'set' && <Settings o={o} reload={load} />}{tab === 'users' && <Users o={o} reload={load} />}</div>);
 }

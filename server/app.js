@@ -10,7 +10,8 @@ const ADMIN_PHONE = process.env.ADMIN_PHONE || '0946705941';
 const mailer = require('./mailer');
 const app = express();
 app.disable('x-powered-by');
-app.use('/api/learn', express.json({ limit: '5mb' }));      // ብዙ ገጽ ያለው ፋይል ይዘት
+app.use('/api/learn', express.json({ limit: '5mb' }));
+app.use('/api/ai', express.json({ limit: '3mb' }));          // የክፍያ ማስረጃ (ምስል/PDF)      // ብዙ ገጽ ያለው ፋይል ይዘት
 app.use(express.json({ limit: '1mb' }));
 // የድሮው ገጽ አጠቃላይ የዳታቤዝ/የክፍለ-ጊዜ API ተዘግቷል (ያለ OTP አካውንት መፍጠር እንዳይቻል)። ለሙከራ ብቻ LEGACY_DB=1
 app.use(['/api/db', '/api/session', '/api/account'], (req, res, next) => (process.env.LEGACY_DB === '1' ? next() : res.status(404).json({ ok: false, error: 'not_found' })));
@@ -433,7 +434,7 @@ require('./chat')({ app, col, limit, notifyUser, notifyAdmin, ...mkApi });
 require('./trust')({ app, col, limit, notifyUser, notifyAdmin, ...mkApi });
 require('./geo')({ app, col, limit, ...mkApi });
 require('./learn')({ app, col, limit, pool, persist, bump, notifyUser, notifyAdmin, token: TOKEN, botUsername: BOT_USERNAME, miniShort: (process.env.TELEGRAM_MINIAPP_SHORT || '').replace(/[^\w]/g, ''), baseUrl: PUBLIC_BASE_URL, ...mkApi });
-const aiSvc = require('./aisvc')({ app, col, limit, notifyUser, notifyAdmin, findUid, ...mkApi });          // AI — አድሚን ቁጥጥር፣ ነጻ ገደብ፣ ክፍያ
+const aiSvc = require('./aisvc')({ app, col, limit, notifyUser, notifyAdmin, findUid, tg, adminChat: adminChatId, baseUrl: PUBLIC_BASE_URL, adminPhone: ADMIN_PHONE, siteSearch: async q => { const r = await fetch(`http://127.0.0.1:${PORT}/api/search?q=${encodeURIComponent(q)}`, { signal: AbortSignal.timeout(3000) }); const j = await r.json(); return (j && j.groups) || []; }, ...mkApi });          // AI — አድሚን ቁጥጥር፣ ነጻ ገደብ፣ ክፍያ
 const couponsApi = require('./coupons')({ app, col, limit, ...mkApi });
 require('./referral')({ app, col, limit, notifyUser, coupons: couponsApi, baseUrl: PUBLIC_BASE_URL, getStore: () => store, ...mkApi });
 opsApi = require('./ops')({ app, col, getStore: () => store, ...mkApi });

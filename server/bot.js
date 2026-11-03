@@ -656,11 +656,11 @@ module.exports = function bot(c) {
   }
   async function onText(chat, text, msg) {
     const t = text.trim(), s = ses(chat), uid = uidOf(chat);
-    if (/^\/cancel\b/.test(t)) { s.flow = null; s.auth = null; save(); return home(chat, '✖️ ተሰርዟል።'); }
+    if (/^\/cancel\b/.test(t)) { s.flow = null; s.auth = null; s.aiproof = null; save(); return home(chat, '✖️ ተሰርዟል።'); }
     if (/^\/myid\b/.test(t)) return send(chat, `🆔 Chat ID፦ <code>${chat}</code>`);
     const ld = /^\/start\s+d_([\w-]{4,40})$/.exec(t); if (ld) return learnStart(chat, ld[1]);
     const dl = /^\/start\s+([sgpwej])_([\w-]{4,40})$/.exec(t); if (dl) s.deep = { t: dl[1], id: dl[2] };       // deep link — ከመግባት በኋላም ይከፈታል
-    if (t === '✖️ ተው') { s.await = null; s.flow = null; save(); return home(chat); }
+    if (t === '✖️ ተው') { s.await = null; s.flow = null; s.aiproof = null; save(); return home(chat); }
     if (uid && /^\/ai\b/.test(t)) return aiIntro(chat, uid); if (uid && /^\/(new|reset)\b/.test(t)) { ai.reset(String(chat)); return send(chat, '🧹 አዲስ ውይይት ጀምረናል።', menuKb(chat)); }
     if (uid && /^\/lang\b/.test(t)) return langMenu(chat);
     if (uid && /^\/(search|near|alerts|messages)\b/.test(t)) return action(chat, uid, /^\/(\w+)/.exec(t)[1]);
@@ -684,7 +684,7 @@ module.exports = function bot(c) {
     if (!uid && !(isAdmin(chat) && /^(ad|avp|ast|arf|arl|ash|apt|amod|apay|asl|arfl|adis|ashp|atr|abc|bcgo|bcx|arp|aiap)/.test(k))) return authStart(chat);
     if (/^(ad|avp|ast|arf|arl|ash|ashr|apt|amod|apay|asl|arfl|adis|ashp|atr|atrq|atrp|atrph|abc|bcgo|bcx|arp|aiap)$/.test(k) && !isAdmin(chat)) return send(chat, '⛔ አድሚን ብቻ');
     const s = ses(chat);
-    if (k === 'aipay') return aiPayStart(chat, uid, a); if (k === 'aiap') { const r = await svc.decide(a, x === '1'); return send(chat, r.ok ? (x === '1' ? '✅ ጸድቋል' : '❌ ውድቅ ተደርጓል') : bad(r)); }
+    if (k === 'aih') return send(chat, { m: '🛍 ለምሳሌ ይጻፉ፦\n• «ሶፋ ምን ዋጋ አለ?»\n• «በአዲስ አበባ ክፍት ሥራዎች አሉ?»\n• «ሱቅ እንዴት እከፍታለሁ?»\n• «ክፍያው እንዴት ይሠራል?»', d: '📄 PDF ወይም PowerPoint (.pptx) ፋይል ይላኩ — እንግሊዝኛውን ገጽ በገጽ በአውድ ወደ አማርኛ እተረጉማለሁ።', u: '🩺 አጣዳፊ ጥያቄ ሁልጊዜ ነጻ ነው፤ ለምሳሌ «አሞኛል፣ ትኩሳት እና ራስ ምታት አለኝ ምን ላድርግ?» ብለው ይጻፉ። (ከባድ አደጋ ከሆነ ወዲያው ሆስፒታል/አምቡላንስ 907)', s: '🎓 ለምሳሌ «የ cell membrane ተግባር ምንድን ነው?» ወይም «ይህን ርዕስ አጭር ማስታወሻ አድርግልኝ» ብለው ይጻፉ።' }[a] || '🤖'); if (k === 'aipay') return aiPayStart(chat, uid, a); if (k === 'aiap') { const r = await svc.decide(a, x === '1'); return send(chat, r.ok ? (x === '1' ? '✅ ጸድቋል' : '❌ ውድቅ ተደርጓል') : bad(r)); }
     if (k === 'adn') return docRun(chat, uid); if (k === 'adx') { DOCS.delete(chat); return send(chat, '✖️ ትርጉሙ ቆሟል።'); }
     switch (k) {
       case 'f': return flowCb(chat, data);
@@ -773,12 +773,11 @@ module.exports = function bot(c) {
   const aiErr0 = e => (e && e.message === 'ai_busy' ? '⏳ AI አሁን ሥራ በዝቶበታል — ከጥቂት ደቂቃ በኋላ ይሞክሩ።' : e && e.message === 'ai_bad_doc' ? '⚠️ ፋይሉ መነበብ አልቻለም (የተመሰጠረ፣ በጣም ትልቅ ወይም ከ100 ገጽ በላይ ሊሆን ይችላል)።' : e && e.message === 'ai_too_big' ? '⚠️ ፋይሉ ለ AI በጣም ትልቅ ነው።' : '⚠️ AI አልተሳካም — እንደገና ይሞክሩ።');
   const aiOff = '🤖 AI ገና አልተዘጋጀም። (አድሚን፦ በ Render ላይ GEMINI_API_KEY (ነጻ) ወይም ANTHROPIC_API_KEY ያቀናብሩ።)';
   const planRows = (plans, pre = 'aipay') => plans.map(p => [b(`💳 ${p.label} — ${p.price} ብር`, `${pre}:${p.id}`)]);
+  const accText = async uid => { const cf = await GET('/api/market/config', uid); return (cf.accounts || []).map(a => `• ${H(a.method)}፦ <code>${H(a.number)}</code>${a.holder ? ' · ' + H(a.holder) : ''}`).join('\n'); };
   async function paywall(chat, uid, why, partial) {
     const inf = svc.info(uid || 'x'), reason = why === 'limit' ? '⛔ የዛሬው ነጻ የ AI መልእክት ገደብ አልቋል።' : why === 'pages' ? '⛔ የዛሬው ነጻ የትርጉም ገጾች ገደብ አልቋል።' : '🔒 ይህ ጥልቅ (ሙሉ) መልስ ለተከፈሉ ተጠቃሚዎች ነው።';
-    if (partial) await sendLong(chat, '', partial);
-    return send(chat, `${reason}
-
-ሙሉ እና ያልተገደበ መልስ ለማግኘት እቅድ ይምረጡ ↓ (አስቸኳይ የጤና እርዳታ ግን ሁልጊዜ ነጻ ነው)።${inf.pending ? '\n\n⏳ ያለፈው ክፍያዎ እየተረጋገጠ ነው።' : ''}`, ik(inf.pending ? [] : planRows(inf.plans)));
+    if (partial) await sendLong(chat, '', partial); const acc = inf.pending ? '' : await accText(uid);
+    return send(chat, `${reason}\n\n${inf.pending ? '⏳ ያለፈው ክፍያዎ እየተረጋገጠ ነው።' : `ሙሉ እና ያልተገደበ መልስ ለማግኘት እቅድ ይምረጡ፣ ከዚያ ከታች ባሉት አካውንቶች ይክፈሉ እና የክፍያ ማስረጃ (screenshot ወይም PDF) ይላኩ፦\n\n${acc || 'የክፍያ አካውንት በድረ-ገጹ ይመልከቱ'}`}\n\n<i>አስቸኳይ የጤና እርዳታ (ለምሳሌ «አሞኛል») ሁልጊዜ ነጻ ነው።</i>`, ik(inf.pending ? [] : planRows(inf.plans)));
   }
   async function aiIntro(chat, uid) {
     if (!aiReady()) return send(chat, aiOff, menuKb(chat));
@@ -789,14 +788,28 @@ module.exports = function bot(c) {
 • ማንኛውንም ጥያቄ እዚሁ ይጻፉ — እመልሳለሁ።
 • 📎 <b>PDF ወይም PowerPoint (.pptx)</b> ይላኩ — እንግሊዝኛውን ገጽ በገጽ በአውድ ወደ አማርኛ እተረጉማለሁ።
 • ስለ ገበያው ወይም ስለ ፈጣሪዬ ይጠይቁኝ።
-• /new — አዲስ ውይይት`, ik(adm || inf.paid || inf.pending ? [] : planRows(inf.plans)));
+• /new — አዲስ ውይይት`, ik([[b('🛍 ስለ ገበያው', 'aih:m'), b('📄 ሰነድ አስተርጉም', 'aih:d')], [b('🩺 አጣዳፊ ጥያቄ', 'aih:u'), b('🎓 ትምህርት', 'aih:s')], ...(adm || inf.paid || inf.pending ? [] : planRows(inf.plans))]));
   }
   async function aiPayStart(chat, uid, planId) {
     const inf = svc.info(uid), p = inf.plans.find(x => x.id === planId); if (!p) return; if (inf.pending) return send(chat, '⏳ ያለፈው ክፍያዎ እየተረጋገጠ ነው።');
     const cf = await GET('/api/market/config', uid), acc = (cf.accounts || []).map(a => `• ${H(a.method)}፦ <code>${H(a.number)}</code>${a.holder ? ' · ' + H(a.holder) : ''}`).join('\n');
     return startFlow(chat, 'aibuy', [{ k: 'method', q: 'በየትኛው ዘዴ ከፈሉ?', t: 'choice', o: PAY }, { k: 'ref', q: 'የግብይት ማጣቀሻ ቁጥር፦', t: 'text', min: 4, max: 40 }], { plan: p.id }, `🤖 <b>${H(p.label)}</b> — ${p.price} ብር\n\n${acc || 'የክፍያ አካውንት በድረ-ገጹ ይመልከቱ'}\n\nከላይ ባለው አካውንት ${p.price} ብር ከላኩ በኋላ ከታች ዝርዝሩን ያስገቡ።`);
   }
-  FIN.aibuy = async (chat, uid, d, x) => { const r = await svc.buy(uid, { plan: x.plan, method: d.method, ref: d.ref }); return send(chat, r.ok ? '✅ ጥያቄዎ ተልኳል — ክፍያው ሲረጋገጥ ይነገርዎታል።' : bad(r), menuKb(chat)); };
+  FIN.aibuy = async (chat, uid, d, x) => {
+    const inf = svc.info(uid), st = ses(chat);
+    if (!inf.requireProof) { const r = await svc.buy(uid, { plan: x.plan, method: d.method, ref: d.ref }); return send(chat, r.ok ? '✅ ጥያቄዎ ተልኳል — ክፍያው ሲረጋገጥ ይነገርዎታል።' : bad(r), menuKb(chat)); }
+    st.aiproof = { plan: x.plan, method: d.method, ref: d.ref, ts: Date.now() }; save();
+    return send(chat, '📎 አሁን የክፍያ ማስረጃዎን ይላኩ — <b>screenshot (ፎቶ) ወይም PDF</b> (ከ1.5MB ያነሰ)።\nለመተው «✖️ ተው»።', { keyboard: [['✖️ ተው']], resize_keyboard: true, one_time_keyboard: true });
+  };
+  async function aiProof(chat, m) {
+    const uid = uidOf(chat), st = ses(chat), p = st.aiproof; if (!uid || !p) return; if (Date.now() - p.ts > 30 * 60e3) { st.aiproof = null; save(); return send(chat, '⌛ ጊዜው አልፏል — እንደገና ይጀምሩ።', menuKb(chat)); }
+    let fileId, type, mime;
+    if (m.photo) { const ok = (m.photo || []).filter(x => (x.file_size || 0) <= 1.4 * 1048576).sort((a, b2) => (b2.width || 0) - (a.width || 0))[0]; if (!ok) return send(chat, '⚠️ ፎቶው ትልቅ ነው — ትንሽ አድርገው ወይም እንደ PDF ይላኩ።'); fileId = ok.file_id; type = 'photo'; }
+    else { const d = m.document; if (!/^(image\/(jpeg|png|webp)|application\/pdf)$/.test(d.mime_type || '')) return send(chat, '⚠️ ምስል (JPG/PNG) ወይም PDF ብቻ ይላኩ።'); if ((d.file_size || 0) > 1.4 * 1048576) return send(chat, '⚠️ ፋይሉ ከ1.5MB በላይ ነው።'); fileId = d.file_id; type = 'document'; }
+    let buf; try { buf = await tgDownload(fileId); } catch (e) { return send(chat, '⚠️ ፋይሉን ማውረድ አልተቻለም — እንደገና ይላኩ።'); }
+    const r = await svc.buy(uid, { plan: p.plan, method: p.method, ref: p.ref, proof: { data: buf.toString('base64') }, tgFile: { type, id: fileId } });
+    if (r.ok || r.error !== 'bad_proof') { st.aiproof = null; save(); } return send(chat, r.ok ? '✅ ጥያቄዎ እና ማስረጃዎ ተልኳል — ክፍያው ሲረጋገጥ ይነገርዎታል።' : bad(r), menuKb(chat));
+  }
   const typing = chat => tg('sendChatAction', { chat_id: chat, action: 'typing' }).catch(() => { });
   const sendLong = async (chat, head, text) => { const parts = AIM.chunkText(text); for (let i = 0; i < parts.length; i++) await send(chat, (i === 0 && head ? head + '\n\n' : '') + H(parts[i])); };
   async function aiText(chat, uid, t) {
@@ -846,6 +859,7 @@ module.exports = function bot(c) {
       const m = upd.message; if (!m || !m.chat || m.chat.type !== 'private') return; const chat = m.chat.id;
       if (m.location) return await onLocation(chat, m);
       if (m.contact) return await authContact(chat, m);
+      if ((m.photo || m.document) && ses(chat).aiproof) return await aiProof(chat, m);
       if (m.document) return await onDocument(chat, m);
       if (m.photo) return ses(chat).flow ? await flowPhoto(chat, m) : send(chat, '📷 ፎቶ ለመጠቀም መጀመሪያ ተገቢውን ቅጽ (ለምሳሌ ዕቃ መጨመር) ይክፈቱ።');
       if (typeof m.text === 'string') return await onText(chat, m.text, m);

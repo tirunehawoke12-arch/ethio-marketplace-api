@@ -4,6 +4,16 @@ export const STEPS = [['placed', '📝', 'ታዘዘ'], ['payment_submitted', '�
 export const STATUS_X = { cancelled: 'ተሰርዟል', refund_pending: 'ተመላሽ በመጠባበቅ', refunded: 'ተመላሽ ተደርጓል', disputed: 'ክርክር ላይ' };
 export const stepLabel = s => STATUS_X[s] || (STEPS.find(x => x[0] === s) || [0, 0, s])[2];
 const ERR = {
+  bad_proof: 'ማስረጃው ምስል (JPG/PNG/WebP) ወይም PDF መሆን አለበት (ከ1.5MB ያነሰ)',
+  ai_off: 'AI ገና አልተዘጋጀም',
+  ai_disabled: 'AI ለጊዜው በአድሚን ተዘግቷል',
+  ai_blocked: 'የ AI አገልግሎት ለእርስዎ ተዘግቷል',
+  ai_limit: 'የዛሬው የ AI ገደብ አልቋል',
+  ai_busy: 'AI ሥራ በዝቶበታል — ቆይተው ይሞክሩ',
+  ai_failed: 'AI አልተሳካም — እንደገና ይሞክሩ',
+  ai_timeout: 'AI በጊዜው አልመለሰም',
+  ai_network: 'ከ AI ጋር መገናኘት አልተቻለም',
+  already_requested: 'ያለፈው ጥያቄዎ እየተረጋገጠ ነው',
   login_required: 'መጀመሪያ ይግቡ', not_registered: 'መጀመሪያ አካውንት ይክፈቱ', invalid: 'መረጃው ወይም የይለፍ ቃሉ ትክክል አይደለም', suspended: 'አካውንትዎ ታግዷል — አድሚኑን ያነጋግሩ',
   too_many_attempts: 'ብዙ ሙከራ — ትንሽ ቆይተው ይሞክሩ', slow_down: 'ትንሽ ቆይተው ይሞክሩ', invalid_email: 'ትክክለኛ ኢሜይል ያስገቡ', invalid_phone: 'ትክክለኛ የኢትዮጵያ ስልክ (09… ወይም 07…) ያስገቡ',
   weak_password: 'የይለፍ ቃል ቢያንስ 8 ቁምፊ መሆን አለበት', email_taken: 'ይህ ኢሜይል ቀድሞ ተመዝግቧል', phone_taken: 'ይህ ስልክ ቁጥር ቀድሞ ተመዝግቧል', already_registered: 'ቀድሞ ተመዝግበዋል',
