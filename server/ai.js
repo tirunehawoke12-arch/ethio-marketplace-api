@@ -1,0 +1,92 @@
+'use strict';
+/* ===== AI ረዳት (Claude) — ንግግር + ሰነድ (PDF/PPTX) ገጽ በገጽ ወደ አማርኛ መተርጎም =====
+   ቅንብር (Render → Environment፤ ቁልፉን በውይይት አይላኩ)፦
+     ANTHROPIC_API_KEY   — Claude (የሚከፈልበት)   ወይም   GEMINI_API_KEY — Google Gemini (ነጻ ደረጃ አለው፤ ካርድ አይጠይቅም)
+     AI_MODEL / GEMINI_MODEL — ነባሪ claude-sonnet-5-5 / gemini-flash-latest
+     ሁለቱም ካሉ Claude ይመረጣል፤ ሁለቱም ከሌሉ AI ጠፍቷል
+     AI_CHAT_DAY         — በቀን ለአንድ ተጠቃሚ የንግግር መልእክት ገደብ (ነባሪ 30፤ አድሚን ያልተገደበ)
+     AI_DOC_PAGES_DAY    — በቀን ለአንድ ተጠቃሚ የሚተረጎም ገጽ (ነባሪ 60)
+     AI_DOC_BATCH        — «ቀጥል» ሳይጫኑ በአንድ ጊዜ የሚተረጎም ገጽ (ነባሪ 5)
+   ወጪ በ API ቁልፍ ባለቤት (እርስዎ) ይከፈላል፤ ገደቦቹ ለዚያ ነው። */
+const SYS = `አንተ «ኢትዮ ዲጂታል ማርኬት» የተባለው የኢትዮጵያ የመስመር ላይ ገበያ እና የተማሪዎች መማሪያ ቦት ውስጥ ያለህ ወዳጃዊ AI ረዳት ነህ።
+- ተጠቃሚው በጻፈበት ቋንቋ መልስ ይስጡ፤ ቋንቋው ካልተለየ በአማርኛ።
+- አጭር፣ ግልጽ እና ትክክለኛ ሁን፤ ትምህርት፣ ትርጉም፣ ጽሑፍ፣ ሒሳብ፣ ንግድ፣ ሥራ ማመልከቻ እና አጠቃላይ ጥያቄዎችን መርዳት ትችላለህ።
+- ስለ ገበያው ልዩ መረጃ (ዋጋ፣ ትዕዛዝ፣ ሱቅ) ከሌለህ አትፍጠር፤ ተጠቃሚውን ከታች ካለው ማውጫ እንዲጠቀም አመልክት።
+- Telegram ውስጥ ነው የምትመልሰው፤ markdown ሰንጠረዥ ወይም ከባድ ቅርጸት አትጠቀም፤ አጫጭር አንቀጾች እና ቀላል ዝርዝር ብቻ።`;
+const TR = `አንተ ባለሙያ የእንግሊዝኛ→አማርኛ ተርጓሚ ነህ። ሰነዱን ትርጉም በትርጉም (አውዳዊ) ወደ ተፈጥሯዊ፣ ግልጽ አማርኛ ተርጉም፤ ቃል በቃል አይደለም።
+ህጎች፦ (1) ትርጉሙን ብቻ ስጥ፤ መግቢያ ወይም ማብራሪያ አትጨምር። (2) የርዕስ፣ የነጥብ እና የአንቀጽ አወቃቀርን ጠብቅ። (3) ቁጥሮች፣ ቀመሮች፣ የሰዎች/ድርጅት ስሞች እና አህጽሮተ ቃላት እንዳሉ ይቀሩ፤ የቴክኒክ ቃል ሲተረጎም ለመጀመሪያ ጊዜ እንግሊዝኛውን በቅንፍ አብረህ ጻፍ፣ ለምሳሌ «የሕዋስ ሽፋን (cell membrane)»። (4) ሠንጠረዥ ከሆነ ረድፍ በረድፍ በቀላል መስመሮች (ዓምዶች በ « | »)። (5) ምስል/ሥዕላዊ መግለጫ ካለ በአጭሩ «[ምስል፦ …]» ብለህ ግለጽ፤ በውስጡ ጽሑፍ ካለ ተርጉመው። (6) ገጹ ቀድሞውኑ በአማርኛ ከሆነ እንዳለ ጻፈው። (7) ገጹ ባዶ ከሆነ «[ባዶ ገጽ]» ብቻ ጻፍ።`;
+const HIST_TURNS = 8, HIST_TTL = 30 * 60e3, API_VER = '2023-06-01';
+const dayKey = (t) => new Date(t + 3 * 3600e3).toISOString().slice(0, 10);
+
+function countPdfPages(buf) {          // ያልተጨመቀ የገጽ ዕቃዎችን ይቆጥራል፤ 0 = አልታወቀም
+  const s = Buffer.from(buf).toString('latin1'); const m = s.match(/\/Type\s*\/Page(?![A-Za-z])/g); return m ? m.length : 0;
+}
+function chunkText(text, n = 3600) {          // ለ Telegram ገደብ በአንቀጽ ወሰን ይቆርጣል
+  const out = []; let cur = '';
+  for (const para of String(text).split(/\n{2,}/)) {
+    if ((cur + '\n\n' + para).length > n && cur) { out.push(cur); cur = ''; }
+    let p = para; while (p.length > n) { let cut = p.lastIndexOf('\n', n); if (cut < n * 0.5) cut = p.lastIndexOf(' ', n); if (cut < n * 0.5) cut = n; out.push(p.slice(0, cut)); p = p.slice(cut).trimStart(); }
+    cur = cur ? cur + '\n\n' + p : p;
+  }
+  if (cur.trim()) out.push(cur); return out;
+}
+function slideText(s, i) {          // የ pptx ስላይድ → ጽሑፍ
+  const lines = [`ስላይድ ${i + 1}${s.title ? ' — ' + s.title : ''}`];
+  for (const b of s.blocks || []) { if (b.k === 'h') lines.push('# ' + b.t); else if (b.k === 'p') lines.push(b.t); else if (b.k === 'li') lines.push('  '.repeat(b.l | 0) + '• ' + b.t); else if (b.k === 'tbl') for (const r of b.rows || []) lines.push(r.join(' | ')); else if (b.k === 'img') lines.push('[ምስል]' + (b.alt ? ': ' + b.alt : '')); }
+  return lines.join('\n');
+}
+
+function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () => Date.now()) {
+  const akey = env.ANTHROPIC_API_KEY || '', gkey = env.GEMINI_API_KEY || '', prov = akey ? 'claude' : gkey ? 'gemini' : '';
+  const model = prov === 'gemini' ? (env.GEMINI_MODEL || 'gemini-flash-latest') : (env.AI_MODEL || 'claude-sonnet-5-5'), base = (prov === 'gemini' ? (env.GEMINI_API_BASE || 'https://generativelanguage.googleapis.com') : (env.ANTHROPIC_API_BASE || 'https://api.anthropic.com')).replace(/\/$/, '');
+  const num = (v, d) => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? n : d; };
+  const lim = { chat: num(env.AI_CHAT_DAY, 30), pages: num(env.AI_DOC_PAGES_DAY, 60), batch: Math.max(1, num(env.AI_DOC_BATCH, 5)) }, retryMs = num(env.AI_RETRY_MS, 15000);
+  const hist = new Map(), used = new Map(), sleep = ms => new Promise(r => setTimeout(r, ms));
+  const timer = setInterval(() => { const t = now(); for (const [k, v] of hist) if (t - v.ts > HIST_TTL) hist.delete(k); for (const [k, v] of used) if (v.d !== dayKey(t)) used.delete(k); }, 10 * 60e3); timer.unref && timer.unref();
+
+  const fail = (r, j) => { const code = r.status === 429 || r.status === 503 ? 'ai_busy' : r.status === 413 ? 'ai_too_big' : r.status === 400 && j && /page|pdf|large|size|document/i.test(JSON.stringify(j)) ? 'ai_bad_doc' : 'ai_failed'; const err = new Error(code); err.status = r.status; return err; };
+  /* ወደ አቅራቢው አንድ ጥያቄ፦ system + msgs [{role:'user'|'assistant', content:string}] + (አማራጭ) pdf Buffer ለመጨረሻው የተጠቃሚ መልእክት */
+  async function ask({ system, msgs, max, pdf }) {
+    for (let attempt = 0; ; attempt++) {
+      let r, j = null;
+      if (prov === 'gemini') {
+        const contents = msgs.map((m, i) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [...(pdf && i === msgs.length - 1 ? [{ inlineData: { mimeType: 'application/pdf', data: Buffer.from(pdf).toString('base64') } }] : []), { text: m.content }] }));
+        r = await fetchImpl(`${base}/v1beta/models/${model}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': gkey }, body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents, generationConfig: { maxOutputTokens: max } }) });
+      } else {
+        const messages = msgs.map((m, i) => (pdf && i === msgs.length - 1 ? { role: 'user', content: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: Buffer.from(pdf).toString('base64') }, cache_control: { type: 'ephemeral' } }, { type: 'text', text: m.content }] } : m));
+        r = await fetchImpl(base + '/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': akey, 'anthropic-version': API_VER }, body: JSON.stringify({ model, max_tokens: max, system, messages }) });
+      }
+      try { j = await r.json(); } catch (e) { }
+      if (r.ok) return ((prov === 'gemini' ? (j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts || []).map(p => p.text || '').join('') : (j && Array.isArray(j.content) ? j.content.filter(c => c.type === 'text').map(c => c.text).join('') : '')) || '').trim();
+      if ((r.status === 429 || r.status === 503) && attempt < 2 && prov === 'gemini') { await sleep(retryMs); continue; }          // ነጻ ደረጃ በደቂቃ ገደብ ይመታል — ትንሽ ጠብቆ እንደገና
+      throw fail(r, j);
+    }
+  }
+  /* ገደብ፦ kind = 'chat' | 'pages'፤ ok=false ከሆነ left=0 */
+  function take(uid, kind, n = 1, admin = false) {
+    if (admin) return { ok: true, left: Infinity }; const t = dayKey(now()), u = used.get(uid) && used.get(uid).d === t ? used.get(uid) : { d: t, chat: 0, pages: 0 }; used.set(uid, u);
+    const cap = lim[kind], left = cap - u[kind]; if (left < n) return { ok: false, left: Math.max(0, left) }; u[kind] += n; return { ok: true, left: cap - u[kind] };
+  }
+  const refund = (uid, kind, n = 1) => { const u = used.get(uid); if (u) u[kind] = Math.max(0, u[kind] - n); };
+
+  async function chat(id, text) {
+    const h = hist.get(id) || { ts: now(), m: [] }; if (now() - h.ts > HIST_TTL) h.m = [];
+    h.m.push({ role: 'user', content: String(text).slice(0, 6000) }); const msgs = h.m.slice(-HIST_TURNS * 2);
+    while (msgs.length && msgs[0].role !== 'user') msgs.shift();
+    const out = await ask({ system: SYS, msgs, max: 1500 }); h.m.push({ role: 'assistant', content: out || '…' }); h.m = h.m.slice(-HIST_TURNS * 2); h.ts = now(); hist.set(id, h); return out;
+  }
+  const reset = id => hist.delete(id);
+
+  /* PDF — የገጽ N ብቻ ትርጉም (ሰነዱ cache ስለሚደረግ ተከታታይ ገጾች ርካሽ ናቸው) */
+  async function pdfPage(buf, n, total) {
+    if (prov === 'gemini' && Buffer.from(buf).length > 14 * 1048576) { const e = new Error('ai_too_big'); throw e; }          // inline ገደብ ~20MB (base64 +33%)
+    const out = await ask({ system: TR, max: 6000, pdf: buf, msgs: [{ role: 'user', content: `የዚህን PDF ገጽ ${n} ብቻ ተርጉም${total ? ` (ከ${total} ገጾች)` : ''}። ሰነዱ ከ${n} ገጽ ያነሰ ከሆነ በትክክል [[END]] ብቻ ጻፍ።` }] });
+    return /^\s*\[\[END\]\]\s*$/.test(out) ? null : out;
+  }
+  /* PPTX — የስላይድ ትርጉም፤ prev = የቀደመው ስላይድ ርዕስ (አውድ) */
+  async function slideTr(deckTitle, s, i, total) {
+    return ask({ system: TR, max: 4000, msgs: [{ role: 'user', content: `ሰነድ፦ «${deckTitle}» (ስላይድ ${i + 1}/${total})። ይህን ስላይድ ተርጉም፦\n\n${slideText(s, i)}` }] });
+  }
+  return { enabled: !!prov, provider: prov, model, lim, chat, reset, take, refund, pdfPage, slideTr };
+}
+module.exports = { create, countPdfPages, chunkText, slideText, SYS, TR };

@@ -3,17 +3,18 @@
    ዘዴ፦ ቦቱ ለተገናኘው አካውንት በተፈረመ ቶከን ወደ ራሱ የ Express API (127.0.0.1) ይጠራል — ስለዚህ ህጎች፣ ማረጋገጫዎች፣
    escrow፣ ማሳወቂያዎች ሁሉ ከድረ-ገጹ ጋር አንድ ናቸው (ምንም አይደገምም)። ንግግሮች (ቅጾች) «flow» ናቸው፦ ጥያቄ በጥያቄ። */
 const { errText } = require('./errors');
+const AIM = require('./ai');
 const { TEMPLATES } = require('./templates.generated');
 const REGIONS = ['አዲስ አበባ', 'ድሬዳዋ', 'አማራ', 'ኦሮሚያ', 'ትግራይ', 'ሲዳማ', 'ሶማሌ', 'አፋር', 'ቤንሻንጉል ጉሙዝ', 'ጋምቤላ', 'ሐረሪ', 'ማዕከላዊ ኢትዮጵያ', 'ደቡብ ምዕራብ ኢትዮጵያ', 'ደቡብ ኢትዮጵያ'];
 const PAY = ['telebirr', 'CBE Birr', 'ንግድ ባንክ', 'አዋሽ ባንክ', 'ዳሽን ባንክ', 'አቢሲኒያ ባንክ', 'ሌላ'];
 const STEP = { placed: '📝 ታዘዘ', payment_submitted: '💳 ክፍያ ተላከ', paid: '✅ ክፍያ ተረጋገጠ', preparing: '📦 እየተዘጋጀ', shipped: '🚚 ተላከ', delivered: '🤝 ደረሰ', settled: '💰 ለሻጭ ተከፈለ', cancelled: '✕ ተሰርዟል', refund_pending: '↩️ ተመላሽ በመጠባበቅ', refunded: '↩️ ተመላሽ ተደርጓል', disputed: '⚖️ ክርክር ላይ' };
 const APPST = { applied: '📨 ተልኳል', shortlisted: '⭐ በዝርዝር', hired: '🎉 ተቀጥረዋል', rejected: '✖️ አልተመረጡም', withdrawn: '↩️ ተነስቷል', invited: '🤝 ግብዣ' };
-const MENU_KEYS = [['market', 'shops', 'jobs'], ['pages', 'cart', 'orders'], ['me', 'search', 'help'], ['near', 'alerts', 'messages']];
+const MENU_KEYS = [['market', 'shops', 'jobs'], ['pages', 'cart', 'orders'], ['me', 'search', 'help'], ['near', 'alerts', 'messages'], ['ai']];
 const MENU_TX = {                                    // የታች ማውጫ በ4 ቋንቋ (ትርጉሙ በአፍ-መፍቻ ተናጋሪ ቢታይ ይመረጣል)
-  am: [['🛍 ገበያ', '🏪 ሱቆች', '💼 ሥራ'], ['🌐 ገጾች', '🛒 ጋሪ', '📦 ትዕዛዞቼ'], ['👤 ገጾቼ', '🔎 ፈልግ', '❓ እገዛ'], ['📍 በአቅራቢያዬ', '🔔 ማንቂያዎች', '💬 መልእክቶች']],
-  en: [['🛍 Market', '🏪 Shops', '💼 Jobs'], ['🌐 Pages', '🛒 Cart', '📦 My orders'], ['👤 My page', '🔎 Search', '❓ Help'], ['📍 Nearby', '🔔 Alerts', '💬 Messages']],
-  om: [['🛍 Gabaa', '🏪 Suuqota', '💼 Hojii'], ['🌐 Fuulota', '🛒 Gaarii', '📦 Ajajoota koo'], ['👤 Fuula koo', '🔎 Barbaadi', '❓ Gargaarsa'], ['📍 Naannoo koo', '🔔 Beeksisa', '💬 Ergaawwan']],
-  ti: [['🛍 ዕዳጋ', '🏪 ድኳናት', '💼 ስራሕ'], ['🌐 ገጻት', '🛒 ቅርጫት', '📦 ትዕዛዛተይ'], ['👤 ገጸይ', '🔎 ድለይ', '❓ ሓገዝ'], ['📍 ኣብ ጎረቤተይ', '🔔 መተሓሳሰቢ', '💬 መልእኽታት']],
+  am: [['🛍 ገበያ', '🏪 ሱቆች', '💼 ሥራ'], ['🌐 ገጾች', '🛒 ጋሪ', '📦 ትዕዛዞቼ'], ['👤 ገጾቼ', '🔎 ፈልግ', '❓ እገዛ'], ['📍 በአቅራቢያዬ', '🔔 ማንቂያዎች', '💬 መልእክቶች'], ['🤖 AI ረዳት']],
+  en: [['🛍 Market', '🏪 Shops', '💼 Jobs'], ['🌐 Pages', '🛒 Cart', '📦 My orders'], ['👤 My page', '🔎 Search', '❓ Help'], ['📍 Nearby', '🔔 Alerts', '💬 Messages'], ['🤖 AI assistant']],
+  om: [['🛍 Gabaa', '🏪 Suuqota', '💼 Hojii'], ['🌐 Fuulota', '🛒 Gaarii', '📦 Ajajoota koo'], ['👤 Fuula koo', '🔎 Barbaadi', '❓ Gargaarsa'], ['📍 Naannoo koo', '🔔 Beeksisa', '💬 Ergaawwan'], ['🤖 Gargaaraa AI']],
+  ti: [['🛍 ዕዳጋ', '🏪 ድኳናት', '💼 ስራሕ'], ['🌐 ገጻት', '🛒 ቅርጫት', '📦 ትዕዛዛተይ'], ['👤 ገጸይ', '🔎 ድለይ', '❓ ሓገዝ'], ['📍 ኣብ ጎረቤተይ', '🔔 መተሓሳሰቢ', '💬 መልእኽታት'], ['🤖 ሓጋዚ AI']],
 };
 const BOT_LANGS = [['am', 'አማርኛ'], ['en', 'English'], ['om', 'Afaan Oromoo'], ['ti', 'ትግርኛ']];
 const TX = {
@@ -37,6 +38,7 @@ module.exports = function bot(c) {
   const grid = (arr, n = 2) => { const out = []; for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n)); return out; };
 
   /* ---------- ክፍለ-ጊዜ (ንግግር፣ ጋሪ) ---------- */
+  const ai = AIM.create(), DOCS = new Map();          // ንግግር + የሰነድ ትርጉም ሥራዎች (በ RAM፤ 60 ደቂቃ)
   const S = {}; const ses = chat => S[chat] || (S[chat] = { cart: [] });
   let saveT; const save = () => { if (!pool) return; clearTimeout(saveT); saveT = setTimeout(() => pgUpsert('_sys', 'botdb', S).catch(e => console.warn('bot save', e.message)), 600); };
   const restore = d => { if (d && typeof d === 'object') Object.assign(S, d); };
@@ -543,7 +545,9 @@ module.exports = function bot(c) {
   }
 
   /* ================= እገዛ ================= */
-  const HELP = `❓ <b>እገዛ — ቦቱ የሚያደርገው</b>\n\n🛍 <b>ገበያ</b> — ዕቃ ይፈልጉ፣ ጋሪ፣ ይዘዙ፣ ክፍያ ይላኩ፣ ደረሰኝ ያውርዱ፣ ግምገማ ይስጡ\n🏪 <b>ሱቆች</b> — ሱቆችን ይመልከቱ\n💼 <b>ሥራ</b> — ክፍት ሥራ፣ ሠራተኞች፣ ማመልከት፣ መቅጠር\n🌐 <b>ገጾች</b> — የሌሎችን ገጽ ይመልከቱ (👁)፣ ቅጽ ይሙሉ\n👤 <b>ገጾቼ</b> — የራስዎን ገጽ (ሠራተኛ፣ አሰሪ፣ ሱቅ፣ ሆቴል…) ይክፈቱ እና ያስተዳድሩ፤ ዕቃ እና ትዕዛዝ፤ ሥራ ማስታወቅ፤ የግል መረጃ\n\n/menu — ዋና ማውጫ · /cancel — የጀመሩትን ሰርዝ`;
+  const HELP = `❓ <b>እገዛ — ቦቱ የሚያደርገው</b>\n\n🛍 <b>ገበያ</b> — ዕቃ ይፈልጉ፣ ጋሪ፣ ይዘዙ፣ ክፍያ ይላኩ፣ ደረሰኝ ያውርዱ፣ ግምገማ ይስጡ\n🏪 <b>ሱቆች</b> — ሱቆችን ይመልከቱ\n💼 <b>ሥራ</b> — ክፍት ሥራ፣ ሠራተኞች፣ ማመልከት፣ መቅጠር\n🌐 <b>ገጾች</b> — የሌሎችን ገጽ ይመልከቱ (👁)፣ ቅጽ ይሙሉ\n👤 <b>ገጾቼ</b> — የራስዎን ገጽ (ሠራተኛ፣ አሰሪ፣ ሱቅ፣ ሆቴል…) ይክፈቱ እና ያስተዳድሩ፤ ዕቃ እና ትዕዛዝ፤ ሥራ ማስታወቅ፤ የግል መረጃ\n\n/menu — ዋና ማውጫ · /cancel — የጀመሩትን ሰርዝ
+
+🤖 <b>AI ረዳት</b> — ማንኛውንም ጥያቄ ይጻፉ፤ PDF/PowerPoint (እንግሊዝኛ) ይላኩ — ገጽ በገጽ ወደ አማርኛ እተረጉማለሁ።`;
 
   /* ================= ራውተር ================= */
   const LABELS = { ...LABEL_KEYS, '🛡 አድሚን': 'admin' };
@@ -646,6 +650,7 @@ module.exports = function bot(c) {
       case 'cart': return showCart(chat); case 'orders': return listOrders(chat, uid); case 'me': return hub(chat, uid); case 'help': return send(chat, HELP, menuKb(chat));
       case 'search': return startFlow(chat, 'search', [{ k: 'q', q: '🔎 የሚፈልጉትን ዕቃ ስም ይጻፉ፦', t: 'text', min: 2, max: 60 }]);
       case 'admin': return isAdmin(chat) ? adminHub(chat) : send(chat, '⛔ አድሚን ብቻ');
+      case 'ai': return aiIntro(chat, uid);
       case 'near': return nearStart(chat); case 'alerts': return alertsMenu(chat, uid); case 'messages': return msgList(chat, uid);
     }
   }
@@ -656,6 +661,7 @@ module.exports = function bot(c) {
     const ld = /^\/start\s+d_([\w-]{4,40})$/.exec(t); if (ld) return learnStart(chat, ld[1]);
     const dl = /^\/start\s+([sgpwej])_([\w-]{4,40})$/.exec(t); if (dl) s.deep = { t: dl[1], id: dl[2] };       // deep link — ከመግባት በኋላም ይከፈታል
     if (t === '✖️ ተው') { s.await = null; s.flow = null; save(); return home(chat); }
+    if (uid && /^\/ai\b/.test(t)) return aiIntro(chat, uid); if (uid && /^\/(new|reset)\b/.test(t)) { ai.reset(String(chat)); return send(chat, '🧹 አዲስ ውይይት ጀምረናል።', menuKb(chat)); }
     if (uid && /^\/lang\b/.test(t)) return langMenu(chat);
     if (uid && /^\/(search|near|alerts|messages)\b/.test(t)) return action(chat, uid, /^\/(\w+)/.exec(t)[1]);
     if (/^\/(start|menu|login)\b/.test(t)) { s.flow = null; if (uid) return home(chat, `🇪🇹 <b>ኢትዮ ዲጂታል ማርኬት</b>\n${tx(chat, 'welcome')} ${H(userOf(uid).name)}!`); s.auth = null; return authStart(chat); }
@@ -667,6 +673,7 @@ module.exports = function bot(c) {
     if (LABELS[t]) { s.flow = null; return action(chat, uid, LABELS[t]); }
     if (/^\//.test(t)) return home(chat);
     if (s.flow) return flowText(chat, t, msg);
+    if (ai.enabled) return aiText(chat, uid, t);          // ሌላ ማንኛውም ጽሑፍ → AI ረዳት
     return send(chat, '👇 ከታች ካለው ማውጫ ይምረጡ ወይም ዕቃ ለመፈለግ «🔎 ፈልግ» ይጫኑ።', menuKb(chat));
   }
   async function route(chat, data) {
@@ -677,6 +684,7 @@ module.exports = function bot(c) {
     if (!uid && !(isAdmin(chat) && /^(ad|avp|ast|arf|arl|ash|apt|amod|apay|asl|arfl|adis|ashp|atr|abc|bcgo|bcx|arp)/.test(k))) return authStart(chat);
     if (/^(ad|avp|ast|arf|arl|ash|ashr|apt|amod|apay|asl|arfl|adis|ashp|atr|atrq|atrp|atrph|abc|bcgo|bcx|arp)$/.test(k) && !isAdmin(chat)) return send(chat, '⛔ አድሚን ብቻ');
     const s = ses(chat);
+    if (k === 'adn') return docRun(chat, uid); if (k === 'adx') { DOCS.delete(chat); return send(chat, '✖️ ትርጉሙ ቆሟል።'); }
     switch (k) {
       case 'f': return flowCb(chat, data);
       case 'nb': return nearby(chat, uid, a); case 'nbk': return send(chat, '📍 ምን ይፈልጋሉ?', NB_KB);
@@ -758,6 +766,53 @@ module.exports = function bot(c) {
       case 'apt': { const r = a === 'pg' ? await AD('POST', `/api/pages/admin/${x}/status`, { status: y }) : await AD('POST', `/api/people/admin/${a}/${x}/status`, { status: y }); return send(chat, r.ok ? '✅ ተቀይሯል' : bad(r)); }
     }
   }
+
+  /* ================= 🤖 AI ረዳት እና የሰነድ ትርጉም (ገጽ በገጽ → አማርኛ) ================= */
+  const aiErr = e => (e && e.message === 'ai_busy' ? '⏳ AI አሁን ሥራ በዝቶበታል — ከጥቂት ደቂቃ በኋላ ይሞክሩ።' : e && e.message === 'ai_bad_doc' ? '⚠️ ፋይሉ መነበብ አልቻለም (የተመሰጠረ፣ በጣም ትልቅ ወይም ከ100 ገጽ በላይ ሊሆን ይችላል)።' : e && e.message === 'ai_too_big' ? '⚠️ ፋይሉ ለ AI በጣም ትልቅ ነው።' : '⚠️ AI አልተሳካም — እንደገና ይሞክሩ።');
+  const aiOff = '🤖 AI ገና አልተዘጋጀም። (አድሚን፦ በ Render ላይ GEMINI_API_KEY (ነጻ) ወይም ANTHROPIC_API_KEY ያቀናብሩ።)';
+  async function aiIntro(chat, uid) {
+    if (!ai.enabled) return send(chat, aiOff, menuKb(chat));
+    return send(chat, `🤖 <b>AI ረዳት</b>\n\n• ማንኛውንም ጥያቄ እዚሁ ይጻፉ — እመልሳለሁ።\n• 📎 <b>PDF ወይም PowerPoint (.pptx)</b> ፋይል ይላኩ — በእንግሊዝኛ ከሆነ ገጽ በገጽ በአውድ ወደ አማርኛ እተረጉማለሁ (${ai.lim.batch} ገጽ እያልኩ «ቀጥል» ይጫኑ)።\n• /new — አዲስ ውይይት\n\n<i>በቀን ${isAdmin(chat) ? 'ያልተገደበ' : ai.lim.chat + ' መልእክት · ' + ai.lim.pages + ' የትርጉም ገጾች'}</i>`, menuKb(chat));
+  }
+  const typing = chat => tg('sendChatAction', { chat_id: chat, action: 'typing' }).catch(() => { });
+  const sendLong = async (chat, head, text) => { const parts = AIM.chunkText(text); for (let i = 0; i < parts.length; i++) await send(chat, (i === 0 && head ? head + '\n\n' : '') + H(parts[i])); };
+  async function aiText(chat, uid, t) {
+    const q = ai.take(String(uid), 'chat', 1, isAdmin(chat)); if (!q.ok) return send(chat, '⛔ የዛሬው የ AI መልእክት ገደብ አልቋል — ነገ ይሞክሩ።', menuKb(chat));
+    typing(chat); const tm = setInterval(() => typing(chat), 4500);
+    try { const out = await ai.chat(String(chat), t); await sendLong(chat, '', out || '…'); } catch (e) { ai.refund(String(uid), 'chat', 1); await send(chat, aiErr(e)); } finally { clearInterval(tm); }
+  }
+  async function tgDownload(fileId) { const f = await tg('getFile', { file_id: fileId }); const r = await fetch(`${process.env.TELEGRAM_API_BASE || 'https://api.telegram.org'}/file/bot${token}/${f.file_path}`); if (!r.ok) throw new Error('download'); return Buffer.from(await r.arrayBuffer()); }
+  async function onDocument(chat, m) {
+    const uid = uidOf(chat); if (!uid) return authStart(chat); if (!ai.enabled) return send(chat, aiOff);
+    const d = m.document, name = d.file_name || 'file', isPdf = /pdf/i.test(d.mime_type || '') || /\.pdf$/i.test(name), isPpt = /\.pptx$/i.test(name) || /presentationml/.test(d.mime_type || '');
+    if (!isPdf && !isPpt) return send(chat, '📎 ለትርጉም <b>PDF</b> ወይም <b>PowerPoint (.pptx)</b> ብቻ ይላኩ። (.ppt/.doc ከሆነ በ WPS «PDF አድርግ» ብለው ይላኩ።)');
+    if ((d.file_size || 0) > 19.5 * 1048576) return send(chat, '⚠️ ፋይሉ ከ20MB በላይ ነው — ትንሽ ክፍል አድርገው ይላኩ።');
+    for (const [k, v] of DOCS) if (Date.now() - v.ts > 3600e3) DOCS.delete(k); if (DOCS.size > 40) return send(chat, '⏳ አሁን ብዙ ሰው እየተረጎመ ነው — ከጥቂት ደቂቃ በኋላ ይሞክሩ።');
+    typing(chat); let buf; try { buf = await tgDownload(d.file_id); } catch (e) { return send(chat, '⚠️ ፋይሉን ማውረድ አልተቻለም — እንደገና ይላኩ።'); }
+    const job = { kind: isPdf ? 'pdf' : 'pptx', name, ts: Date.now(), next: 1, total: 0, busy: false };
+    if (isPdf) { job.buf = buf; job.total = AIM.countPdfPages(buf); if (job.total > 100) return send(chat, `⚠️ ፋይሉ ${job.total} ገጽ ነው — AI በአንድ ጊዜ እስከ 100 ገጽ ብቻ ያነባል። በ100 ገጽ ክፍል አድርገው ይላኩ።`); }
+    else { try { const { parsePptx } = require('../src/lib/pptx'); const r = await parsePptx(buf); job.slides = r.slides.map(s => ({ title: s.title, blocks: s.blocks })); job.total = job.slides.length; } catch (e) { return send(chat, '⚠️ PPTX መነበብ አልቻለም — (PowerPoint 2007+ .pptx መሆኑን ያረጋግጡ)'); } if (!job.total) return send(chat, '⚠️ ስላይድ አልተገኘም።'); }
+    job.title = name.replace(/\.(pdf|pptx)$/i, ''); DOCS.set(chat, job);
+    await send(chat, `📄 <b>${H(clip(name, 60))}</b>${job.total ? ' — ' + job.total + ' ' + (isPdf ? 'ገጾች' : 'ስላይዶች') : ''}\n🌐 ወደ አማርኛ ገጽ በገጽ በአውድ እተረጉማለሁ…`);
+    return docRun(chat, uid);
+  }
+  async function docRun(chat, uid) {
+    const d = DOCS.get(chat); if (!d) return send(chat, '⌛ ፋይሉ ጊዜው አልፏል — እንደገና ይላኩ።'); if (d.busy) return; d.busy = true; d.ts = Date.now();
+    const tm = setInterval(() => typing(chat), 4500); let done = 0, stop = false;
+    try {
+      while (done < ai.lim.batch && (!d.total || d.next <= d.total)) {
+        const q = ai.take(String(uid), 'pages', 1, isAdmin(chat)); if (!q.ok) { stop = true; await send(chat, '⛔ የዛሬው የትርጉም ገጽ ገደብ አልቋል — ነገ ከገጽ ' + d.next + ' ይቀጥሉ (ፋይሉን እንደገና ይላኩ)።'); break; }
+        typing(chat); let text;
+        try { text = d.kind === 'pdf' ? await ai.pdfPage(d.buf, d.next, d.total) : await ai.slideTr(d.title, d.slides[d.next - 1], d.next - 1, d.total); }
+        catch (e) { ai.refund(String(uid), 'pages', 1); stop = true; await send(chat, aiErr(e), ik([[b('🔁 እንደገና ሞክር', 'adn'), b('✖️ አቁም', 'adx')]])); break; }
+        if (text === null) { d.total = d.next - 1; break; }
+        await sendLong(chat, `📄 <b>${d.kind === 'pdf' ? 'ገጽ' : 'ስላይድ'} ${d.next}${d.total ? '/' + d.total : ''}</b>`, text); d.next++; done++;
+      }
+      if (stop) return;
+      if (d.total && d.next > d.total) { DOCS.delete(chat); return send(chat, `✅ <b>ትርጉሙ ተጠናቀቀ</b> — ${d.total} ${d.kind === 'pdf' ? 'ገጾች' : 'ስላይዶች'}።`, menuKb(chat)); }
+      return send(chat, `ገጽ ${d.next - done}–${d.next - 1} ተተርጉሟል።`, ik([[b(`▶️ ቀጥል (ገጽ ${d.next}…)`, 'adn'), b('✖️ አቁም', 'adx')]]));
+    } finally { clearInterval(tm); d.busy = false; }
+  }
   async function handle(upd) {
     try {
       if (upd.callback_query) { const cq = upd.callback_query; tg('answerCallbackQuery', { callback_query_id: cq.id }).catch(() => { }); if (!cq.message) return; return await route(cq.message.chat.id, String(cq.data || '')); }
@@ -765,6 +820,7 @@ module.exports = function bot(c) {
       const m = upd.message; if (!m || !m.chat || m.chat.type !== 'private') return; const chat = m.chat.id;
       if (m.location) return await onLocation(chat, m);
       if (m.contact) return await authContact(chat, m);
+      if (m.document) return await onDocument(chat, m);
       if (m.photo) return ses(chat).flow ? await flowPhoto(chat, m) : send(chat, '📷 ፎቶ ለመጠቀም መጀመሪያ ተገቢውን ቅጽ (ለምሳሌ ዕቃ መጨመር) ይክፈቱ።');
       if (typeof m.text === 'string') return await onText(chat, m.text, m);
     } catch (e) { console.error('bot update failed:', e); }
