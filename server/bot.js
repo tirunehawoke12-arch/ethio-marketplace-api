@@ -768,7 +768,8 @@ module.exports = function bot(c) {
   }
 
   /* ================= 🤖 AI ረዳት እና የሰነድ ትርጉም (ገጽ በገጽ → አማርኛ) ================= */
-  const aiErr = e => (e && e.message === 'ai_busy' ? '⏳ AI አሁን ሥራ በዝቶበታል — ከጥቂት ደቂቃ በኋላ ይሞክሩ።' : e && e.message === 'ai_bad_doc' ? '⚠️ ፋይሉ መነበብ አልቻለም (የተመሰጠረ፣ በጣም ትልቅ ወይም ከ100 ገጽ በላይ ሊሆን ይችላል)።' : e && e.message === 'ai_too_big' ? '⚠️ ፋይሉ ለ AI በጣም ትልቅ ነው።' : '⚠️ AI አልተሳካም — እንደገና ይሞክሩ።');
+  const aiErr = (e, chat) => (e && e.message === 'ai_timeout' ? '⏳ AI በጊዜው አልመለሰም — እንደገና ይሞክሩ።' : e && e.message === 'ai_network' ? '⚠️ ከ AI አገልግሎት ጋር መገናኘት አልተቻለም — እንደገና ይሞክሩ።' : aiErr0(e)) + (chat && isAdmin(chat) && e && (e.detail || e.status) ? `\n\n🛠 <code>${H(e.message)} ${e.status || ''} ${H(e.detail || '')}</code>` : '');
+  const aiErr0 = e => (e && e.message === 'ai_busy' ? '⏳ AI አሁን ሥራ በዝቶበታል — ከጥቂት ደቂቃ በኋላ ይሞክሩ።' : e && e.message === 'ai_bad_doc' ? '⚠️ ፋይሉ መነበብ አልቻለም (የተመሰጠረ፣ በጣም ትልቅ ወይም ከ100 ገጽ በላይ ሊሆን ይችላል)።' : e && e.message === 'ai_too_big' ? '⚠️ ፋይሉ ለ AI በጣም ትልቅ ነው።' : '⚠️ AI አልተሳካም — እንደገና ይሞክሩ።');
   const aiOff = '🤖 AI ገና አልተዘጋጀም። (አድሚን፦ በ Render ላይ GEMINI_API_KEY (ነጻ) ወይም ANTHROPIC_API_KEY ያቀናብሩ።)';
   async function aiIntro(chat, uid) {
     if (!ai.enabled) return send(chat, aiOff, menuKb(chat));
@@ -779,7 +780,7 @@ module.exports = function bot(c) {
   async function aiText(chat, uid, t) {
     const q = ai.take(String(uid), 'chat', 1, isAdmin(chat)); if (!q.ok) return send(chat, '⛔ የዛሬው የ AI መልእክት ገደብ አልቋል — ነገ ይሞክሩ።', menuKb(chat));
     typing(chat); const tm = setInterval(() => typing(chat), 4500);
-    try { const out = await ai.chat(String(chat), t); await sendLong(chat, '', out || '…'); } catch (e) { ai.refund(String(uid), 'chat', 1); await send(chat, aiErr(e)); } finally { clearInterval(tm); }
+    try { const out = await ai.chat(String(chat), t); await sendLong(chat, '', out || '…'); } catch (e) { ai.refund(String(uid), 'chat', 1); await send(chat, aiErr(e, chat)); } finally { clearInterval(tm); }
   }
   async function tgDownload(fileId) { const f = await tg('getFile', { file_id: fileId }); const r = await fetch(`${process.env.TELEGRAM_API_BASE || 'https://api.telegram.org'}/file/bot${token}/${f.file_path}`); if (!r.ok) throw new Error('download'); return Buffer.from(await r.arrayBuffer()); }
   async function onDocument(chat, m) {
@@ -804,7 +805,7 @@ module.exports = function bot(c) {
         const q = ai.take(String(uid), 'pages', 1, isAdmin(chat)); if (!q.ok) { stop = true; await send(chat, '⛔ የዛሬው የትርጉም ገጽ ገደብ አልቋል — ነገ ከገጽ ' + d.next + ' ይቀጥሉ (ፋይሉን እንደገና ይላኩ)።'); break; }
         typing(chat); let text;
         try { text = d.kind === 'pdf' ? await ai.pdfPage(d.buf, d.next, d.total) : await ai.slideTr(d.title, d.slides[d.next - 1], d.next - 1, d.total); }
-        catch (e) { ai.refund(String(uid), 'pages', 1); stop = true; await send(chat, aiErr(e), ik([[b('🔁 እንደገና ሞክር', 'adn'), b('✖️ አቁም', 'adx')]])); break; }
+        catch (e) { ai.refund(String(uid), 'pages', 1); stop = true; await send(chat, aiErr(e, chat), ik([[b('🔁 እንደገና ሞክር', 'adn'), b('✖️ አቁም', 'adx')]])); break; }
         if (text === null) { d.total = d.next - 1; break; }
         await sendLong(chat, `📄 <b>${d.kind === 'pdf' ? 'ገጽ' : 'ስላይድ'} ${d.next}${d.total ? '/' + d.total : ''}</b>`, text); d.next++; done++;
       }

@@ -54,3 +54,10 @@ test('Gemini (ነጻ)፦ ቁልፍ በ header፣ የ PDF inlineData፣ ድጋሚ
   assert.equal(AIM.create({ ANTHROPIC_API_KEY: 'a', GEMINI_API_KEY: 'g' }).provider, 'claude'); assert.equal(AIM.create({}).provider, '');
   const big = AIM.create({ GEMINI_API_KEY: 'g' }, f); await assert.rejects(() => big.pdfPage(Buffer.alloc(15 * 1048576), 1, 1), /ai_too_big/);
 });
+test('AI ስህተት ዝርዝር እና የጊዜ ገደብ', async () => {
+  const f = async () => ({ ok: false, status: 400, json: async () => ({ error: { message: 'API key not valid' } }) });
+  const ai = AIM.create({ GEMINI_API_KEY: 'bad' }, f); await assert.rejects(() => ai.chat('z', 'hi'), e => e.message === 'ai_failed' && e.status === 400 && /not valid/.test(e.detail));
+  const hang = (u, o) => new Promise((_, rej) => o.signal.addEventListener('abort', () => { const e = new Error('x'); e.name = 'AbortError'; rej(e); }));
+  await assert.rejects(() => AIM.create({ GEMINI_API_KEY: 'g', AI_TIMEOUT_MS: '30' }, hang).chat('z', 'hi'), /ai_timeout/);
+  await assert.rejects(() => AIM.create({ GEMINI_API_KEY: 'g' }, async () => { throw new Error('ENOTFOUND'); }).chat('z', 'hi'), e => e.message === 'ai_network' && /ENOTFOUND/.test(e.detail));
+});
