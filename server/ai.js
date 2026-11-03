@@ -38,7 +38,9 @@ function slideText(s, i) {          // የ pptx ስላይድ → ጽሑፍ
 
 function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () => Date.now()) {
   const akey = env.ANTHROPIC_API_KEY || '', gkey = env.GEMINI_API_KEY || '', prov = akey ? 'claude' : gkey ? 'gemini' : '';
-  const model = prov === 'gemini' ? (env.GEMINI_MODEL || 'gemini-flash-latest') : (env.AI_MODEL || 'claude-sonnet-5-5'), base = (prov === 'gemini' ? (env.GEMINI_API_BASE || 'https://generativelanguage.googleapis.com') : (env.ANTHROPIC_API_BASE || 'https://api.anthropic.com')).replace(/\/$/, '');
+  const model = prov === 'gemini' ? (env.GEMINI_MODEL || 'gemini-flash-latest').split(',')[0].trim() : (env.AI_MODEL || 'claude-sonnet-5-5'), base = (prov === 'gemini' ? (env.GEMINI_API_BASE || 'https://generativelanguage.googleapis.com') : (env.ANTHROPIC_API_BASE || 'https://api.anthropic.com')).replace(/\/$/, '');
+  const gl = String(env.GEMINI_MODEL || '').split(',').map(x => x.trim()).filter(Boolean), uniq = a => [...new Set(a)];
+  const models = { chat: uniq([...gl, 'gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-2.5-flash-lite', 'gemini-2.5-flash']), doc: uniq([...gl, 'gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite']) };
   const num = (v, d) => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? n : d; };
   const lim = { chat: num(env.AI_CHAT_DAY, 30), pages: num(env.AI_DOC_PAGES_DAY, 60), batch: Math.max(1, num(env.AI_DOC_BATCH, 5)) }, retryMs = num(env.AI_RETRY_MS, 15000), timeoutMs = num(env.AI_TIMEOUT_MS, 60000);
   const hist = new Map(), used = new Map(), sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -46,21 +48,32 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
 
   const fail = (r, j) => { const code = r.status === 429 || r.status === 503 ? 'ai_busy' : r.status === 413 ? 'ai_too_big' : r.status === 400 && j && /page|pdf|large|size|document/i.test(JSON.stringify(j)) ? 'ai_bad_doc' : 'ai_failed'; const m = j && (j.error && (j.error.message || j.error.status) || j.message); const err = new Error(code); err.status = r.status; err.detail = String(m || '').slice(0, 300); console.warn('AI ' + prov + ' ' + r.status + ': ' + err.detail); return err; };
   /* ወደ አቅራቢው አንድ ጥያቄ፦ system + msgs [{role:'user'|'assistant', content:string}] + (አማራጭ) pdf Buffer ለመጨረሻው የተጠቃሚ መልእክት */
-  async function ask({ system, msgs, max, pdf }) {
-    for (let attempt = 0; ; attempt++) { try {
-      let r, j = null; const ctl = typeof AbortController === 'function' ? new AbortController() : null, tm = ctl && setTimeout(() => ctl.abort(), timeoutMs);
+  async function once(mdl, { system, msgs, max, pdf }, tmo) {
+    let r, j = null; const ctl = typeof AbortController === 'function' ? new AbortController() : null, tm = ctl && setTimeout(() => ctl.abort(), tmo);
+    try {
       if (prov === 'gemini') {
         const contents = msgs.map((m, i) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [...(pdf && i === msgs.length - 1 ? [{ inlineData: { mimeType: 'application/pdf', data: Buffer.from(pdf).toString('base64') } }] : []), { text: m.content }] }));
-        r = await fetchImpl(`${base}/v1beta/models/${model}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': gkey }, signal: ctl && ctl.signal, body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents, generationConfig: { maxOutputTokens: max } }) });
+        r = await fetchImpl(`${base}/v1beta/models/${mdl}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': gkey }, signal: ctl && ctl.signal, body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents, generationConfig: { maxOutputTokens: max } }) });
       } else {
         const messages = msgs.map((m, i) => (pdf && i === msgs.length - 1 ? { role: 'user', content: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: Buffer.from(pdf).toString('base64') }, cache_control: { type: 'ephemeral' } }, { type: 'text', text: m.content }] } : m));
-        r = await fetchImpl(base + '/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': akey, 'anthropic-version': API_VER }, signal: ctl && ctl.signal, body: JSON.stringify({ model, max_tokens: max, system, messages }) });
+        r = await fetchImpl(base + '/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': akey, 'anthropic-version': API_VER }, signal: ctl && ctl.signal, body: JSON.stringify({ model: mdl, max_tokens: max, system, messages }) });
       }
-      clearTimeout(tm); try { j = await r.json(); } catch (e) { }
-      if (r.ok) return ((prov === 'gemini' ? (j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts || []).map(p => p.text || '').join('') : (j && Array.isArray(j.content) ? j.content.filter(c => c.type === 'text').map(c => c.text).join('') : '')) || '').trim();
-      if ((r.status === 429 || r.status === 503) && attempt < 2 && prov === 'gemini') { await sleep(retryMs); continue; }          // ነጻ ደረጃ በደቂቃ ገደብ ይመታል — ትንሽ ጠብቆ እንደገና
-      throw fail(r, j);
-    } catch (e) { if (/^ai_/.test(e.message)) throw e; const n = new Error(e && e.name === 'AbortError' ? 'ai_timeout' : 'ai_network'); n.detail = String(e && e.message || e).slice(0, 200); console.warn('AI ' + prov + ' ' + n.message + ': ' + n.detail); throw n; } }
+      try { j = await r.json(); } catch (e) { }
+    } catch (e) { const n = new Error(e && e.name === 'AbortError' ? 'ai_timeout' : 'ai_network'); n.detail = String(e && e.message || e).slice(0, 200); console.warn('AI ' + prov + ' ' + mdl + ' ' + n.message + ': ' + n.detail); throw n; } finally { clearTimeout(tm); }
+    if (r.ok) return ((prov === 'gemini' ? (j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts || []).map(p => p.text || '').join('') : (j && Array.isArray(j.content) ? j.content.filter(c => c.type === 'text').map(c => c.text).join('') : '')) || '').trim();
+    const e = fail(r, j); e.model = mdl; console.warn('AI ' + prov + ' ' + mdl + ' ' + r.status + ': ' + e.detail); throw e;
+  }
+  /* ሞዴል ሲሞላ (503/429)፣ ሲዘገይ ወይም ሲጠፋ (404) ወደሚቀጥለው ሞዴል ይሸጋገራል፤ የሰራው ለ10 ደቂቃ ይታወሳል */
+  const good = {};
+  async function ask(o) {
+    const kind = o.pdf ? 'doc' : 'chat', list = prov === 'gemini' ? models[kind] : [model]; let last = null; const start = good[kind] && now() - good[kind].t < 10 * 60e3 ? Math.max(0, list.indexOf(good[kind].m)) : 0;
+    for (let n = 0; n < list.length; n++) {
+      const m = list[(start + n) % list.length];
+      try { const out = await once(m, o, kind === 'doc' ? timeoutMs : Math.min(timeoutMs, 30000)); good[kind] = { m, t: now() }; return out; }
+      catch (e) { last = e; if (!(e.message === 'ai_busy' || e.message === 'ai_timeout' || e.message === 'ai_network' || e.status === 404 || (e.status === 400 && /model/i.test(e.detail || '')))) throw e; }
+    }
+    if (last && last.message === 'ai_busy' && prov === 'gemini' && retryMs > 0 && o._r !== 1) { await sleep(retryMs); return ask({ ...o, _r: 1 }); }          // ሁሉም ሞዴል ሲሞላ አንድ ጊዜ ተጠብቆ እንደገና
+    throw last;
   }
   /* ገደብ፦ kind = 'chat' | 'pages'፤ ok=false ከሆነ left=0 */
   function take(uid, kind, n = 1, admin = false) {
