@@ -76,19 +76,19 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
     throw last;
   }
   /* ገደብ፦ kind = 'chat' | 'pages'፤ ok=false ከሆነ left=0 */
-  function take(uid, kind, n = 1, admin = false) {
+  function take(uid, kind, n = 1, admin = false, capOverride) {
     if (admin) return { ok: true, left: Infinity }; const t = dayKey(now()), u = used.get(uid) && used.get(uid).d === t ? used.get(uid) : { d: t, chat: 0, pages: 0 }; used.set(uid, u);
-    const cap = lim[kind], left = cap - u[kind]; if (left < n) return { ok: false, left: Math.max(0, left) }; u[kind] += n; return { ok: true, left: cap - u[kind] };
+    const cap = capOverride == null ? lim[kind] : capOverride, left = cap - u[kind]; if (left < n) return { ok: false, left: Math.max(0, left) }; u[kind] += n; return { ok: true, left: cap - u[kind] };
   }
   const refund = (uid, kind, n = 1) => { const u = used.get(uid); if (u) u[kind] = Math.max(0, u[kind] - n); };
 
-  async function chat(id, text) {
+  async function chat(id, text, system) {
     const h = hist.get(id) || { ts: now(), m: [] }; if (now() - h.ts > HIST_TTL) h.m = [];
     h.m.push({ role: 'user', content: String(text).slice(0, 6000) }); const msgs = h.m.slice(-HIST_TURNS * 2);
     while (msgs.length && msgs[0].role !== 'user') msgs.shift();
-    const out = await ask({ system: SYS, msgs, max: 1500 }); h.m.push({ role: 'assistant', content: out || '…' }); h.m = h.m.slice(-HIST_TURNS * 2); h.ts = now(); hist.set(id, h); return out;
+    const out = await ask({ system: system || SYS, msgs, max: 1500 }); h.m.push({ role: 'assistant', content: out || '…' }); h.m = h.m.slice(-HIST_TURNS * 2); h.ts = now(); hist.set(id, h); return out;
   }
-  const reset = id => hist.delete(id);
+  const reset = id => hist.delete(id), usage = uid => { const u = used.get(uid); return u && u.d === dayKey(now()) ? { chat: u.chat, pages: u.pages } : { chat: 0, pages: 0 }; };
 
   /* PDF — የገጽ N ብቻ ትርጉም (ሰነዱ cache ስለሚደረግ ተከታታይ ገጾች ርካሽ ናቸው) */
   async function pdfPage(buf, n, total) {
@@ -100,6 +100,7 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
   async function slideTr(deckTitle, s, i, total) {
     return ask({ system: TR, max: 4000, msgs: [{ role: 'user', content: `ሰነድ፦ «${deckTitle}» (ስላይድ ${i + 1}/${total})። ይህን ስላይድ ተርጉም፦\n\n${slideText(s, i)}` }] });
   }
-  return { enabled: !!prov, provider: prov, model, lim, chat, reset, take, refund, pdfPage, slideTr };
+  return { enabled: !!prov, provider: prov, model, lim, chat, reset, take, refund, usage, pdfPage, slideTr };
 }
-module.exports = { create, countPdfPages, chunkText, slideText, SYS, TR };
+let inst = null; const shared = () => inst || (inst = create());
+module.exports = { create, shared, countPdfPages, chunkText, slideText, SYS, TR };

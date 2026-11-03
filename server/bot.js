@@ -25,7 +25,7 @@ const TX = {
 const LABEL_KEYS = {}; Object.values(MENU_TX).forEach(m => m.forEach((row, i) => row.forEach((t, j) => { LABEL_KEYS[t] = MENU_KEYS[i][j]; })));
 
 module.exports = function bot(c) {
-  const { tg, tokFor, port, baseUrl, adminChat, bindAdmin, adminPhone, token, getDb, getStore, accKey, findUid, normPhoneET, authApi, pool, pgUpsert, isSusp } = c;
+  const { aisvc, tg, tokFor, port, baseUrl, adminChat, bindAdmin, adminPhone, token, getDb, getStore, accKey, findUid, normPhoneET, authApi, pool, pgUpsert, isSusp } = c;
   const H = x => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const B = x => '<b>' + H(x) + '</b>';
   const ETB = n => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' ብር';
@@ -38,7 +38,7 @@ module.exports = function bot(c) {
   const grid = (arr, n = 2) => { const out = []; for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n)); return out; };
 
   /* ---------- ክፍለ-ጊዜ (ንግግር፣ ጋሪ) ---------- */
-  const ai = AIM.create(), DOCS = new Map();          // ንግግር + የሰነድ ትርጉም ሥራዎች (በ RAM፤ 60 ደቂቃ)
+  const ai = AIM.shared(), DOCS = new Map(), svc = aisvc || null, aiReady = () => !!(svc && ai.enabled);          // ንግግር + የሰነድ ትርጉም ሥራዎች (በ RAM፤ 60 ደቂቃ)
   const S = {}; const ses = chat => S[chat] || (S[chat] = { cart: [] });
   let saveT; const save = () => { if (!pool) return; clearTimeout(saveT); saveT = setTimeout(() => pgUpsert('_sys', 'botdb', S).catch(e => console.warn('bot save', e.message)), 600); };
   const restore = d => { if (d && typeof d === 'object') Object.assign(S, d); };
@@ -673,7 +673,7 @@ module.exports = function bot(c) {
     if (LABELS[t]) { s.flow = null; return action(chat, uid, LABELS[t]); }
     if (/^\//.test(t)) return home(chat);
     if (s.flow) return flowText(chat, t, msg);
-    if (ai.enabled) return aiText(chat, uid, t);          // ሌላ ማንኛውም ጽሑፍ → AI ረዳት
+    if (aiReady()) return aiText(chat, uid, t);          // ሌላ ማንኛውም ጽሑፍ → AI ረዳት
     return send(chat, '👇 ከታች ካለው ማውጫ ይምረጡ ወይም ዕቃ ለመፈለግ «🔎 ፈልግ» ይጫኑ።', menuKb(chat));
   }
   async function route(chat, data) {
@@ -681,9 +681,10 @@ module.exports = function bot(c) {
     if (k === 'noop') return;
     if (k === 'login') return authStart(chat);
     if (k === 'rst') { const a = ses(chat).auth; if (a && a.stage === 'pw') { a.stage = 'resetpw'; save(); return send(chat, '🆘 ስልክዎ በ Telegram ስለተረጋገጠ አዲስ የይለፍ ቃል መፍጠር ይችላሉ።\n🔐 አዲስ የይለፍ ቃል ይጻፉ (ቢያንስ 8 ቁምፊ — መልዕክቱ ይሰረዛል)፦'); } return authStart(chat); }
-    if (!uid && !(isAdmin(chat) && /^(ad|avp|ast|arf|arl|ash|apt|amod|apay|asl|arfl|adis|ashp|atr|abc|bcgo|bcx|arp)/.test(k))) return authStart(chat);
-    if (/^(ad|avp|ast|arf|arl|ash|ashr|apt|amod|apay|asl|arfl|adis|ashp|atr|atrq|atrp|atrph|abc|bcgo|bcx|arp)$/.test(k) && !isAdmin(chat)) return send(chat, '⛔ አድሚን ብቻ');
+    if (!uid && !(isAdmin(chat) && /^(ad|avp|ast|arf|arl|ash|apt|amod|apay|asl|arfl|adis|ashp|atr|abc|bcgo|bcx|arp|aiap)/.test(k))) return authStart(chat);
+    if (/^(ad|avp|ast|arf|arl|ash|ashr|apt|amod|apay|asl|arfl|adis|ashp|atr|atrq|atrp|atrph|abc|bcgo|bcx|arp|aiap)$/.test(k) && !isAdmin(chat)) return send(chat, '⛔ አድሚን ብቻ');
     const s = ses(chat);
+    if (k === 'aipay') return aiPayStart(chat, uid, a); if (k === 'aiap') { const r = await svc.decide(a, x === '1'); return send(chat, r.ok ? (x === '1' ? '✅ ጸድቋል' : '❌ ውድቅ ተደርጓል') : bad(r)); }
     if (k === 'adn') return docRun(chat, uid); if (k === 'adx') { DOCS.delete(chat); return send(chat, '✖️ ትርጉሙ ቆሟል።'); }
     switch (k) {
       case 'f': return flowCb(chat, data);
@@ -771,20 +772,44 @@ module.exports = function bot(c) {
   const aiErr = (e, chat) => (e && e.message === 'ai_timeout' ? '⏳ AI በጊዜው አልመለሰም — እንደገና ይሞክሩ።' : e && e.message === 'ai_network' ? '⚠️ ከ AI አገልግሎት ጋር መገናኘት አልተቻለም — እንደገና ይሞክሩ።' : aiErr0(e)) + (chat && isAdmin(chat) && e && (e.detail || e.status) ? `\n\n🛠 <code>${H(e.message)} ${e.status || ''} ${H(e.detail || '')}</code>` : '');
   const aiErr0 = e => (e && e.message === 'ai_busy' ? '⏳ AI አሁን ሥራ በዝቶበታል — ከጥቂት ደቂቃ በኋላ ይሞክሩ።' : e && e.message === 'ai_bad_doc' ? '⚠️ ፋይሉ መነበብ አልቻለም (የተመሰጠረ፣ በጣም ትልቅ ወይም ከ100 ገጽ በላይ ሊሆን ይችላል)።' : e && e.message === 'ai_too_big' ? '⚠️ ፋይሉ ለ AI በጣም ትልቅ ነው።' : '⚠️ AI አልተሳካም — እንደገና ይሞክሩ።');
   const aiOff = '🤖 AI ገና አልተዘጋጀም። (አድሚን፦ በ Render ላይ GEMINI_API_KEY (ነጻ) ወይም ANTHROPIC_API_KEY ያቀናብሩ።)';
-  async function aiIntro(chat, uid) {
-    if (!ai.enabled) return send(chat, aiOff, menuKb(chat));
-    return send(chat, `🤖 <b>AI ረዳት</b>\n\n• ማንኛውንም ጥያቄ እዚሁ ይጻፉ — እመልሳለሁ።\n• 📎 <b>PDF ወይም PowerPoint (.pptx)</b> ፋይል ይላኩ — በእንግሊዝኛ ከሆነ ገጽ በገጽ በአውድ ወደ አማርኛ እተረጉማለሁ (${ai.lim.batch} ገጽ እያልኩ «ቀጥል» ይጫኑ)።\n• /new — አዲስ ውይይት\n\n<i>በቀን ${isAdmin(chat) ? 'ያልተገደበ' : ai.lim.chat + ' መልእክት · ' + ai.lim.pages + ' የትርጉም ገጾች'}</i>`, menuKb(chat));
+  const planRows = (plans, pre = 'aipay') => plans.map(p => [b(`💳 ${p.label} — ${p.price} ብር`, `${pre}:${p.id}`)]);
+  async function paywall(chat, uid, why, partial) {
+    const inf = svc.info(uid || 'x'), reason = why === 'limit' ? '⛔ የዛሬው ነጻ የ AI መልእክት ገደብ አልቋል።' : why === 'pages' ? '⛔ የዛሬው ነጻ የትርጉም ገጾች ገደብ አልቋል።' : '🔒 ይህ ጥልቅ (ሙሉ) መልስ ለተከፈሉ ተጠቃሚዎች ነው።';
+    if (partial) await sendLong(chat, '', partial);
+    return send(chat, `${reason}
+
+ሙሉ እና ያልተገደበ መልስ ለማግኘት እቅድ ይምረጡ ↓ (አስቸኳይ የጤና እርዳታ ግን ሁልጊዜ ነጻ ነው)።${inf.pending ? '\n\n⏳ ያለፈው ክፍያዎ እየተረጋገጠ ነው።' : ''}`, ik(inf.pending ? [] : planRows(inf.plans)));
   }
+  async function aiIntro(chat, uid) {
+    if (!aiReady()) return send(chat, aiOff, menuKb(chat));
+    const inf = svc.info(uid || 'x'), adm = isAdmin(chat), left = Math.max(0, inf.free.chat - inf.usage.chat);
+    const st = adm ? '🛡 አድሚን — ያልተገደበ' : inf.paid ? `✅ የተከፈለ — እስከ ${new Date(inf.until + 3 * 3600e3).toISOString().slice(0, 10)}` : `🆓 ነጻ — ዛሬ ${left} መልእክት · ${inf.free.pages} የትርጉም ገጽ`;
+    return send(chat, `🤖 <b>AI ረዳት</b> · ${st}
+
+• ማንኛውንም ጥያቄ እዚሁ ይጻፉ — እመልሳለሁ።
+• 📎 <b>PDF ወይም PowerPoint (.pptx)</b> ይላኩ — እንግሊዝኛውን ገጽ በገጽ በአውድ ወደ አማርኛ እተረጉማለሁ።
+• ስለ ገበያው ወይም ስለ ፈጣሪዬ ይጠይቁኝ።
+• /new — አዲስ ውይይት`, ik(adm || inf.paid || inf.pending ? [] : planRows(inf.plans)));
+  }
+  async function aiPayStart(chat, uid, planId) {
+    const inf = svc.info(uid), p = inf.plans.find(x => x.id === planId); if (!p) return; if (inf.pending) return send(chat, '⏳ ያለፈው ክፍያዎ እየተረጋገጠ ነው።');
+    const cf = await GET('/api/market/config', uid), acc = (cf.accounts || []).map(a => `• ${H(a.method)}፦ <code>${H(a.number)}</code>${a.holder ? ' · ' + H(a.holder) : ''}`).join('\n');
+    return startFlow(chat, 'aibuy', [{ k: 'method', q: 'በየትኛው ዘዴ ከፈሉ?', t: 'choice', o: PAY }, { k: 'ref', q: 'የግብይት ማጣቀሻ ቁጥር፦', t: 'text', min: 4, max: 40 }], { plan: p.id }, `🤖 <b>${H(p.label)}</b> — ${p.price} ብር\n\n${acc || 'የክፍያ አካውንት በድረ-ገጹ ይመልከቱ'}\n\nከላይ ባለው አካውንት ${p.price} ብር ከላኩ በኋላ ከታች ዝርዝሩን ያስገቡ።`);
+  }
+  FIN.aibuy = async (chat, uid, d, x) => { const r = await svc.buy(uid, { plan: x.plan, method: d.method, ref: d.ref }); return send(chat, r.ok ? '✅ ጥያቄዎ ተልኳል — ክፍያው ሲረጋገጥ ይነገርዎታል።' : bad(r), menuKb(chat)); };
   const typing = chat => tg('sendChatAction', { chat_id: chat, action: 'typing' }).catch(() => { });
   const sendLong = async (chat, head, text) => { const parts = AIM.chunkText(text); for (let i = 0; i < parts.length; i++) await send(chat, (i === 0 && head ? head + '\n\n' : '') + H(parts[i])); };
   async function aiText(chat, uid, t) {
-    const q = ai.take(String(uid), 'chat', 1, isAdmin(chat)); if (!q.ok) return send(chat, '⛔ የዛሬው የ AI መልእክት ገደብ አልቋል — ነገ ይሞክሩ።', menuKb(chat));
     typing(chat); const tm = setInterval(() => typing(chat), 4500);
-    try { const out = await ai.chat(String(chat), t); await sendLong(chat, '', out || '…'); } catch (e) { ai.refund(String(uid), 'chat', 1); await send(chat, aiErr(e, chat)); } finally { clearInterval(tm); }
+    try {
+      const r = await svc.converse({ uid: uid || 'admin', key: String(chat), text: t, admin: isAdmin(chat) });
+      if (!r.ok) return send(chat, r.error === 'ai_disabled' ? '⏸ AI ለጊዜው በአድሚን ተዘግቷል።' : r.error === 'ai_blocked' ? '⛔ የ AI አገልግሎት ለእርስዎ ተዘግቷል።' : r.error === 'ai_limit' ? '⛔ የዛሬው የ AI መልእክት ገደብ አልቋል — ነገ ይሞክሩ።' : aiOff, menuKb(chat));
+      if (r.paywall) return await paywall(chat, uid, r.paywall, r.text); await sendLong(chat, '', r.text || '…');
+    } catch (e) { await send(chat, aiErr(e, chat)); } finally { clearInterval(tm); }
   }
   async function tgDownload(fileId) { const f = await tg('getFile', { file_id: fileId }); const r = await fetch(`${process.env.TELEGRAM_API_BASE || 'https://api.telegram.org'}/file/bot${token}/${f.file_path}`); if (!r.ok) throw new Error('download'); return Buffer.from(await r.arrayBuffer()); }
   async function onDocument(chat, m) {
-    const uid = uidOf(chat); if (!uid) return authStart(chat); if (!ai.enabled) return send(chat, aiOff);
+    const uid = uidOf(chat); if (!uid && !isAdmin(chat)) return authStart(chat); if (!aiReady()) return send(chat, aiOff);
     const d = m.document, name = d.file_name || 'file', isPdf = /pdf/i.test(d.mime_type || '') || /\.pdf$/i.test(name), isPpt = /\.pptx$/i.test(name) || /presentationml/.test(d.mime_type || '');
     if (!isPdf && !isPpt) return send(chat, '📎 ለትርጉም <b>PDF</b> ወይም <b>PowerPoint (.pptx)</b> ብቻ ይላኩ። (.ppt/.doc ከሆነ በ WPS «PDF አድርግ» ብለው ይላኩ።)');
     if ((d.file_size || 0) > 19.5 * 1048576) return send(chat, '⚠️ ፋይሉ ከ20MB በላይ ነው — ትንሽ ክፍል አድርገው ይላኩ።');
@@ -802,10 +827,10 @@ module.exports = function bot(c) {
     const tm = setInterval(() => typing(chat), 4500); let done = 0, stop = false;
     try {
       while (done < ai.lim.batch && (!d.total || d.next <= d.total)) {
-        const q = ai.take(String(uid), 'pages', 1, isAdmin(chat)); if (!q.ok) { stop = true; await send(chat, '⛔ የዛሬው የትርጉም ገጽ ገደብ አልቋል — ነገ ከገጽ ' + d.next + ' ይቀጥሉ (ፋይሉን እንደገና ይላኩ)።'); break; }
+        const q = svc.takePages(uid || 'admin', isAdmin(chat)); if (!q.ok) { stop = true; if (q.paywall) await paywall(chat, uid, 'pages'); else await send(chat, q.error === 'ai_disabled' ? '⏸ AI ለጊዜው በአድሚን ተዘግቷል።' : '⛔ የዛሬው የትርጉም ገጽ ገደብ አልቋል — ነገ ከገጽ ' + d.next + ' ይቀጥሉ (ፋይሉን እንደገና ይላኩ)።'); break; }
         typing(chat); let text;
         try { text = d.kind === 'pdf' ? await ai.pdfPage(d.buf, d.next, d.total) : await ai.slideTr(d.title, d.slides[d.next - 1], d.next - 1, d.total); }
-        catch (e) { ai.refund(String(uid), 'pages', 1); stop = true; await send(chat, aiErr(e, chat), ik([[b('🔁 እንደገና ሞክር', 'adn'), b('✖️ አቁም', 'adx')]])); break; }
+        catch (e) { ai.refund(String(uid || 'admin'), 'pages', 1); stop = true; await send(chat, aiErr(e, chat), ik([[b('🔁 እንደገና ሞክር', 'adn'), b('✖️ አቁም', 'adx')]])); break; }
         if (text === null) { d.total = d.next - 1; break; }
         await sendLong(chat, `📄 <b>${d.kind === 'pdf' ? 'ገጽ' : 'ስላይድ'} ${d.next}${d.total ? '/' + d.total : ''}</b>`, text); d.next++; done++;
       }

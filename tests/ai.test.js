@@ -31,7 +31,8 @@ test('ቦት፦ ጽሑፍ → AI፣ PDF ሰነድ → ገጽ በገጽ + «ቀ�
     if (/api\.telegram\.org\/file/.test(url)) return { ok: true, arrayBuffer: async () => Buffer.from('%PDF /Type /Page /Type /Page /Type /Page') };
     return realFetch(url, o); };
   const sent = [], tg = async (m, p) => { sent.push([m, p]); return { ok: true, file_path: 'x.pdf' }; }, docs = { 'data/users/U1': { acct: { email: 'a@b', phone: '0911', name: 'ተጠቃሚ' } } };
-  const bot = require('../server/bot')({ tg, tokFor: () => 't', port, baseUrl: 'https://x.et', adminChat: '999', bindAdmin() {}, adminPhone: '', token: 'T', getDb: () => ({ accounts: { k: { chatId: 1 } } }), getStore: () => ({ docs }), accKey: () => 'k', findUid: () => 'U1', normPhoneET: x => x, authApi: {}, pool: null, pgUpsert: async () => { }, isSusp: () => false });
+  const svc = require('../server/aisvc')({ app: { get() { }, post() { } }, col: (() => { const d = {}; return p => d[p] || (d[p] = {}); })(), who: () => null, adminOnly: () => false, saveMany: async () => { }, bad() { }, S: x => String(x == null ? '' : x), N: Number, nid: () => 'x' + Math.random(), limit: () => true, ai: require('../server/ai').shared() });
+  const bot = require('../server/bot')({ aisvc: svc, tg, tokFor: () => 't', port, baseUrl: 'https://x.et', adminChat: '999', bindAdmin() {}, adminPhone: '', token: 'T', getDb: () => ({ accounts: { k: { chatId: 1 } } }), getStore: () => ({ docs }), accKey: () => 'k', findUid: () => 'U1', normPhoneET: x => x, authApi: {}, pool: null, pgUpsert: async () => { }, isSusp: () => false });
   try {
     await bot.handle({ message: { chat: { id: 1, type: 'private' }, text: 'ኢትዮጵያ ዋና ከተማ?' } }); assert.ok(sent.some(x => x[0] === 'sendMessage' && /የ AI መልስ/.test(x[1].text)));
     sent.length = 0; await bot.handle({ message: { chat: { id: 1, type: 'private' }, document: { file_id: 'F', file_name: 'Book.pdf', mime_type: 'application/pdf', file_size: 1000 } } });

@@ -264,7 +264,7 @@ const bump = p => { store.rev[p] = (store.rev[p] || REV0) + 1; persist(); };
 const validPath = p => typeof p === 'string' && p.length < 200 && /^[\w@+.:~\/-]+$/.test(p) && !p.includes('..');
 function can(tok, p, write, id) {
   if (tok && tok.k === 'admin') return true;
-  { const t0 = String(p).split('/')[0]; if (t0 === 'mk' || t0 === 'pp' || t0 === 'pg' || t0 === 'tr' || t0 === 'ch' || t0 === 'al' || t0 === 'rf' || t0 === 'ln' || t0[0] === '_') return false; }   // ገበያ እና ምስል መረጃ በልዩ API ብቻ
+  { const t0 = String(p).split('/')[0]; if (t0 === 'mk' || t0 === 'pp' || t0 === 'pg' || t0 === 'tr' || t0 === 'ch' || t0 === 'al' || t0 === 'rf' || t0 === 'ln' || t0 === 'ai' || t0[0] === '_') return false; }   // ገበያ እና ምስል መረጃ በልዩ API ብቻ
   const m = /^data\/users\/([\w-]+)$/.exec(p);
   if (m) return !!tok && tok.u === m[1];                       // የግል ውሂብ፦ ባለቤት ብቻ
   if (!tok) return false;
@@ -433,6 +433,7 @@ require('./chat')({ app, col, limit, notifyUser, notifyAdmin, ...mkApi });
 require('./trust')({ app, col, limit, notifyUser, notifyAdmin, ...mkApi });
 require('./geo')({ app, col, limit, ...mkApi });
 require('./learn')({ app, col, limit, pool, persist, bump, notifyUser, notifyAdmin, token: TOKEN, botUsername: BOT_USERNAME, miniShort: (process.env.TELEGRAM_MINIAPP_SHORT || '').replace(/[^\w]/g, ''), baseUrl: PUBLIC_BASE_URL, ...mkApi });
+const aiSvc = require('./aisvc')({ app, col, limit, notifyUser, notifyAdmin, findUid, ...mkApi });          // AI — አድሚን ቁጥጥር፣ ነጻ ገደብ፣ ክፍያ
 const couponsApi = require('./coupons')({ app, col, limit, ...mkApi });
 require('./referral')({ app, col, limit, notifyUser, coupons: couponsApi, baseUrl: PUBLIC_BASE_URL, getStore: () => store, ...mkApi });
 opsApi = require('./ops')({ app, col, getStore: () => store, ...mkApi });
@@ -443,7 +444,7 @@ if (process.env.NODE_ENV !== 'test') require('./scheduler').start({ col, saveMan
 
 const authApi = require('./auth')({ app, col, bump, pool, pgUpsert, persist, readTok, limit, tokFor, findUid, isSusp, accountKey, normPhoneET, tg, randDigits, id, safeOtpMatch, clean, saveDB, getDb: () => db, getStore: () => store, PUBLIC_BASE_URL, BOT_USERNAME, OTP_TTL, LINK_TTL, notifyAdmin });
 
-botApi = require('./bot')({ tg, tokFor, port: PORT, baseUrl: PUBLIC_BASE_URL, adminChat: adminChatId, bindAdmin, adminPhone: normPhoneET(ADMIN_PHONE), token: TOKEN, botUsername: BOT_USERNAME, getDb: () => db, getStore: () => store, accKey, findUid, normPhoneET, authApi, pool, pgUpsert, isSusp });
+botApi = require('./bot')({ aisvc: aiSvc, tg, tokFor, port: PORT, baseUrl: PUBLIC_BASE_URL, adminChat: adminChatId, bindAdmin, adminPhone: normPhoneET(ADMIN_PHONE), token: TOKEN, botUsername: BOT_USERNAME, getDb: () => db, getStore: () => store, accKey, findUid, normPhoneET, authApi, pool, pgUpsert, isSusp });
 app.use((err, req, res, next) => opsApi.errorMw(err, req, res, next));      // ያልተያዙ የመንገድ ስህተቶች → አድሚን መዝገብ
 
 async function initStorage() {
