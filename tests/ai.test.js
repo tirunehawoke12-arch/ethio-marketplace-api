@@ -62,10 +62,12 @@ test('AI ስህተት ዝርዝር እና የጊዜ ገደብ', async () => {
   await assert.rejects(() => AIM.create({ GEMINI_API_KEY: 'g', AI_TIMEOUT_MS: '30' }, hang).chat('z', 'hi'), /ai_timeout/);
   await assert.rejects(() => AIM.create({ GEMINI_API_KEY: 'g' }, async () => { throw new Error('ENOTFOUND'); }).chat('z', 'hi'), e => e.message === 'ai_network' && /ENOTFOUND/.test(e.detail));
 });
-test('Gemini ሞዴል ሲሞላ ወደ ሌላ ሞዴል ይሸጋገራል', async () => {
-  const urls = []; const f = async (url) => { urls.push(url.match(/models\/([^:]+):/)[1]); const m = urls[urls.length - 1]; if (m === 'gemini-flash-lite-latest') return { ok: false, status: 503, json: async () => ({ error: { message: 'high demand' } }) }; if (m === 'gemini-flash-latest') return { ok: false, status: 404, json: async () => ({ error: { message: 'model not found' } }) }; return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'እሺ' }] } }] }) }; };
-  const ai = AIM.create({ GEMINI_API_KEY: 'g', AI_RETRY_MS: '0' }, f); assert.equal(await ai.chat('s', 'hi'), 'እሺ'); assert.deepEqual(urls, ['gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-2.5-flash-lite']);
-  urls.length = 0; await ai.chat('s', 'again'); assert.deepEqual(urls, ['gemini-2.5-flash-lite']);          // የሰራው ይታወሳል
-  const all = AIM.create({ GEMINI_API_KEY: 'g', AI_RETRY_MS: '0' }, async () => ({ ok: false, status: 503, json: async () => ({ error: { message: 'busy' } }) })); await assert.rejects(() => all.chat('s', 'x'), /ai_busy/);
+test('Gemini ሞዴል ሲሞላ ወደ ሌላ ሞዴል ይሸጋገራል፤ 404 ሞዴል ይታለፋል፤ ትክክለኛው ስህተት ይታያል', async () => {
+  const urls = []; const f = async (url) => { const m = url.match(/models\/([^:]+):/)[1]; urls.push(m); if (m === 'gemini-flash-lite-latest') return { ok: false, status: 503, json: async () => ({ error: { message: 'high demand' } }) }; if (m === 'gemini-3.5-flash-lite') return { ok: false, status: 404, json: async () => ({ error: { message: 'no longer available' } }) }; return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'እሺ' }] } }] }) }; };
+  const ai = AIM.create({ GEMINI_API_KEY: 'g', AI_RETRY_MS: '0' }, f); assert.equal(await ai.chat('s', 'hi'), 'እሺ'); assert.deepEqual(urls, ['gemini-flash-lite-latest', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite']);
+  urls.length = 0; await ai.chat('s', 'again'); assert.deepEqual(urls, ['gemini-3.1-flash-lite']);          // የሰራው ይታወሳል
+  const dead404 = []; const f2 = async (url) => { const m = url.match(/models\/([^:]+):/)[1]; dead404.push(m); return m === 'gemini-flash-latest' ? { ok: false, status: 503, json: async () => ({ error: { message: 'busy' } }) } : { ok: false, status: 404, json: async () => ({ error: { message: 'gone' } }) }; };
+  const all = AIM.create({ GEMINI_API_KEY: 'g', AI_RETRY_MS: '0' }, f2); await assert.rejects(() => all.pdfPage(Buffer.from('%PDF'), 1, 1), e => e.message === 'ai_busy'); const n = dead404.length; await assert.rejects(() => all.pdfPage(Buffer.from('%PDF'), 1, 1), /ai_busy/);
+  assert.ok(dead404.length - n <= 3);          // የሞቱ (404) ሞዴሎች ዳግም አልተሞከሩም (ቢበዛ flash-latest ብቻ በድጋሚ)
   const own = AIM.create({ GEMINI_API_KEY: 'g', GEMINI_MODEL: 'my-model' }, f); urls.length = 0; await own.chat('t', 'x'); assert.equal(urls[0], 'my-model');
 });

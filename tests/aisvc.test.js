@@ -1,3 +1,4 @@
+process.env.PAY_FREE_TELEBIRR = "0";
 const test = require('node:test'), assert = require('node:assert');
 const AIM = require('../server/ai');
 function harness(replyFn, extra = {}) {

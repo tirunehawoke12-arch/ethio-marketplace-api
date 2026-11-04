@@ -4,7 +4,7 @@
 const AIM = require('./ai');
 const CFG = 'ai/cfg', ACC = 'ai/acc', REQ = 'ai/reqs', PRF = 'ai/proof', DAY = 86400e3, MARK = /\s*\[\[PAID\]\]\s*/g;
 const DEFAULTS = {
-  enabled: true, paywall: true, requireProof: true, freeChatDay: 8, paidChatDay: 200, freePagesDay: 3, paidPagesDay: 150,
+  enabled: true, paywall: true, requireProof: true, autoApprove: false, freeChatDay: 8, paidChatDay: 200, freePagesDay: 3, paidPagesDay: 150,
   plans: [{ id: 'w', label: '1 ሳምንት', days: 7, price: 50 }, { id: 'm', label: '1 ወር', days: 30, price: 150 }],
   premiumTopics: 'ዝርዝር የሕክምና ምርመራ፣ ሕክምና ወይም የመድኃኒት መጠን፤ የፈተና ወይም የምደባ ሙሉ መልስ/መፍትሔ፤ የሕግ ወይም የገንዘብ ጥልቅ ምክር፤ ረጅም ጽሑፍ፣ ሪፖርት ወይም የምርምር ጽሑፍ ሙሉ መጻፍ',
   creator: 'ይህ ስርዓት (ኢትዮ ዲጂታል ማርኬት እና የ Telegram ቦቱ) የተሰራው በ Tiruneh Awoke ነው። እርሱ በባሕር ዳር ዩኒቨርሲቲ (Bahir Dar University)፣ በ College of Medicine and Health Sciences የ undergraduate (የመጀመሪያ ዲግሪ) ተማሪ ነው።',
@@ -19,7 +19,7 @@ const STOP = new Set('ምንድን ነው ናቸው እና ወይም ለእኔ �
 const SYS_PAID = '\n\n[የአገልግሎት ደረጃ፦ የተከፈለ ተጠቃሚ]\nሙሉ እና ዝርዝር መልስ ስጥ፤ [[PAID]] በጭራሽ አትጻፍ። የሕክምና/ሕግ/ገንዘብ ጉዳይ ሲሆን ለመማሪያ መረጃ ብቻ መሆኑን እና ባለሙያ ማማከር እንደሚያስፈልግ በአንድ መስመር አስታውስ።';
 
 module.exports = function aisvc(ctx) {
-  const { app, col, who, adminOnly, saveMany, bad, S, N, nid, limit, notifyUser = () => { }, notifyAdmin = () => { }, findUid = () => null, ai = AIM.shared(), tg = null, adminChat = () => null, siteSearch = null, baseUrl = '', adminPhone = '0946705941', now = () => Date.now() } = ctx;
+  const { app, col, who, adminOnly, saveMany, bad, S, N, nid, limit, notifyUser = () => { }, notifyAdmin = () => { }, findUid = () => null, ai = AIM.shared(), tg = null, adminChat = () => null, siteSearch = null, pv = null, payAccounts = () => [], baseUrl = '', adminPhone = '0946705941', now = () => Date.now() } = ctx;
   const KB = (...r) => ({ rows: [r.map(([t, d]) => ({ text: t, callback_data: d }))] });
   const cfg = () => { const c = (col(CFG).main || {}); return { ...DEFAULTS, ...c, plans: Array.isArray(c.plans) && c.plans.length ? c.plans : DEFAULTS.plans }; };
   const acc = uid => { const a = col(ACC)[uid] || {}; return { until: a.until || 0, blocked: !!a.blocked, paid: (a.until || 0) > now() }; };
@@ -78,7 +78,18 @@ module.exports = function aisvc(ctx) {
       if (tg && chat && f && f.id && /^(photo|document)$/.test(f.type)) tg(f.type === 'photo' ? 'sendPhoto' : 'sendDocument', { chat_id: chat, [f.type]: f.id, caption: cap }).catch(() => { });          // የ Telegram ፋይል ለአድሚን ይተላለፋል
       notifyAdmin(`🤖 የ AI ክፍያ ጥያቄ\n${r.name} · ${r.phone}\n📦 ${p.label} (${p.days} ቀን) — ${p.price} ብር\n💳 ${method} · ማጣቀሻ ${ref}\n${pf ? (f ? '📎 ማስረጃ ከላይ ተልኳል' : '📎 ማስረጃ በድረ-ገጽ አድሚን ገጽ ይታያል') : '⚠️ ያለ ማስረጃ'}`, KB(['✅ አጽድቅ', `aiap:${r.id}:1`], ['❌ ውድቅ', `aiap:${r.id}:0`]));
     } catch (e) { }
+    if (pv && pv.enabled) autoVerify(r.id).catch(() => { });
     return { ok: true, id: r.id };
+  }
+  const AUTO_L = { match: '✅ ተዛምዷል', mismatch: '❌ አይመሳሰልም', notfound: '❓ በቴሌኮም አልተገኘም', unknown: '⚠️ ማረጋገጥ አልተቻለም', error: '⚠️ ፍተሻው አልተሳካም' };
+  /* ነፃ ራስ-ሰር ማረጋገጫ — በአድሚን «autoApprove» ሲበራ እና ሙሉ ተዛምዶ ሲኖር ብቻ ያጸድቃል፤ አለበለዚያ ለአድሚን ጠቋሚ ብቻ */
+  async function autoVerify(id) {
+    const r = col(REQ)[id]; if (!r || r.status !== 'pending') return null; const c = cfg();
+    const res = await pv.check({ method: r.method, ref: r.ref, amount: r.price, accounts: payAccounts(), ts: r.ts });
+    r.auto = { ...res, ts: now() }; try { await saveMany([[REQ, r.id]]); } catch (e) { }
+    if (res.state === 'match' && c.autoApprove) { const d = await decide(r.id, true); if (d.ok) { try { notifyAdmin(`🤖 የ AI ክፍያ (${r.name} · ${r.price} ብር) በራስ-ሰር ተረጋግጧል።`); } catch (e) { } return res; } }
+    if (res.state !== 'unknown' || !/መፈተሽ አይቻልም/.test(res.reasons[0] || '')) try { notifyAdmin(`🤖 ራስ-ሰር ፍተሻ (AI ክፍያ ${r.name} · ${r.price} ብር)፦ ${AUTO_L[res.state] || res.state}${res.reasons.length ? '\n' + res.reasons.map(x => '• ' + x).join('\n') : ''}`, res.state === 'match' ? KB(['✅ አጽድቅ', `aiap:${r.id}:1`]) : undefined); } catch (e) { }
+    return res;
   }
   async function decide(id, approve, reason) {
     const r = col(REQ)[id]; if (!r) return { ok: false, error: 'not_found' }; if (r.status !== 'pending') return { ok: false, error: 'wrong_step:' + r.status };
@@ -102,7 +113,7 @@ module.exports = function aisvc(ctx) {
   });
   app.post('/api/ai/admin/config', async (req, res) => {
     if (!admin(req, res)) return; const b = req.body || {}, c = { ...(col(CFG).main || { id: 'main' }), id: 'main' }, n = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.round(N(v)) || 0));
-    if (b.enabled !== undefined) c.enabled = !!b.enabled; if (b.paywall !== undefined) c.paywall = !!b.paywall; if (b.requireProof !== undefined) c.requireProof = !!b.requireProof;
+    if (b.enabled !== undefined) c.enabled = !!b.enabled; if (b.paywall !== undefined) c.paywall = !!b.paywall; if (b.requireProof !== undefined) c.requireProof = !!b.requireProof; if (b.autoApprove !== undefined) c.autoApprove = !!b.autoApprove;
     for (const [k, lo, hi] of [['freeChatDay', 0, 500], ['paidChatDay', 1, 5000], ['freePagesDay', 0, 500], ['paidPagesDay', 1, 2000]]) if (b[k] !== undefined) c[k] = n(b[k], lo, hi);
     for (const k of ['premiumTopics', 'creator', 'market', 'extra']) if (b[k] !== undefined) c[k] = S(b[k], k === 'market' || k === 'extra' ? 3000 : 1200);
     if (Array.isArray(b.plans)) { const seen = new Set(), plans = []; for (const p of b.plans.slice(0, 8)) { const id = S(p.id, 12).replace(/[^\w-]/g, '') || 'p' + plans.length, days = n(p.days, 1, 3650), price = n(p.price, 0, 1e6), label = S(p.label, 40); if (!label || !days || seen.has(id)) continue; seen.add(id); plans.push({ id, label, days, price }); } if (!plans.length) return bad(res, 400, 'missing_fields'); c.plans = plans; }
@@ -124,6 +135,6 @@ module.exports = function aisvc(ctx) {
     if (ch.length) await saveMany(ch).catch(() => { }); return ch.length;
   }
   const timer = setInterval(() => { tick().catch(() => { }); }, 3600e3); timer.unref && timer.unref(); setTimeout(() => tick().catch(() => { }), 60e3).unref();
-  return { cfg, acc, info, converse, takePages, buy, decide, tick, stats, ai, isOwner };
+  return { autoVerify, cfg, acc, info, converse, takePages, buy, decide, tick, stats, ai, isOwner };
 };
 module.exports.DEFAULTS = DEFAULTS;

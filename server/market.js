@@ -295,5 +295,5 @@ module.exports = function market(ctx) {
     if (!adminOnly(req, res)) return; const o = col(P.orders)[req.params.id]; if (!A[req.params.act] || !o) return bad(res, 404, 'not_found');
     const r = await applyAdmin(o, req.params.act, req.body || {}); if (!r.ok) return bad(res, r.code, r.error); res.json({ ok: true, status: r.status });
   });
-  return { who, saveMany, bad, S, N, phoneET, adminOnly, nid, userInfo, hooks };
+  return { who, saveMany, bad, S, N, phoneET, adminOnly, nid, userInfo, hooks, pv, payAccounts: () => cfg().accounts };
 };

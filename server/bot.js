@@ -842,7 +842,7 @@ module.exports = function bot(c) {
       while (done < ai.lim.batch && (!d.total || d.next <= d.total)) {
         const q = svc.takePages(uid || 'admin', isAdmin(chat)); if (!q.ok) { stop = true; if (q.paywall) await paywall(chat, uid, 'pages'); else await send(chat, q.error === 'ai_disabled' ? '⏸ AI ለጊዜው በአድሚን ተዘግቷል።' : '⛔ የዛሬው የትርጉም ገጽ ገደብ አልቋል — ነገ ከገጽ ' + d.next + ' ይቀጥሉ (ፋይሉን እንደገና ይላኩ)።'); break; }
         typing(chat); let text;
-        try { text = d.kind === 'pdf' ? await ai.pdfPage(d.buf, d.next, d.total) : await ai.slideTr(d.title, d.slides[d.next - 1], d.next - 1, d.total); }
+        try { for (let tr = 0; ; tr++) { try { text = d.kind === 'pdf' ? await ai.pdfPage(d.buf, d.next, d.total) : await ai.slideTr(d.title, d.slides[d.next - 1], d.next - 1, d.total); break; } catch (e) { if (tr >= 2 || !/^ai_(busy|timeout|network)$/.test(e.message)) throw e; typing(chat); await new Promise(r => setTimeout(r, 6000 * (tr + 1))); } } }          // ጊዜያዊ ችግር ሲሆን ራሱ እስከ 2 ጊዜ ደግሞ ይሞክራል
         catch (e) { ai.refund(String(uid || 'admin'), 'pages', 1); stop = true; await send(chat, aiErr(e, chat), ik([[b('🔁 እንደገና ሞክር', 'adn'), b('✖️ አቁም', 'adx')]])); break; }
         if (text === null) { d.total = d.next - 1; break; }
         await sendLong(chat, `📄 <b>${d.kind === 'pdf' ? 'ገጽ' : 'ስላይድ'} ${d.next}${d.total ? '/' + d.total : ''}</b>`, text); d.next++; done++;

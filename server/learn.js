@@ -137,6 +137,11 @@ module.exports = function learn(ctx) {
       if (price === 0) { await grant(r, d); return res.json({ ok: true, status: 'approved' }); }
       await saveMany([[R, r.id]]); res.json({ ok: true, status: 'pending' });
       try { notifyAdmin(`🎓 አዲስ የመማሪያ ክፍያ ጥያቄ\n${name} · ${r.phone}\n📖 ${d.title} — ${price} ብር\n💳 ${method} · ማጣቀሻ ${ref}`); } catch (e) { }
+      if (ctx.pv && ctx.pv.enabled) (async () => {            // ነፃ ራስ-ሰር ፍተሻ፤ ማጽደቅ የሚሆነው PAY_AUTO_CONFIRM=1 እና ሙሉ ተዛምዶ ሲኖር ብቻ
+        const res = await ctx.pv.check({ method, ref, amount: price, accounts: ctx.payAccounts ? ctx.payAccounts() : [], ts: r.ts }); r.auto = { ...res, ts: now() };
+        if (res.state === 'match' && ctx.pv.auto && r.status === 'pending') { await grant(r, d); await saveMany([[R, r.id]]); try { notifyAdmin(`🤖 የመማሪያ ክፍያ (${name} · ${price} ብር) በራስ-ሰር ተረጋግጧል።`); notifyUser(r.uid, `✅ ክፍያዎ ተረጋግጧል — «${d.title}» ተፈቅዶልዎታል።`); } catch (e) { } return; }
+        await saveMany([[R, r.id]]); try { notifyAdmin(`🤖 ራስ-ሰር ፍተሻ (መማሪያ ${name} · ${price} ብር)፦ ${res.state}${res.reasons.length ? ' — ' + res.reasons.join('፤ ') : ''}`); } catch (e) { }
+      })().catch(() => { });
     } catch (e) { delete col(R)[r.id]; bad(res, e.message === 'roster_full' ? 400 : 503, e.message === 'roster_full' ? 'too_many' : 'storage'); }
   });
   app.get('/api/learn/admin/requests', (req, res) => {

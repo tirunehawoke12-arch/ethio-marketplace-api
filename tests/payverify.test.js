@@ -16,7 +16,7 @@ test('መጠን ከሌለ → unknown', () => assert.equal(J({ amount: NaN }).st
 test('ክፍያው ከትዕዛዙ በፊት → mismatch', () => assert.equal(J({ ts: Date.now() - 3600000 }).state, 'mismatch'));
 test('አልተገኘም → notfound', () => assert.equal(J({ found: false }).state, 'notfound'));
 test('ያለ URL ጠፍቷል፤ auto የሚበራው በ PAY_AUTO_CONFIRM=1 ብቻ', () => {
-  assert.equal(create({}).enabled, false); const a = create({ PAY_VERIFIER_URL: 'http://v' }); assert.equal(a.enabled, true); assert.equal(a.auto, false); assert.equal(create({ PAY_VERIFIER_URL: 'http://v', PAY_AUTO_CONFIRM: '1' }).auto, true);
+  assert.equal(create({ PAY_FREE_TELEBIRR: '0' }).enabled, false); const a = create({ PAY_VERIFIER_URL: 'http://v' }); assert.equal(a.enabled, true); assert.equal(a.auto, false); assert.equal(create({ PAY_VERIFIER_URL: 'http://v', PAY_AUTO_CONFIRM: '1' }).auto, true);
 });
 test('lookup — ቁልፍ እና ትክክለኛ አካል ይልካል፤ HTTP ስህተት ይወረወራል', async () => {
   let seen; const v = create({ PAY_VERIFIER_URL: 'http://v', PAY_VERIFIER_KEY: 'k' }, async (u, o) => { seen = [u, o]; return { ok: true, json: async () => ({ found: true, amount: '500', receiver: 'x', ts: '2026-01-01T00:00:00Z' }) }; });

@@ -40,7 +40,7 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
   const akey = env.ANTHROPIC_API_KEY || '', gkey = env.GEMINI_API_KEY || '', prov = akey ? 'claude' : gkey ? 'gemini' : '';
   const model = prov === 'gemini' ? (env.GEMINI_MODEL || 'gemini-flash-latest').split(',')[0].trim() : (env.AI_MODEL || 'claude-sonnet-5-5'), base = (prov === 'gemini' ? (env.GEMINI_API_BASE || 'https://generativelanguage.googleapis.com') : (env.ANTHROPIC_API_BASE || 'https://api.anthropic.com')).replace(/\/$/, '');
   const gl = String(env.GEMINI_MODEL || '').split(',').map(x => x.trim()).filter(Boolean), uniq = a => [...new Set(a)];
-  const models = { chat: uniq([...gl, 'gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-2.5-flash-lite', 'gemini-2.5-flash']), doc: uniq([...gl, 'gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite']) };
+  const models = { chat: uniq([...gl, 'gemini-flash-lite-latest', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.6-flash']), doc: uniq([...gl, 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-flash-lite-latest']) };
   const num = (v, d) => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? n : d; };
   const lim = { chat: num(env.AI_CHAT_DAY, 30), pages: num(env.AI_DOC_PAGES_DAY, 60), batch: Math.max(1, num(env.AI_DOC_BATCH, 5)) }, retryMs = num(env.AI_RETRY_MS, 15000), timeoutMs = num(env.AI_TIMEOUT_MS, 60000);
   const hist = new Map(), used = new Map(), sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -64,16 +64,18 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
     const e = fail(r, j); e.model = mdl; console.warn('AI ' + prov + ' ' + mdl + ' ' + r.status + ': ' + e.detail); throw e;
   }
   /* ሞዴል ሲሞላ (503/429)፣ ሲዘገይ ወይም ሲጠፋ (404) ወደሚቀጥለው ሞዴል ይሸጋገራል፤ የሰራው ለ10 ደቂቃ ይታወሳል */
-  const good = {};
+  const good = {}, dead = new Map();          // dead = 404 (ሞዴሉ የለም/ለአዲስ ተጠቃሚ ተዘግቷል) → ለ6 ሰዓት አይሞከርም
   async function ask(o) {
-    const kind = o.pdf ? 'doc' : 'chat', list = prov === 'gemini' ? models[kind] : [model]; let last = null; const start = good[kind] && now() - good[kind].t < 10 * 60e3 ? Math.max(0, list.indexOf(good[kind].m)) : 0;
+    const kind = o.pdf ? 'doc' : 'chat', all = prov === 'gemini' ? models[kind] : [model], alive = all.filter(m => !(dead.get(m) > now())), list = alive.length ? alive : all; let last = null, lastGood = null;
+    const start = good[kind] && now() - good[kind].t < 10 * 60e3 ? Math.max(0, list.indexOf(good[kind].m)) : 0;
     for (let n = 0; n < list.length; n++) {
       const m = list[(start + n) % list.length];
       try { const out = await once(m, o, kind === 'doc' ? timeoutMs : Math.min(timeoutMs, 30000)); good[kind] = { m, t: now() }; return out; }
-      catch (e) { last = e; if (!(e.message === 'ai_busy' || e.message === 'ai_timeout' || e.message === 'ai_network' || e.status === 404 || (e.status === 400 && /model/i.test(e.detail || '')))) throw e; }
+      catch (e) { last = e; if (e.status === 404) dead.set(m, now() + 6 * 3600e3); else lastGood = e; if (!(e.message === 'ai_busy' || e.message === 'ai_timeout' || e.message === 'ai_network' || e.status === 404 || (e.status === 400 && /model/i.test(e.detail || '')))) throw e; }
     }
-    if (last && last.message === 'ai_busy' && prov === 'gemini' && retryMs > 0 && o._r !== 1) { await sleep(retryMs); return ask({ ...o, _r: 1 }); }          // ሁሉም ሞዴል ሲሞላ አንድ ጊዜ ተጠብቆ እንደገና
-    throw last;
+    const fin = lastGood || last;          // ከ404 ይልቅ ትክክለኛውን (ሥራ በዝቶ/ጊዜ) ስህተት ያሳያል
+    if (fin && fin.message === 'ai_busy' && prov === 'gemini' && retryMs > 0 && o._r !== 1) { await sleep(retryMs); return ask({ ...o, _r: 1 }); }          // ሁሉም ሞዴል ሲሞላ አንድ ጊዜ ተጠብቆ እንደገና
+    throw fin;
   }
   /* ገደብ፦ kind = 'chat' | 'pages'፤ ok=false ከሆነ left=0 */
   function take(uid, kind, n = 1, admin = false, capOverride) {

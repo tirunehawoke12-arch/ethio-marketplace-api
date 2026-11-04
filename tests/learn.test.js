@@ -1,3 +1,4 @@
+process.env.PAY_FREE_TELEBIRR = "0";
 const test = require('node:test'), assert = require('node:assert'), crypto = require('node:crypto');
 const TOKEN = '123:TESTTOKEN';
 function signed(user, age = 0) { const p = new URLSearchParams({ auth_date: String(Math.floor(Date.now() / 1000) - age), query_id: 'q', user: JSON.stringify(user) }); const str = [...p.entries()].map(([k, v]) => k + '=' + v).sort().join('\n'); p.set('hash', crypto.createHmac('sha256', crypto.createHmac('sha256', 'WebAppData').update(TOKEN).digest()).update(str).digest('hex')); return p.toString(); }
