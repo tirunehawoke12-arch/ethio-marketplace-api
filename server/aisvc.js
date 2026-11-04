@@ -4,7 +4,7 @@
 const AIM = require('./ai');
 const CFG = 'ai/cfg', ACC = 'ai/acc', REQ = 'ai/reqs', PRF = 'ai/proof', DAY = 86400e3, MARK = /\s*\[\[PAID\]\]\s*/g;
 const DEFAULTS = {
-  enabled: true, paywall: true, requireProof: true, autoApprove: false, freeChatDay: 8, paidChatDay: 200, freePagesDay: 3, paidPagesDay: 150,
+  enabled: true, paywall: true, requireProof: true, autoApprove: true, freeChatDay: 8, paidChatDay: 200, freePagesDay: 3, paidPagesDay: 150,
   plans: [{ id: 'w', label: '1 ሳምንት', days: 7, price: 50 }, { id: 'm', label: '1 ወር', days: 30, price: 150 }],
   premiumTopics: 'ዝርዝር የሕክምና ምርመራ፣ ሕክምና ወይም የመድኃኒት መጠን፤ የፈተና ወይም የምደባ ሙሉ መልስ/መፍትሔ፤ የሕግ ወይም የገንዘብ ጥልቅ ምክር፤ ረጅም ጽሑፍ፣ ሪፖርት ወይም የምርምር ጽሑፍ ሙሉ መጻፍ',
   creator: 'ይህ ስርዓት (ኢትዮ ዲጂታል ማርኬት እና የ Telegram ቦቱ) የተሰራው በ Tiruneh Awoke ነው። እርሱ በባሕር ዳር ዩኒቨርሲቲ (Bahir Dar University)፣ በ College of Medicine and Health Sciences የ undergraduate (የመጀመሪያ ዲግሪ) ተማሪ ነው።',
@@ -23,6 +23,7 @@ module.exports = function aisvc(ctx) {
   const KB = (...r) => ({ rows: [r.map(([t, d]) => ({ text: t, callback_data: d }))] });
   const cfg = () => { const c = (col(CFG).main || {}); return { ...DEFAULTS, ...c, plans: Array.isArray(c.plans) && c.plans.length ? c.plans : DEFAULTS.plans }; };
   const acc = uid => { const a = col(ACC)[uid] || {}; return { until: a.until || 0, blocked: !!a.blocked, paid: (a.until || 0) > now() }; };
+  const isTb = m => /telebirr|ቴሌብር|tele\s*birr/i.test(String(m || '')), tbOnly = () => !!(pv && pv.enabled && cfg().autoApprove);
   const planOf = (c, id) => c.plans.find(p => p.id === id);
   const sysFor = (c, paid) => AIM.SYS + `\n\n[ስለ ፈጣሪ]\n${c.creator}\n\n[ስለ ገበያው]\n${c.market}${c.extra ? '\n\n[ተጨማሪ መረጃ ከአድሚን]\n' + c.extra : ''}` + (paid || !c.paywall ? SYS_PAID : SYS_FREE(c));
   const stats = { chats: 0, pages: 0, paywalls: 0, urgent: 0 }, last9 = x => String(x || '').replace(/\D/g, '').slice(-9), urgentUse = new Map();
@@ -58,7 +59,7 @@ module.exports = function aisvc(ctx) {
     const q = ai.take(String(uid), 'pages', 1, owner, paid ? c.paidPagesDay : c.freePagesDay); if (q.ok) stats.pages++;
     return { ok: q.ok, paid, paywall: !q.ok && !paid && c.paywall, error: q.ok ? '' : 'ai_limit' };
   }
-  const info = uid => { const c = cfg(), a = acc(uid), owner = isOwner(uid), mine = Object.values(col(REQ)).filter(r => r.uid === uid).sort((x, y) => y.ts - x.ts)[0]; return { enabled: c.enabled && ai.enabled, owner, requireProof: !!c.requireProof, paid: a.paid || owner, until: a.until, blocked: a.blocked, plans: c.plans, free: { chat: c.freeChatDay, pages: c.freePagesDay }, usage: ai.usage(String(uid)), pending: mine && mine.status === 'pending' ? { id: mine.id, plan: mine.plan } : null, last: mine ? { status: mine.status, reason: mine.reason || '' } : null }; };
+  const info = uid => { const c = cfg(), a = acc(uid), owner = isOwner(uid), mine = Object.values(col(REQ)).filter(r => r.uid === uid).sort((x, y) => y.ts - x.ts)[0]; return { enabled: c.enabled && ai.enabled, telebirrOnly: tbOnly(), owner, requireProof: !!c.requireProof, paid: a.paid || owner, until: a.until, blocked: a.blocked, plans: c.plans, free: { chat: c.freeChatDay, pages: c.freePagesDay }, usage: ai.usage(String(uid)), pending: mine && mine.status === 'pending' ? { id: mine.id, plan: mine.plan } : null, last: mine ? { status: mine.status, reason: mine.reason || '' } : null }; };
 
   /* ክፍያ ጥያቄ */
   function readProof(p) {          // ማስረጃ፦ ምስል (jpeg/png/webp) ወይም PDF፣ ≤ ~1.5MB፤ የፋይል ራስጌ ይረጋገጣል
@@ -67,7 +68,7 @@ module.exports = function aisvc(ctx) {
   }
   async function buy(uid, b) {
     const c = cfg(), p = planOf(c, S(b.plan, 12)); if (!p) return { ok: false, error: 'not_found' }; const method = S(b.method, 20), ref = S(b.ref, 40);
-    if (method.length < 2 || ref.length < 4) return { ok: false, error: 'payment_proof_required' }; if (Object.values(col(REQ)).some(r => r.uid === uid && r.status === 'pending')) return { ok: false, error: 'already_requested' };
+    if (method.length < 2 || ref.length < 4) return { ok: false, error: 'payment_proof_required' }; if (tbOnly() && !isTb(method)) return { ok: false, error: 'telebirr_only' }; if (Object.values(col(REQ)).some(r => r.uid === uid && r.status === 'pending')) return { ok: false, error: 'already_requested' };
     const pf = readProof(b.proof); if (pf === 'bad') return { ok: false, error: 'bad_proof' }; if (!pf && c.requireProof) return { ok: false, error: 'proof_required' };
     const k = x => String(x).toUpperCase().replace(/[\s\-_.]/g, ''); if (Object.values(col(REQ)).some(r => r.status !== 'rejected' && k(r.ref) === k(ref))) return { ok: false, error: 'duplicate_reference' };
     const u = (col('data/users/' + uid) || {}).acct || {}, r = { id: nid(), uid, plan: p.id, days: p.days, price: p.price, label: p.label, method, ref, note: S(b.note, 200), name: u.name || '', phone: u.phone || '', status: 'pending', proof: !!pf, ts: now() };
@@ -88,7 +89,10 @@ module.exports = function aisvc(ctx) {
     const res = await pv.check({ method: r.method, ref: r.ref, amount: r.price, accounts: payAccounts(), ts: r.ts });
     r.auto = { ...res, ts: now() }; try { await saveMany([[REQ, r.id]]); } catch (e) { }
     if (res.state === 'match' && c.autoApprove) { const d = await decide(r.id, true); if (d.ok) { try { notifyAdmin(`🤖 የ AI ክፍያ (${r.name} · ${r.price} ብር) በራስ-ሰር ተረጋግጧል።`); } catch (e) { } return res; } }
-    if (res.state !== 'unknown' || !/መፈተሽ አይቻልም/.test(res.reasons[0] || '')) try { notifyAdmin(`🤖 ራስ-ሰር ፍተሻ (AI ክፍያ ${r.name} · ${r.price} ብር)፦ ${AUTO_L[res.state] || res.state}${res.reasons.length ? '\n' + res.reasons.map(x => '• ' + x).join('\n') : ''}`, res.state === 'match' ? KB(['✅ አጽድቅ', `aiap:${r.id}:1`]) : undefined); } catch (e) { }
+    const why = res.reasons.length ? '\n' + res.reasons.map(x => '• ' + x).join('\n') : '';
+    if (res.state === 'mismatch' || res.state === 'notfound') { try { notifyUser(r.uid, res.state === 'notfound' ? `⚠️ የክፍያ ማጣቀሻዎ (${r.ref}) በኢትዮ ቴሌኮም አልተገኘም። ቁጥሩን ያረጋግጡ፤ ትክክል ከሆነ አድሚኑ በእጅ ይመለከተዋል።` : `⚠️ ክፍያዎ ከደረሰኙ ጋር አልተመሳሰለም፦${why}\nአድሚኑ በእጅ ይመለከተዋል።`); } catch (e) { } }
+    else if (res.state !== 'match') { try { notifyUser(r.uid, '⏳ ክፍያዎ በአድሚን እየተረጋገጠ ነው — ሲጠናቀቅ ይነገርዎታል።'); } catch (e) { } }
+    if (res.state !== 'unknown' || !/መፈተሽ አይቻልም/.test(res.reasons[0] || '')) try { notifyAdmin(`🤖 ራስ-ሰር ፍተሻ (AI ክፍያ ${r.name} · ${r.price} ብር)፦ ${AUTO_L[res.state] || res.state}${why}`, res.state === 'match' ? KB(['✅ አጽድቅ', `aiap:${r.id}:1`]) : KB(['✅ አጽድቅ', `aiap:${r.id}:1`], ['❌ ውድቅ', `aiap:${r.id}:0`])); } catch (e) { }
     return res;
   }
   async function decide(id, approve, reason) {
@@ -135,6 +139,6 @@ module.exports = function aisvc(ctx) {
     if (ch.length) await saveMany(ch).catch(() => { }); return ch.length;
   }
   const timer = setInterval(() => { tick().catch(() => { }); }, 3600e3); timer.unref && timer.unref(); setTimeout(() => tick().catch(() => { }), 60e3).unref();
-  return { autoVerify, cfg, acc, info, converse, takePages, buy, decide, tick, stats, ai, isOwner };
+  return { tbOnly, autoVerify, cfg, acc, info, converse, takePages, buy, decide, tick, stats, ai, isOwner };
 };
 module.exports.DEFAULTS = DEFAULTS;

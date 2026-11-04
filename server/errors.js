@@ -6,6 +6,7 @@ const ERR = {
   ai_disabled: 'AI ለጊዜው በአድሚን ተዘግቷል',
   ai_blocked: 'የ AI አገልግሎት ለእርስዎ ተዘግቷል',
   ai_limit: 'የዛሬው የ AI ገደብ አልቋል',
+  telebirr_only: 'በራስ ማረጋገጥ ስለበራ ክፍያ በቴሌብር ብቻ ይላኩ',
   ai_busy: 'AI ሥራ በዝቶበታል — ቆይተው ይሞክሩ',
   ai_failed: 'AI አልተሳካም — እንደገና ይሞክሩ',
   ai_timeout: 'AI በጊዜው አልመለሰም',

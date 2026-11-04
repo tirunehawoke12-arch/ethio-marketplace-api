@@ -44,7 +44,7 @@ function Chat() {
     <div className="card min-h-[40vh] space-y-3">{msgs.length === 0 && <p className="muted text-center">ማንኛውንም ጥያቄ ይጻፉ — ስለ ትምህርት፣ ትርጉም፣ ንግድ፣ ወይም ስለ ገበያው። (PDF/PowerPoint ለማስተረጎም በ Telegram ቦት ይላኩ።)</p>}
       {msgs.map((m, i) => <div key={i} className={'max-w-[92%] whitespace-pre-wrap rounded-2xl px-3 py-2 ' + (m.r === 'u' ? 'ml-auto bg-brand text-white' : m.r === 'e' ? 'bg-red-50 text-red-700' : 'bg-brand-light dark:bg-brand/20')}>{m.t}</div>)}
       {busy && <p className="muted">⏳ እየመለሰ ነው…</p>}<div ref={end} /></div>
-    {pay && !inf.paid && !inf.pending && inf.plans && <><p className="msg-err">{note}</p><Pay plans={inf.plans} accounts={accounts} needProof={inf.requireProof !== false} onDone={() => { setPay(false); load(); }} /></>}
+    {pay && !inf.paid && !inf.pending && inf.plans && <><p className="msg-err">{note}</p><Pay plans={inf.plans} accounts={inf.telebirrOnly ? accounts.filter(a => /telebirr|ቴሌብር/i.test(a.method)) : accounts} needProof={inf.requireProof !== false} onDone={() => { setPay(false); load(); }} /></>}
     <form className="sticky bottom-20 flex gap-2 md:bottom-4" onSubmit={send}><input className="input flex-1" value={text} onChange={e => setText(e.target.value)} placeholder="ጥያቄዎን ይጻፉ…" maxLength={4000} /><button className="btn-primary" disabled={busy || !text.trim()}>ላክ</button></form></div>);
 }
 export default function Page() { return <RequireAuth><Chat /></RequireAuth>; }

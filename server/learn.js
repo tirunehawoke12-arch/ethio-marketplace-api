@@ -115,7 +115,7 @@ module.exports = function learn(ctx) {
   const link = id => botUsername ? (miniShort ? `https://t.me/${botUsername}/${miniShort}?startapp=d_${id}` : `https://t.me/${botUsername}?start=d_${id}`) : '';
   const allIds = () => { const s = new Set(); for (const d of Object.values(col(D))) for (const r of d.roster || []) s.add(r.id); for (const x of Object.values(col(ST))) s.add(x.sid); return s; };
   const newSid = () => { const used = allIds(); for (let i = 0; i < 400; i++) { const id = 'ST' + String(1000 + crypto.randomInt(9000)); if (!used.has(id)) return id; } return 'ST' + Date.now().toString(36).toUpperCase().slice(-6); };
-  app.get('/api/learn/catalog', (req, res) => { res.set('cache-control', 'no-store'); res.json({ ok: true, cats: CATS, items: Object.values(col(D)).filter(listable).sort((a, b) => b.ts - a.ts).map(catItem) }); });
+  app.get('/api/learn/catalog', (req, res) => { res.set('cache-control', 'no-store'); res.json({ ok: true, telebirrOnly: !!(ctx.pv && ctx.pv.auto), cats: CATS, items: Object.values(col(D)).filter(listable).sort((a, b) => b.ts - a.ts).map(catItem) }); });
   app.get('/api/learn/my', (req, res) => {
     const u = who(req, res); if (!u) return; if (u.admin) return res.json({ ok: true, student: null, items: [] }); res.set('cache-control', 'no-store'); const st = col(ST)[u.uid];
     res.json({ ok: true, bot: botUsername, home: botUsername ? (miniShort ? `https://t.me/${botUsername}/${miniShort}` : `https://t.me/${botUsername}?start=lib`) : '', student: st ? { name: st.name.split(/\s+/)[0], sid: st.sid } : null,
@@ -131,7 +131,7 @@ module.exports = function learn(ctx) {
     const d = col(D)[S(b.deck, 24)]; if (!d || !listable(d)) return bad(res, 404, 'not_found');
     const prev = Object.values(col(R)).find(r => r.uid === u.uid && r.deck === d.id && r.status !== 'rejected'); if (prev) return bad(res, 409, prev.status === 'approved' ? 'already_have' : 'already_requested');
     const st = col(ST)[u.uid], name = st ? st.name : S(b.name, 60), price = d.price | 0; if (name.length < 2) return bad(res, 400, 'missing_fields');
-    const method = S(b.method, 20), ref = S(b.ref, 40); if (price > 0) { if (!method || ref.length < 4) return bad(res, 400, 'payment_proof_required'); const k = rkey(ref); if (Object.values(col(R)).some(x => x.status !== 'rejected' && x.ref && rkey(x.ref) === k)) return bad(res, 409, 'duplicate_reference'); }
+    const method = S(b.method, 20), ref = S(b.ref, 40); if (price > 0) { if (!method || ref.length < 4) return bad(res, 400, 'payment_proof_required'); if (ctx.pv && ctx.pv.auto && !ctx.pv.isTb(method)) return bad(res, 400, 'telebirr_only'); const k = rkey(ref); if (Object.values(col(R)).some(x => x.status !== 'rejected' && x.ref && rkey(x.ref) === k)) return bad(res, 409, 'duplicate_reference'); }
     const r = { id: nid(), uid: u.uid, deck: d.id, name, phone: S(b.phone, 20), method, ref, note: S(b.note, 200), price, status: 'pending', ts: now() }; col(R)[r.id] = r;
     try {
       if (price === 0) { await grant(r, d); return res.json({ ok: true, status: 'approved' }); }
@@ -140,7 +140,8 @@ module.exports = function learn(ctx) {
       if (ctx.pv && ctx.pv.enabled) (async () => {            // ነፃ ራስ-ሰር ፍተሻ፤ ማጽደቅ የሚሆነው PAY_AUTO_CONFIRM=1 እና ሙሉ ተዛምዶ ሲኖር ብቻ
         const res = await ctx.pv.check({ method, ref, amount: price, accounts: ctx.payAccounts ? ctx.payAccounts() : [], ts: r.ts }); r.auto = { ...res, ts: now() };
         if (res.state === 'match' && ctx.pv.auto && r.status === 'pending') { await grant(r, d); await saveMany([[R, r.id]]); try { notifyAdmin(`🤖 የመማሪያ ክፍያ (${name} · ${price} ብር) በራስ-ሰር ተረጋግጧል።`); notifyUser(r.uid, `✅ ክፍያዎ ተረጋግጧል — «${d.title}» ተፈቅዶልዎታል።`); } catch (e) { } return; }
-        await saveMany([[R, r.id]]); try { notifyAdmin(`🤖 ራስ-ሰር ፍተሻ (መማሪያ ${name} · ${price} ብር)፦ ${res.state}${res.reasons.length ? ' — ' + res.reasons.join('፤ ') : ''}`); } catch (e) { }
+        await saveMany([[R, r.id]]); if (res.state === 'mismatch' || res.state === 'notfound') { try { notifyUser(r.uid, `⚠️ የክፍያ ማጣቀሻዎ አልተረጋገጠም (${res.state === 'notfound' ? 'በኢትዮ ቴሌኮም አልተገኘም' : res.reasons.join('፤ ')})። አድሚኑ በእጅ ይመለከተዋል።`); } catch (e) { } } else { try { notifyUser(r.uid, '⏳ ክፍያዎ በአድሚን እየተረጋገጠ ነው።'); } catch (e) { } }
+        try { notifyAdmin(`🤖 ራስ-ሰር ፍተሻ (መማሪያ ${name} · ${price} ብር)፦ ${res.state}${res.reasons.length ? ' — ' + res.reasons.join('፤ ') : ''}`); } catch (e) { }
       })().catch(() => { });
     } catch (e) { delete col(R)[r.id]; bad(res, e.message === 'roster_full' ? 400 : 503, e.message === 'roster_full' ? 'too_many' : 'storage'); }
   });

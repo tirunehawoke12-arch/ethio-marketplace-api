@@ -28,7 +28,7 @@ test('AI ክፍያ — autoApprove ሲበራ ተዛምዶ በራሱ ያጸድቃ
     const docs = { 'data/users/u1': { acct: { name: 'አበበ', phone: '0911' } } }, col = p => docs[p] || (docs[p] = {}), sent = [], told = [];
     const { pv } = mk(HTML()); let n = 0;
     const svc = require('../server/aisvc')({ app, col, limit: () => true, who: () => ({ uid: 'u1' }), adminOnly: () => true, saveMany: async () => { }, bad() { }, S: (x, m) => String(x == null ? '' : x).slice(0, m), N: Number, nid: () => 'ai' + (++n), notifyUser: (u, t) => told.push(t), notifyAdmin: (t, b) => sent.push(t), ai: AIM.create({ ANTHROPIC_API_KEY: 'k' }, async () => ({})), pv, payAccounts: () => ACC, now: () => ts0 });
-    if (auto) col('ai/cfg').main = { autoApprove: true };
+    col('ai/cfg').main = { autoApprove: auto };
     const PROOF = { data: Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(30)]).toString('base64') };
     const r = await svc.buy('u1', { plan: 'm', method: 'telebirr', ref: 'CK12AB34CD', proof: PROOF }); assert.equal(r.ok, true);
     await new Promise(r => setTimeout(r, 30)); const q = col('ai/reqs')[r.id];

@@ -28,7 +28,7 @@ const refKey = x => String(x == null ? '' : x).toUpperCase().replace(/[\s\-_.]/g
 function create(env = process.env, fetchImpl = (...a) => fetch(...a)) {
   const url = env.PAY_VERIFIER_URL || '', key = env.PAY_VERIFIER_KEY || '';
   const free = env.PAY_FREE_TELEBIRR !== '0', base = (env.PAY_RECEIPT_BASE || 'https://transactioninfo.ethiotelecom.et/receipt/').replace(/\/?$/, '/');
-  const enabled = !!url || free, auto = enabled && env.PAY_AUTO_CONFIRM === '1';
+  const enabled = !!url || free, auto = enabled && (env.PAY_AUTO_CONFIRM === '1' || (!url && free && env.PAY_AUTO_CONFIRM !== '0'));          // ነፃው አብሮ-የተሰራ ፍተሻ በነባሪ በራስ ያረጋግጣል (PAY_AUTO_CONFIRM=0 ያጠፋል)
   const isTb = m => /telebirr|ቴሌብር|tele\s*birr/i.test(String(m || ''));
   async function freeTelebirr(ref) {
     const k = refKey(ref); if (!/^[A-Z0-9]{8,14}$/.test(k)) return { found: false };
@@ -69,6 +69,6 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a)) {
     try { return judge({ total: amount, payment: { method }, ts: ts || 0 }, accounts, await lookup({ method, ref, amount, accounts })); }
     catch (e) { return { state: 'error', reasons: [String(e.message).slice(0, 80)] }; }
   }
-  return { enabled, auto, lookup, judge, check };
+  return { enabled, auto, lookup, judge, check, isTb };
 }
 module.exports = { create, refKey, parseTelebirr };
