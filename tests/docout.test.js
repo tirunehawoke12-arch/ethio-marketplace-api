@@ -12,7 +12,9 @@ test('splitBoth፦ [[EN]]/[[AM]] ይለያል፤ ምልክት ከሌለ ሁሉ�
 test('AI፦ Gemini ፍለጋ ምንጮች ከመልሱ በኋላ ይጨመራሉ፤ ፍለጋ ሲከለከል ያለሱ ይመልሳል', async () => {
   let n = 0, tools = [];
   const f = async (u, o) => { const b = JSON.parse(o.body); tools.push(!!b.tools); n++; if (b.tools && n === 1) return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'መልስ' }] }, groundingMetadata: { groundingChunks: [{ web: { uri: 'https://who.int/x', title: 'who.int' } }, { web: { uri: 'https://who.int/x', title: 'dup' } }] } }] }) }; return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'ያለ ምንጭ' }] } }] }) }; };
-  const ai = AIM.create({ GEMINI_API_KEY: 'g' }, f); const r = await ai.chat('a', 'ሰላም'); assert.match(r, /መልስ[\s\S]*📚 ምንጮች፦\n• who\.int — https:\/\/who\.int\/x$/); assert.equal(tools[0], true);
+  const ai = AIM.create({ GEMINI_API_KEY: 'g', AI_GROUNDING: '1' }, f); const r = await ai.chat('a', 'ሰላም'); assert.match(r, /መልስ[\s\S]*📚 ምንጮች፦\n• who\.int — https:\/\/who\.int\/x$/); assert.equal(tools[0], true);
   const f2 = async (u, o) => { const b = JSON.parse(o.body); if (b.tools) return { ok: false, status: 400, json: async () => ({ error: { message: 'bad' } }) }; return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'ቀላል' }] } }] }) }; };
-  assert.equal(await AIM.create({ GEMINI_API_KEY: 'g' }, f2).chat('b', 'x'), 'ቀላል'); assert.match(AIM.SYS, /📚 ምንጭ/);
+  assert.equal(await AIM.create({ GEMINI_API_KEY: 'g', AI_GROUNDING: '1' }, f2).chat('b', 'x'), 'ቀላል');
+  const f3 = async (u, o) => { const b = JSON.parse(o.body); if (b.tools) return { ok: false, status: 429, json: async () => ({ error: { message: 'quota' } }) }; return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'ያለ ፍለጋ' }] } }] }) }; };
+  assert.equal(await AIM.create({ GEMINI_API_KEY: 'g', AI_GROUNDING: '1' }, f3).chat('c', 'x'), 'ያለ ፍለጋ'); const f4 = async (u, o) => { assert.ok(!JSON.parse(o.body).tools); return f3(u, o); }; assert.equal(await AIM.create({ GEMINI_API_KEY: 'g' }, f4).chat('d', 'x'), 'ያለ ፍለጋ'); assert.match(AIM.SYS, /📚 ምንጭ/);
 });

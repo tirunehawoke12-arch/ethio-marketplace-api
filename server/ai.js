@@ -61,7 +61,7 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
       }
       try { j = await r.json(); } catch (e) { }
     } catch (e) { const n = new Error(e && e.name === 'AbortError' ? 'ai_timeout' : 'ai_network'); n.detail = String(e && e.message || e).slice(0, 200); console.warn('AI ' + prov + ' ' + mdl + ' ' + n.message + ': ' + n.detail); throw n; } finally { clearTimeout(tm); }
-    if (!r.ok && ground && r.status === 400) return once(mdl, { system, msgs, max, pdf }, tmo);          // «ፍለጋ» መሣሪያው ካልተፈቀደ ያለሱ ይሞክራል
+    if (!r.ok && ground && [400, 403, 429].includes(r.status)) return once(mdl, { system, msgs, max, pdf }, tmo);          // «ፍለጋ» መሣሪያው ካልተፈቀደ ያለሱ ይሞክራል
     if (r.ok && ground && prov === 'gemini') { const gm = j && j.candidates && j.candidates[0] && j.candidates[0].groundingMetadata, seen = new Set(), src = ((gm && gm.groundingChunks) || []).map(c => c.web).filter(w => w && w.uri && !seen.has(w.uri) && seen.add(w.uri)).slice(0, 4); const body = ((j.candidates[0].content && j.candidates[0].content.parts) || []).map(p => p.text || '').join('').trim(); if (src.length && body) return body + '\n\n📚 ምንጮች፦\n' + src.map(w => `• ${w.title || w.uri} — ${w.uri}`).join('\n'); }
     if (r.ok) return ((prov === 'gemini' ? (j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts || []).map(p => p.text || '').join('') : (j && Array.isArray(j.content) ? j.content.filter(c => c.type === 'text').map(c => c.text).join('') : '')) || '').trim();
     const e = fail(r, j); e.model = mdl; console.warn('AI ' + prov + ' ' + mdl + ' ' + r.status + ': ' + e.detail); throw e;
@@ -91,7 +91,7 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
     const h = hist.get(id) || { ts: now(), m: [] }; if (now() - h.ts > HIST_TTL) h.m = [];
     h.m.push({ role: 'user', content: String(text).slice(0, 6000) }); const msgs = h.m.slice(-HIST_TURNS * 2);
     while (msgs.length && msgs[0].role !== 'user') msgs.shift();
-    const out = await ask({ system: system || SYS, msgs, max: 1500, ground: env.AI_GROUNDING !== '0' }); h.m.push({ role: 'assistant', content: out || '…' }); h.m = h.m.slice(-HIST_TURNS * 2); h.ts = now(); hist.set(id, h); return out;
+    const out = await ask({ system: system || SYS, msgs, max: 1500, ground: env.AI_GROUNDING === '1' }); h.m.push({ role: 'assistant', content: out || '…' }); h.m = h.m.slice(-HIST_TURNS * 2); h.ts = now(); hist.set(id, h); return out;
   }
   const reset = id => hist.delete(id), usage = uid => { const u = used.get(uid); return u && u.d === dayKey(now()) ? { chat: u.chat, pages: u.pages } : { chat: 0, pages: 0 }; };
 
