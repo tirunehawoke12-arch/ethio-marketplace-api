@@ -713,7 +713,7 @@ module.exports = function bot(c) {
     const ld = /^\/start\s+d_([\w-]{4,40})$/.exec(t); if (ld) return learnStart(chat, ld[1]);
     const dl = /^\/start\s+([sgpwej])_([\w-]{4,40})$/.exec(t); if (dl) s.deep = { t: dl[1], id: dl[2] };       // deep link — ከመግባት በኋላም ይከፈታል
     if (t === '✖️ ተው') { s.await = null; s.flow = null; s.aiproof = null; save(); return home(chat); }
-    if (uid && /^\/ai\b/.test(t)) return aiIntro(chat, uid); if (uid && /^\/(new|reset)\b/.test(t)) { ai.reset(String(chat)); return send(chat, '🧹 አዲስ ውይይት ጀምረናል።', menuKb(chat)); }
+    if (uid && /^\/ai\b/.test(t)) return aiIntro(chat, uid); if (uid && /^\/voice\b/.test(t)) { const s2 = ses(chat), nx = { undefined: 'on', auto: 'on', on: 'off', off: 'auto' }[s2.vo || 'auto']; s2.vo = nx; save(); return send(chat, nx === 'on' ? '🔊 ሁልጊዜ በድምፅም እመልሳለሁ።' : nx === 'off' ? '🔇 የድምፅ መልስ ጠፍቷል (ድምፅ ቢልኩም በጽሑፍ ብቻ)።' : '🎙 በድምፅ ሲጠይቁ በድምፅ እመልሳለሁ (ነባሪ)።'); } if (uid && /^\/(new|reset)\b/.test(t)) { ai.reset(String(chat)); return send(chat, '🧹 አዲስ ውይይት ጀምረናል።', menuKb(chat)); }
     if (uid && /^\/lang\b/.test(t)) return langMenu(chat);
     if (uid && /^\/(search|near|alerts|messages)\b/.test(t)) return action(chat, uid, /^\/(\w+)/.exec(t)[1]);
     if (/^\/(start|menu|login)\b/.test(t)) { s.flow = null; if (uid) return home(chat, `🇪🇹 <b>ኢትዮ ዲጂታል ማርኬት</b>\n${tx(chat, 'welcome')} ${H(userOf(uid).name)}!`); s.auth = null; return authStart(chat); }
@@ -738,7 +738,8 @@ module.exports = function bot(c) {
     const s = ses(chat);
     if (/^ax/.test(k)) return isAdmin(chat) ? axRoute(chat, k, a, x) : send(chat, '⛔ አድሚን ብቻ');
     if (k === 'aih') return send(chat, { m: '🛍 ለምሳሌ ይጻፉ፦\n• «ሶፋ ምን ዋጋ አለ?»\n• «በአዲስ አበባ ክፍት ሥራዎች አሉ?»\n• «ሱቅ እንዴት እከፍታለሁ?»\n• «ክፍያው እንዴት ይሠራል?»', d: '📄 PDF ወይም PowerPoint (.pptx) ፋይል ይላኩ — እንግሊዝኛውን ገጽ በገጽ በአውድ ወደ አማርኛ እተረጉማለሁ።', u: '🩺 አጣዳፊ ጥያቄ ሁልጊዜ ነጻ ነው፤ ለምሳሌ «አሞኛል፣ ትኩሳት እና ራስ ምታት አለኝ ምን ላድርግ?» ብለው ይጻፉ። (ከባድ አደጋ ከሆነ ወዲያው ሆስፒታል/አምቡላንስ 907)', s: '🎓 ለምሳሌ «የ cell membrane ተግባር ምንድን ነው?» ወይም «ይህን ርዕስ አጭር ማስታወሻ አድርግልኝ» ብለው ይጻፉ።' }[a] || '🤖'); if (k === 'aipay') return aiPayStart(chat, uid, a); if (k === 'aiap') { const r = await svc.decide(a, x === '1'); return send(chat, r.ok ? (x === '1' ? '✅ ጸድቋል' : '❌ ውድቅ ተደርጓል') : bad(r)); }
-    if (k === 'adn') return docRun(chat, uid); if (k === 'adf') { const d = DOCS.get(chat); return d ? docFile(chat, d) : send(chat, '⌛ ፋይሉ ጊዜው አልፏል።'); } if (k === 'adx') { DOCS.delete(chat); return send(chat, '✖️ ትርጉሙ ቆሟል።'); }
+    if (k === 'adn') return docRun(chat, uid); if (k === 'adfo') return fontMenu(chat, DOCS.get(chat)); if (k === 'adfp' || k === 'adfs') { const dd = DOCS.get(chat), o = { ...DO.optOf((dd && dd.opt) || ses(chat).docopt) }; if (k === 'adfp' && DO.PRESETS[a]) o.preset = a; if (k === 'adfs' && DO.SIZES[a]) o.size = a; ses(chat).docopt = o; if (dd) dd.opt = o; save(); return fontMenu(chat, dd); }
+    if (k === 'adf') { const d = DOCS.get(chat); return d ? docFile(chat, d) : send(chat, '⌛ ፋይሉ ጊዜው አልፏል።'); } if (k === 'adx') { DOCS.delete(chat); return send(chat, '✖️ ትርጉሙ ቆሟል።'); }
     switch (k) {
       case 'f': return flowCb(chat, data);
       case 'nb': return nearby(chat, uid, a); case 'nbk': return send(chat, '📍 ምን ይፈልጋሉ?', NB_KB);
@@ -842,7 +843,7 @@ module.exports = function bot(c) {
 • ማንኛውንም ጥያቄ እዚሁ ይጻፉ — እመልሳለሁ።
 • 📎 <b>PDF ወይም PowerPoint (.pptx)</b> ይላኩ — እንግሊዝኛውን ገጽ በገጽ በአውድ ወደ አማርኛ እተረጉማለሁ።\n• 📷 <b>ፎቶ ወይም ፋይል</b> (PDF፣ DOCX፣ PPTX፣ TXT፣ CSV) ከጥያቄዎ (caption) ጋር ይላኩ — አንብቤ እመልሳለሁ፤ ተከታይ ጥያቄም ይችላሉ። ለትርጉም ያለ caption ወይም «ተርጉም» ብለው ይላኩ።
 • ስለ ገበያው ወይም ስለ ፈጣሪዬ ይጠይቁኝ።
-• /new — አዲስ ውይይት`, ik([[b('🛍 ስለ ገበያው', 'aih:m'), b('📄 ሰነድ አስተርጉም', 'aih:d')], [b('🩺 አጣዳፊ ጥያቄ', 'aih:u'), b('🎓 ትምህርት', 'aih:s')], ...(adm || inf.paid || inf.pending ? [] : planRows(inf.plans))]));
+• 🎙 <b>በድምፅ ይጠይቁ</b> (voice message) — እሰማለሁ፤ በድምፅም እመልሳለሁ። /voice — የድምፅ መልስ ማብራት/ማጥፋት\n• /new — አዲስ ውይይት`, ik([[b('🛍 ስለ ገበያው', 'aih:m'), b('📄 ሰነድ አስተርጉም', 'aih:d')], [b('🩺 አጣዳፊ ጥያቄ', 'aih:u'), b('🎓 ትምህርት', 'aih:s')], ...(adm || inf.paid || inf.pending ? [] : planRows(inf.plans))]));
   }
   async function aiPayStart(chat, uid, planId) {
     const inf = svc.info(uid), p = inf.plans.find(x => x.id === planId); if (!p) return; if (inf.pending) return send(chat, '⏳ ያለፈው ክፍያዎ እየተረጋገጠ ነው።');
@@ -888,13 +889,42 @@ module.exports = function bot(c) {
       if (r.paywall) return await paywall(chat, uid, r.paywall, r.text); await sendLong(chat, '', r.text || '…'); if (media) await send(chat, '💬 ስለዚህ ፋይል ተጨማሪ ጥያቄ ይጻፉ (ለ20 ደቂቃ ይታወሳል)።');
     } catch (e) { await send(chat, aiErr(e, chat)); } finally { clearInterval(tm); }
   }
-  async function aiText(chat, uid, t) {
+  /* ===== ድምፅ፦ መጠየቅ (voice/audio → ጽሑፍ) እና መመለስ (ጽሑፍ → ድምፅ፣ ffmpeg ካለ OGG/Opus voice) ===== */
+  const ffmpegBin = () => { if (process.env.FFMPEG_PATH) return process.env.FFMPEG_PATH; try { return require('ffmpeg-static') || 'ffmpeg'; } catch (e) { return 'ffmpeg'; } };
+  const toOgg = (pcm, rate) => new Promise(res => {
+    let p; try { p = require('child_process').spawn(ffmpegBin(), ['-hide_banner', '-loglevel', 'error', '-f', 's16le', '-ar', String(rate), '-ac', '1', '-i', 'pipe:0', '-c:a', 'libopus', '-b:a', '32k', '-f', 'ogg', 'pipe:1']); } catch (e) { return res(null); }
+    const out = []; let done = false; const fin = v => { if (!done) { done = true; res(v); } };
+    p.stdout.on('data', d => out.push(d)); p.on('error', () => fin(null)); p.on('close', c => fin(c === 0 && out.length ? Buffer.concat(out) : null)); p.stdin.on('error', () => { }); p.stdin.end(pcm); setTimeout(() => { try { p.kill(); } catch (e) { } fin(null); }, 30000).unref();
+  });
+  const wavOf = (pcm, rate) => { const h = Buffer.alloc(44); h.write('RIFF', 0); h.writeUInt32LE(36 + pcm.length, 4); h.write('WAVEfmt ', 8); h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20); h.writeUInt16LE(1, 22); h.writeUInt32LE(rate, 24); h.writeUInt32LE(rate * 2, 28); h.writeUInt16LE(2, 32); h.writeUInt16LE(16, 34); h.write('data', 36); h.writeUInt32LE(pcm.length, 40); return Buffer.concat([h, pcm]); };
+  async function tgUpload(method, field, chat, buf, name, mime, extra = {}) {
+    const fd = new FormData(); fd.append('chat_id', String(chat)); for (const [k, v] of Object.entries(extra)) fd.append(k, String(v)); fd.append(field, new Blob([buf], { type: mime }), name);
+    const r = await fetch(`${process.env.TELEGRAM_API_BASE || 'https://api.telegram.org'}/bot${token}/${method}`, { method: 'POST', body: fd }); if (!r.ok) throw new Error(method + ' ' + r.status);
+  }
+  async function speakTo(chat, text) {
+    try {
+      const t = String(text || '').split('📚')[0].replace(/\[\[[A-Z]+\]\]/g, '').replace(/https?:\/\/\S+/g, '').replace(/[*_`#>]/g, '').trim().slice(0, 900); if (t.length < 2) return;
+      tg('sendChatAction', { chat_id: chat, action: 'record_voice' }).catch(() => { }); const a = await ai.speak(t); if (!a) return;
+      const ogg = await toOgg(a.pcm, a.rate); if (ogg) return await tgUpload('sendVoice', 'voice', chat, ogg, 'reply.ogg', 'audio/ogg');
+      await tgUpload('sendDocument', 'document', chat, wavOf(a.pcm, a.rate), 'reply.wav', 'audio/wav', { caption: '🔊 የድምፅ መልስ' });
+    } catch (e) { console.warn('speakTo', e.message); }
+  }
+  async function onVoice(chat, m) {
+    const uid = uidOf(chat); if (!uid && !isAdmin(chat)) return authStart(chat); if (!aiReady()) return send(chat, aiOff);
+    const v = m.voice || m.audio; if ((v.duration || 0) > 180) return send(chat, '⚠️ ድምፁ ከ3 ደቂቃ በላይ ነው — አጠር አድርገው ይላኩ።'); if ((v.file_size || 0) > 15 * 1048576) return send(chat, '⚠️ ፋይሉ ትልቅ ነው።');
+    tg('sendChatAction', { chat_id: chat, action: 'typing' }).catch(() => { }); let text;
+    try { text = await ai.transcribe(await tgDownload(v.file_id), v.mime_type || 'audio/ogg'); }
+    catch (e) { return send(chat, e.message === 'ai_no_audio' ? '🎙 ድምፅ ለመረዳት Gemini (GEMINI_API_KEY) ያስፈልጋል — አሁን በጽሑፍ ይጠይቁ።' : aiErr(e, chat)); }
+    if (!text) return send(chat, '🎙 ድምፁ አልተሰማኝም — እንደገና ቀርበው ይናገሩ።');
+    await send(chat, '🎙 <i>' + H(clip(text, 500)) + '</i>'); return aiText(chat, uid, text, true);
+  }
+  async function aiText(chat, uid, t, voice) {
     typing(chat); const tm = setInterval(() => typing(chat), 4500);
     try {
       const lm = MEDIA.get(chat), media = lm && Date.now() - lm.ts < 20 * 60e3 ? lm.m : null;          // የቅርብ ጊዜ ፎቶ/PDF ለተከታይ ጥያቄዎች ይታወሳል (20 ደቂቃ)
       const r = await svc.converse({ uid: uid || 'admin', key: String(chat), text: t, admin: isAdmin(chat), media });
       if (!r.ok) return send(chat, r.error === 'ai_disabled' ? '⏸ AI ለጊዜው በአድሚን ተዘግቷል።' : r.error === 'ai_blocked' ? '⛔ የ AI አገልግሎት ለእርስዎ ተዘግቷል።' : r.error === 'ai_limit' ? '⛔ የዛሬው የ AI መልእክት ገደብ አልቋል — ነገ ይሞክሩ።' : aiOff, menuKb(chat));
-      if (r.paywall) return await paywall(chat, uid, r.paywall, r.text); await sendLong(chat, '', r.text || '…');
+      if (r.paywall) return await paywall(chat, uid, r.paywall, r.text); await sendLong(chat, '', r.text || '…'); const vo = ses(chat).vo; if (vo === 'on' || (vo !== 'off' && voice)) await speakTo(chat, r.text);
     } catch (e) { await send(chat, aiErr(e, chat)); } finally { clearInterval(tm); }
   }
   async function tgDownload(fileId) { const f = await tg('getFile', { file_id: fileId }); const r = await fetch(`${process.env.TELEGRAM_API_BASE || 'https://api.telegram.org'}/file/bot${token}/${f.file_path}`); if (!r.ok) throw new Error('download'); return Buffer.from(await r.arrayBuffer()); }
@@ -909,35 +939,53 @@ module.exports = function bot(c) {
     if (isPdf) { job.buf = buf; job.total = AIM.countPdfPages(buf); if (job.total > 100) return send(chat, `⚠️ ፋይሉ ${job.total} ገጽ ነው — AI በአንድ ጊዜ እስከ 100 ገጽ ብቻ ያነባል። በ100 ገጽ ክፍል አድርገው ይላኩ።`); }
     else { try { const { parsePptx } = require('../src/lib/pptx'); const r = await parsePptx(buf); job.slides = r.slides.map(s => ({ title: s.title, blocks: s.blocks })); job.total = job.slides.length; } catch (e) { return send(chat, '⚠️ PPTX መነበብ አልቻለም — (PowerPoint 2007+ .pptx መሆኑን ያረጋግጡ)'); } if (!job.total) return send(chat, '⚠️ ስላይድ አልተገኘም።'); }
     job.title = name.replace(/\.(pdf|pptx)$/i, ''); DOCS.set(chat, job);
-    await send(chat, `📄 <b>${H(clip(name, 60))}</b>${job.total ? ' — ' + job.total + ' ' + (isPdf ? 'ገጾች' : 'ስላይዶች') : ''}\n🌐 ወደ አማርኛ ገጽ በገጽ በአውድ እተረጉማለሁ…`);
+    await send(chat, `📄 <b>${H(clip(name, 60))}</b>${job.total ? ' — ' + job.total + ' ' + (isPdf ? 'ገጾች' : 'ስላይዶች') : ''}\n🌐 ወደ አማርኛ ገጽ በገጽ በአውድ እተረጉማለሁ…\n🔤 ፎንት መምረጥ ይችላሉ (ትርጉሙ አይቆምም)`, ik([[b('🔤 ፎንት/መጠን ምረጥ', 'adfo')]]));
     return docRun(chat, uid);
   }
   /* የተተረጎመውን በተሰጠው ፎርም (PDF → PDF፣ PPTX → PPTX) እንግሊዝኛ + አማርኛ በአንድ ገጽ/ስላይድ አድርጎ ይመልሳል */
   async function docFile(chat, d) {
     if (!d.out || !d.out.length) return send(chat, '⚠️ እስካሁን የተተረጎመ ገጽ የለም።');
     try {
-      const pdf = d.kind === 'pdf', buf = pdf ? DO.buildPdf(d.title, d.out) : DO.buildPptx(d.title, d.out), nm = `${String(d.title || 'translation').replace(/[^\w\u1200-\u137F.-]+/g, '_').slice(0, 60)}_am.${pdf ? 'pdf' : 'pptx'}`;
+      const pdf = d.kind === 'pdf', opt = d.opt || ses(chat).docopt, buf = pdf ? DO.buildPdf(d.title, d.out, opt) : DO.buildPptx(d.title, d.out, opt), nm = `${String(d.title || 'translation').replace(/[^\w\u1200-\u137F.-]+/g, '_').slice(0, 60)}_am.${pdf ? 'pdf' : 'pptx'}`;
       const fd = new FormData(); fd.append('chat_id', String(chat)); fd.append('caption', `📥 ${d.out.length} ${pdf ? 'ገጽ' : 'ስላይድ'} — በእያንዳንዱ ላይ ዋናው እንግሊዝኛ እና የአማርኛ ትርጉሙ`); fd.append('document', new Blob([buf], { type: pdf ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }), nm);
       const r = await fetch(`${process.env.TELEGRAM_API_BASE || 'https://api.telegram.org'}/bot${token}/sendDocument`, { method: 'POST', body: fd }); if (!r.ok) throw new Error('send ' + r.status);
     } catch (e) { console.warn('docFile', e.message); return send(chat, '⚠️ ፋይሉን ማዘጋጀት/መላክ አልተሳካም — ትርጉሙ ከላይ በመልእክት ተልኳል።'); }
   }
+  const GLOSS_RE = /([ሀ-፿][ሀ-፿ ፡]{1,36}[ሀ-፿]) \(([A-Za-z][A-Za-z \-]{1,36}[A-Za-z])\)/g;
+  const fontMenu = (chat, d) => { const o = DO.optOf((d && d.opt) || ses(chat).docopt); return send(chat, `🔤 <b>የፋይሉ ፎንት እና መጠን</b>\nአሁን፦ ${H(DO.PRESETS[o.preset].label)} · ${DO.SIZES[o.size][0]}\n\n<i>PPTX፦ ፎንቱ በእርስዎ ኮምፒውተር/ስልክ ላይ ከተጫነ ይታያል (ከሌለ ተመሳሳይ ይተካል)። PDF፦ የአማርኛ ፎንት በፋይሉ ውስጥ ተካቷል፤ ቀለም እና መጠን ይለወጣሉ።</i>`, ik([...Object.entries(DO.PRESETS).map(([k, v]) => [b((k === o.preset ? '✅ ' : '') + v.label, 'adfp:' + k)]), Object.entries(DO.SIZES).map(([k, v]) => b((k === o.size ? '✅ ' : '') + v[0], 'adfs:' + k))])); };
   async function docRun(chat, uid) {
     const d = DOCS.get(chat); if (!d) return send(chat, '⌛ ፋይሉ ጊዜው አልፏል — እንደገና ይላኩ።'); if (d.busy) return; d.busy = true; d.ts = Date.now();
-    const tm = setInterval(() => typing(chat), 4500); let done = 0, stop = false;
+    const tm = setInterval(() => typing(chat), 4500); let done = 0, stop = false; d.cache = d.cache || {}; d.gloss = d.gloss || new Map();
     try {
-      while (done < ai.lim.batch && (!d.total || d.next <= d.total)) {
-        const q = svc.takePages(uid || 'admin', isAdmin(chat)); if (!q.ok) { stop = true; if (q.paywall) await paywall(chat, uid, 'pages'); else await send(chat, q.error === 'ai_disabled' ? '⏸ AI ለጊዜው በአድሚን ተዘግቷል።' : '⛔ የዛሬው የትርጉም ገጽ ገደብ አልቋል — ነገ ከገጽ ' + d.next + ' ይቀጥሉ (ፋይሉን እንደገና ይላኩ)።'); break; }
-        typing(chat); let text;
-        try { for (let tr = 0; ; tr++) { try { text = d.kind === 'pdf' ? await ai.pdfPage(d.buf, d.next, d.total, true) : await ai.slideTr(d.title, d.slides[d.next - 1], d.next - 1, d.total); break; } catch (e) { if (tr >= 2 || !/^ai_(busy|timeout|network)$/.test(e.message)) throw e; typing(chat); await new Promise(r => setTimeout(r, 6000 * (tr + 1))); } } }          // ጊዜያዊ ችግር ሲሆን ራሱ እስከ 2 ጊዜ ደግሞ ይሞክራል
-        catch (e) { ai.refund(String(uid || 'admin'), 'pages', 1); stop = true; await send(chat, aiErr(e, chat), ik([[b('🔁 እንደገና ሞክር', 'adn'), b('✖️ አቁም', 'adx')]])); break; }
-        if (text === null) { d.total = d.next - 1; break; }
-        let en = '', am = text; if (d.kind === 'pdf') ({ en, am } = DO.splitBoth(text)); else { const sl = d.slides[d.next - 1]; en = AIM.slideText(sl, d.next - 1).split('\n').slice(1).map(x => x.replace(/^# /, '')).join('\n'); }
-        (d.out = d.out || []).push({ n: d.next, title: d.kind === 'pptx' ? (d.slides[d.next - 1].title || '') : '', en, am });
-        await sendLong(chat, `📄 <b>${d.kind === 'pdf' ? 'ገጽ' : 'ስላይድ'} ${d.next}${d.total ? '/' + d.total : ''}</b>`, am || text); d.next++; done++;
+      const last = d.total ? Math.min(d.total, d.next + ai.lim.batch - 1) : d.next + ai.lim.batch - 1, ns = [], tasks = new Map(); let limitHit = null, active = 0; const waiters = [];
+      const gate = async fn => { while (active >= ai.lim.par) await new Promise(r => waiters.push(r)); active++; try { return await fn(); } finally { active--; const w = waiters.shift(); if (w) w(); } };
+      const slideTx = i => (d.slides[i] ? AIM.slideText(d.slides[i], i).split('\n').slice(1).join('\n') : '');
+      const outline = d.kind === 'pptx' ? d.slides.map((s2, i) => `${i + 1}. ${s2.title || ''}`).join('; ').slice(0, 700) : '';
+      const work = n => gate(async () => {
+        const cx = { gloss: [...d.gloss.values()].slice(-40), outline, ...(d.kind === 'pptx' ? { prev: slideTx(n - 2), next: slideTx(n) } : {}) };
+        for (let tr = 0; ; tr++) {
+          try { const v = d.kind === 'pdf' ? await ai.pdfPage(d.buf, n, d.total, true, { title: d.title, gloss: cx.gloss }) : await ai.slideTr(d.title, d.slides[n - 1], n - 1, d.total, cx); d.cache[n] = v; return { ok: true, v }; }
+          catch (e) { if (tr >= 2 || !/^ai_(busy|timeout|network)$/.test(e.message)) { ai.refund(String(uid || 'admin'), 'pages', 1); return { ok: false, e }; } await new Promise(r => setTimeout(r, 4000 * (tr + 1))); }
+        }
+      });
+      for (let n = d.next; n <= last; n++) {
+        if (d.cache[n] === undefined) { const q = svc.takePages(uid || 'admin', isAdmin(chat)); if (!q.ok) { limitHit = q; break; } tasks.set(n, work(n)); } else tasks.set(n, Promise.resolve({ ok: true, v: d.cache[n] }));
+        ns.push(n);
       }
+      typing(chat);
+      for (const n of ns) {
+        const r = await tasks.get(n);
+        if (!r.ok) { stop = true; await send(chat, aiErr(r.e, chat), ik([[b('🔁 እንደገና ሞክር', 'adn'), b('✖️ አቁም', 'adx')]])); break; }
+        if (r.v === null) { d.total = n - 1; break; }
+        let en = '', am = r.v; if (d.kind === 'pdf') ({ en, am } = DO.splitBoth(r.v)); else en = slideTx(n - 1);
+        (d.out = d.out || []).push({ n, title: d.kind === 'pptx' ? (d.slides[n - 1].title || '') : '', en, am }); delete d.cache[n];
+        for (const m of String(am).matchAll(GLOSS_RE)) d.gloss.set(m[2].toLowerCase(), [m[2], m[1]]);
+        await sendLong(chat, `📄 <b>${d.kind === 'pdf' ? 'ገጽ' : 'ስላይድ'} ${n}${d.total ? '/' + d.total : ''}</b>`, am || r.v); d.next = n + 1; done++;
+      }
+      if (!stop && limitHit && !(d.total && d.next > d.total)) { stop = true; if (limitHit.paywall) await paywall(chat, uid, 'pages'); else await send(chat, '⛔ የዛሬው የትርጉም ገጽ ገደብ አልቋል — ነገ ከገጽ ' + d.next + ' ይቀጥሉ (ፋይሉን እንደገና ይላኩ)።'); }
       if (stop) return;
       if (d.total && d.next > d.total) { await send(chat, `✅ <b>ትርጉሙ ተጠናቀቀ</b> — ${d.total} ${d.kind === 'pdf' ? 'ገጾች' : 'ስላይዶች'}። ፋይሉን እያዘጋጀሁ ነው…`, menuKb(chat)); await docFile(chat, d); DOCS.delete(chat); return; }
-      return send(chat, `ገጽ ${d.next - done}–${d.next - 1} ተተርጉሟል።`, ik([[b(`▶️ ቀጥል (ገጽ ${d.next}…)`, 'adn'), b('📥 እስከ አሁን ፋይል', 'adf'), b('✖️ አቁም', 'adx')]]));
+      return send(chat, `ገጽ ${d.next - done}–${d.next - 1} ተተርጉሟል።`, ik([[b(`▶️ ቀጥል (ገጽ ${d.next}…)`, 'adn'), b('📥 እስከ አሁን ፋይል', 'adf')], [b('🔤 ፎንት/መጠን', 'adfo'), b('✖️ አቁም', 'adx')]]));
     } finally { clearInterval(tm); d.busy = false; }
   }
   async function handle(upd) {
@@ -945,6 +993,7 @@ module.exports = function bot(c) {
       if (upd.callback_query) { const cq = upd.callback_query; tg('answerCallbackQuery', { callback_query_id: cq.id }).catch(() => { }); if (!cq.message) return; return await route(cq.message.chat.id, String(cq.data || '')); }
       if (upd.inline_query) return await inline(upd.inline_query);
       const m = upd.message; if (!m || !m.chat || m.chat.type !== 'private') return; const chat = m.chat.id;
+      if (m.voice || m.audio) return await onVoice(chat, m);
       if (m.location) return await onLocation(chat, m);
       if (m.contact) return await authContact(chat, m);
       if (m.document && ses(chat).axup && isAdmin(chat)) return await axUpload(chat, m);

@@ -73,3 +73,12 @@ test('AI፦ ድረ-ገጹን መርምሮ ይመልሳል (ቁጥሮች + ፍለ
   h.col('ai/acc').u1.until = Date.now() + 3600e3; await h.svc.tick(); assert.ok(h.told.some(t => /ያበቃል/.test(t[1]))); const n = h.told.length; await h.svc.tick(); assert.equal(h.told.length, n);          // አንድ ጊዜ ብቻ
   h.col('ai/acc').u1.until = Date.now() - 1000; await h.svc.tick(); assert.ok(h.told.some(t => /አብቅቷል/.test(t[1]))); assert.equal(h.svc.info('u1').paid, false);          // በራሱ ተዘግቷል
 });
+test('AI፦ የአሁን ቀን/ሰዓት (ግሪጎሪያን + ኢትዮጵያ ካሌንደር + ግዕዝ ሰዓት) እና ወቅታዊ ዜና ወደ system ይገባል', async () => {
+  const urls = [], RSS = '<rss><channel><item><title><![CDATA[Ethiopia launches new dam - BBC]]></title><link>https://bbc.com/a</link><pubDate>Wed, 04 Nov 2026 08:00:00 GMT</pubDate><source url="https://bbc.com">BBC</source></item></channel></rss>';
+  const h = harness(() => 'እሺ', { now: () => Date.UTC(2026, 10, 4, 11, 17), newsFetch: async u => { urls.push(u); return { ok: true, text: async () => RSS }; } });
+  const c = h.svc.clockInfo(); assert.match(c, /ረቡዕ፣ November 4፣ 2026/); assert.match(c, /ጥቅምት 25፣ 2019/); assert.match(c, /14:17/); assert.match(c, /2:17 PM/); assert.match(c, /ሰዓት 8:17 ቀን/);
+  assert.deepEqual(h.svc.ethDate(2026, 9, 11), { y: 2019, m: 1, d: 1 }); assert.deepEqual(h.svc.ethDate(2023, 9, 12), { y: 2016, m: 1, d: 1 });
+  await h.call('POST', '/api/ai/chat', { tok: U, body: { text: 'ዛሬ ምን ተደረገ?' } }); const sys = h.prompts[h.prompts.length - 1]; assert.match(sys, /አሁን ያለው ትክክለኛ ጊዜ/); assert.match(sys, /Ethiopia launches new dam/); assert.match(sys, /https:\/\/bbc\.com\/a/); assert.ok(urls.some(u => /news\.google\.com\/rss/.test(u)));
+  urls.length = 0; await h.call('POST', '/api/ai/chat', { tok: U, body: { text: 'ሰላም እንዴት ነህ' } }); assert.equal(urls.length, 0);          // ዜና የማይፈልግ ጥያቄ አይፈልግም
+  const h2 = harness(() => 'እሺ', { now: () => Date.UTC(2026, 10, 4, 11, 17), newsFetch: async () => ({ ok: false }) }); await h2.call('POST', '/api/ai/chat', { tok: U, body: { text: 'latest news today' } }); assert.match(h2.prompts[0], /አትገምት/);
+});

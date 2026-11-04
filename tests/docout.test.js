@@ -18,3 +18,21 @@ test('AI፦ Gemini ፍለጋ ምንጮች ከመልሱ በኋላ ይጨመራሉ
   const f3 = async (u, o) => { const b = JSON.parse(o.body); if (b.tools) return { ok: false, status: 429, json: async () => ({ error: { message: 'quota' } }) }; return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'ያለ ፍለጋ' }] } }] }) }; };
   assert.equal(await AIM.create({ GEMINI_API_KEY: 'g', AI_GROUNDING: '1' }, f3).chat('c', 'x'), 'ያለ ፍለጋ'); const f4 = async (u, o) => { assert.ok(!JSON.parse(o.body).tools); return f3(u, o); }; assert.equal(await AIM.create({ GEMINI_API_KEY: 'g' }, f4).chat('d', 'x'), 'ያለ ፍለጋ'); assert.match(AIM.SYS, /📚 ምንጭ/);
 });
+test('ድምፅ፦ transcribe (Gemini ኦዲዮ inlineData) እና speak (PCM)፤ Claude ላይ ግልጽ ስህተት', async () => {
+  let seen = null; const f = async (u, o) => { const b = JSON.parse(o.body); if (/tts/.test(u)) { seen = { u, rm: b.generationConfig.responseModalities }; return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'audio/L16;codec=pcm;rate=24000', data: Buffer.alloc(480).toString('base64') } }] } }] }) }; } seen = { audio: b.contents[0].parts[0].inlineData }; return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'ሰላም' }] } }] }) }; };
+  const ai = AIM.create({ GEMINI_API_KEY: 'g' }, f); assert.equal(await ai.transcribe(Buffer.from('OggS'), 'audio/ogg'), 'ሰላም'); assert.equal(seen.audio.mimeType, 'audio/ogg');
+  const a = await ai.speak('ሰላም'); assert.equal(a.rate, 24000); assert.equal(a.pcm.length, 480); assert.deepEqual(seen.rm, ['AUDIO']);
+  const f2 = async (u) => (/tts/.test(u) ? { ok: false, status: 404, json: async () => ({}) } : { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: '[[EMPTY]]' }] } }] }) }); const ai2 = AIM.create({ GEMINI_API_KEY: 'g' }, f2); assert.equal(await ai2.speak('x'), null); assert.equal(await ai2.transcribe(Buffer.from('x')), '');
+  await assert.rejects(() => AIM.create({ ANTHROPIC_API_KEY: 'k' }, f).transcribe(Buffer.from('x')), /ai_no_audio/);
+});
+function entry(b, name) { const n = b.readUInt16LE(b.length - 12); let q = b.readUInt32LE(b.length - 6); for (let i = 0; i < n; i++) { const nl = b.readUInt16LE(q + 28), xl = b.readUInt16LE(q + 30), cl = b.readUInt16LE(q + 32), nm = b.slice(q + 46, q + 46 + nl).toString(), off = b.readUInt32LE(q + 42); if (nm === name) { const l = b.readUInt16LE(off + 26), csz = b.readUInt32LE(q + 20); return zlib.inflateRawSync(b.slice(off + 30 + l, off + 30 + l + csz)).toString(); } q += 46 + nl + xl + cl; } return ''; }
+test('ፎንት ምርጫ፦ PPTX በተመረጠው ፎንት፣ መጠን ይለወጣል፤ PDF ይሠራል፤ ያልታወቀ ምርጫ → ነባሪ', () => {
+  const x = entry(D.buildPptx('B', items, { preset: 'modern', size: 'l' }), 'ppt/slides/slide1.xml'); assert.match(x, /typeface="Ebrima"/); assert.match(x, /typeface="Arial"/); assert.doesNotMatch(x, /Nyala/); assert.match(x, /sz="1[89]00"|sz="2000"/);
+  assert.match(entry(D.buildPptx('B', items, { preset: 'zzz' }), 'ppt/slides/slide1.xml'), /typeface="Nyala"/);
+  for (const k of Object.keys(D.PRESETS)) assert.equal(D.buildPdf('B', items, { preset: k, size: 's' }).slice(0, 5).toString(), '%PDF-'); assert.ok(D.buildPdf('B', items, { size: 'l' }).length > 20000);
+});
+test('አውድ፦ ርዕስ፣ ቀዳሚ/ቀጣይ ስላይድ እና ቋሚ ቃላት ወደ ትርጉም ጥያቄ ይገባሉ', async () => {
+  let sys = ''; const f = async (u, o) => { sys = JSON.parse(o.body).system; return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: 'ትርጉም' }] }) }; };
+  const ai = AIM.create({ ANTHROPIC_API_KEY: 'k' }, f); await ai.slideTr('Bio', { title: 'Cell', blocks: [{ k: 'p', t: 'x' }] }, 1, 3, { prev: 'PREV TEXT', next: 'NEXT TEXT', gloss: [['cell membrane', 'የሕዋስ ሽፋን']], outline: '1. A; 2. B' });
+  assert.match(sys, /ርዕስ፦ Bio/); assert.match(sys, /PREV TEXT/); assert.match(sys, /NEXT TEXT/); assert.match(sys, /cell membrane = የሕዋስ ሽፋን/); assert.match(sys, /1\. A; 2\. B/);
+});

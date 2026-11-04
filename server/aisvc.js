@@ -19,7 +19,7 @@ const STOP = new Set('ምንድን ነው ናቸው እና ወይም ለእኔ �
 const SYS_PAID = '\n\n[የአገልግሎት ደረጃ፦ የተከፈለ ተጠቃሚ]\nሙሉ እና ዝርዝር መልስ ስጥ፤ [[PAID]] በጭራሽ አትጻፍ። የሕክምና/ሕግ/ገንዘብ ጉዳይ ሲሆን ለመማሪያ መረጃ ብቻ መሆኑን እና ባለሙያ ማማከር እንደሚያስፈልግ በአንድ መስመር አስታውስ።';
 
 module.exports = function aisvc(ctx) {
-  const { app, col, who, adminOnly, saveMany, bad, S, N, nid, limit, notifyUser = () => { }, notifyAdmin = () => { }, findUid = () => null, ai = AIM.shared(), tg = null, adminChat = () => null, siteSearch = null, pv = null, payAccounts = () => [], baseUrl = '', adminPhone = '0946705941', now = () => Date.now() } = ctx;
+  const { app, col, who, adminOnly, saveMany, bad, S, N, nid, limit, notifyUser = () => { }, notifyAdmin = () => { }, findUid = () => null, ai = AIM.shared(), tg = null, adminChat = () => null, siteSearch = null, pv = null, payAccounts = () => [], baseUrl = '', adminPhone = '0946705941', now = () => Date.now(), newsFetch = (...a) => fetch(...a) } = ctx;
   const KB = (...r) => ({ rows: [r.map(([t, d]) => ({ text: t, callback_data: d }))] });
   const cfg = () => { const c = (col(CFG).main || {}); return { ...DEFAULTS, ...c, plans: Array.isArray(c.plans) && c.plans.length ? c.plans : DEFAULTS.plans }; };
   const acc = uid => { const a = col(ACC)[uid] || {}; return { until: a.until || 0, blocked: !!a.blocked, paid: (a.until || 0) > now() }; };
@@ -38,6 +38,33 @@ module.exports = function aisvc(ctx) {
     return out;
   }
 
+  /* ===== የአሁን ጊዜ፦ ቀን/ሰዓት (ኢትዮጵያ UTC+3፣ የግዕዝ ካሌንደርም) + ወቅታዊ ዜና (ነጻ Google News RSS) ===== */
+  const WD_AM = ['እሑድ', 'ሰኞ', 'ማክሰኞ', 'ረቡዕ', 'ሐሙስ', 'ዓርብ', 'ቅዳሜ'], MO_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'], MO_ET = ['መስከረም', 'ጥቅምት', 'ኅዳር', 'ታኅሣሥ', 'ጥር', 'የካቲት', 'መጋቢት', 'ሚያዝያ', 'ግንቦት', 'ሰኔ', 'ሐምሌ', 'ነሐሴ', 'ጳጉሜን'];
+  function ethDate(y, m, d) {          // ግሪጎሪያን → ኢትዮጵያ ካሌንደር (JDN)
+    const a = Math.floor((14 - m) / 12), yy = y + 4800 - a, mm = m + 12 * a - 3, jdn = d + Math.floor((153 * mm + 2) / 5) + 365 * yy + Math.floor(yy / 4) - Math.floor(yy / 100) + Math.floor(yy / 400) - 32045, r = (jdn - 1723856) % 1461, n = (r % 365) + 365 * Math.floor(r / 1460);
+    return { y: 4 * Math.floor((jdn - 1723856) / 1461) + Math.floor(r / 365) - Math.floor(r / 1460), m: Math.floor(n / 30) + 1, d: (n % 30) + 1 };
+  }
+  const clockInfo = () => {
+    const t = new Date(now() + 3 * 3600e3), y = t.getUTCFullYear(), m = t.getUTCMonth() + 1, d = t.getUTCDate(), hh = t.getUTCHours(), mi = t.getUTCMinutes(), e = ethDate(y, m, d), h12 = hh % 12 || 12, et = ((hh + 6) % 12) || 12;    // የኢትዮጵያ ሰዓት = ሰዓት + 6
+    return `[አሁን ያለው ትክክለኛ ጊዜ — ስለ ቀን፣ ሰዓት ወይም «ዛሬ» ሲጠየቅ ይህን ብቻ ተጠቀም]\nዛሬ ${WD_AM[t.getUTCDay()]}፣ ${MO_EN[m - 1]} ${d}፣ ${y} (ግሪጎሪያን) = ${MO_ET[e.m - 1]} ${e.d}፣ ${e.y} ዓ.ም (ኢትዮጵያ ካሌንደር)\nሰዓት፦ ${String(hh).padStart(2, '0')}:${String(mi).padStart(2, '0')} (አለም አቀፍ 24 ሰዓት፣ ኢትዮጵያ ሰዓት አቆጣጠር UTC+3) = ${h12}:${String(mi).padStart(2, '0')} ${hh >= 12 ? 'PM' : 'AM'} = የኢትዮጵያ (ግዕዝ) ሰዓት ${et}:${String(mi).padStart(2, '0')} ${hh >= 6 && hh < 18 ? 'ቀን' : 'ሌሊት/ምሽት'}`;
+  };
+  const TIMELY = /ዛሬ|አሁን|ዜና|የቅርብ|ትናንት|ዘንድሮ|በቅርቡ|ወቅታዊ|ውጤት|ምርጫ|ሰበር|ዋጋ ስንት|today|now|latest|news|current|recent|yesterday|breaking|score|result|this week|tonight/i, TIME_ONLY = /^(ዛሬ|አሁን|ዜና|የቅርብ|ትናንት|ምን|ተደረገ|ሆነ|ነገር|ወቅታዊ|ሁነቶች|ሁኔታ|today|what|happened|news|latest|now)$/i;
+  const newsCache = new Map(), xml = x => String(x || '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/<[^>]+>/g, '').trim();
+  async function feed(url) {
+    const hit = newsCache.get(url); if (hit && now() - hit.t < 5 * 60e3) return hit.v; const ac = new AbortController(), tm = setTimeout(() => ac.abort(), 6000);
+    try { const r = await newsFetch(url, { signal: ac.signal, headers: { 'user-agent': 'Mozilla/5.0 EtioDigitalMarket' } }); if (!r.ok) return []; const x = await r.text(), v = [...x.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, 7).map(m => { const g = tag => { const q = new RegExp('<' + tag + '[^>]*>([\\s\\S]*?)</' + tag + '>').exec(m[1]); return q ? xml(q[1]) : ''; }; return { title: g('title'), link: g('link'), date: g('pubDate'), src: g('source') }; }).filter(i => i.title); newsCache.set(url, { t: now(), v }); return v; }
+    catch (e) { return []; } finally { clearTimeout(tm); }
+  }
+  async function newsInfo(text) {
+    if (!TIMELY.test(text) || process.env.AI_NEWS === '0') return '';
+    const words = keywords(text).filter(w => !TIME_ONLY.test(w)).slice(0, 3), q = words.join(' '), am = /[ሀ-፿]/.test(text), B = 'https://news.google.com/rss', jobs = [];
+    const mk = (lang, ceid, hl) => q ? `${B}/search?q=${encodeURIComponent(q + ' when:2d')}&hl=${hl}&gl=ET&ceid=${ceid}` : `${B}?hl=${hl}&gl=ET&ceid=${ceid}`;
+    if (am) jobs.push(feed(mk('am', 'ET:am', 'am'))); jobs.push(feed(mk('en', 'ET:en', 'en-ET'))); if (q && !am) jobs.push(feed(`${B}/search?q=${encodeURIComponent(q + ' when:2d')}&hl=en&gl=US&ceid=US:en`));
+    const seen = new Set(), items = []; for (const l of await Promise.all(jobs)) for (const i of l) if (!seen.has(i.title)) { seen.add(i.title); items.push(i); }
+    if (!items.length) return '\n\n[ወቅታዊ ዜና ፍለጋ] አሁን ከዜና ምንጭ መረጃ ማግኘት አልተቻለም — ስለ ዛሬ ሁነቶች እርግጠኛ መረጃ እንደሌለህ በግልጽ ንገር፤ አትገምት።';
+    return '\n\n[ወቅታዊ ዜና — ከ Google News ዛሬ የተገኘ፤ ስለ ቅርብ ጊዜ ሁነቶች ከዚህ ብቻ ተመርኩዘህ መልስ፤ እያንዳንዱን ሲጠቅስ ምንጩን እና አገናኙን ጻፍ፤ የሌለ ነገር አትጨምር]\n' + items.slice(0, 10).map(i => `• ${i.title}${i.src && !i.title.endsWith(i.src) ? ' — ' + i.src : ''} (${i.date.slice(0, 22)}) ${i.link}`).join('\n');
+  }
+
   /* የጽሑፍ ውይይት፦ → { ok, text, paywall: ''|'premium'|'limit' } */
   async function converse({ uid, key, text, admin, media }) {
     const c = cfg(); if (!ai.enabled) return { ok: false, error: 'ai_off' }; const owner = admin || isOwner(uid); if (!c.enabled && !owner) return { ok: false, error: 'ai_disabled' };
@@ -47,6 +74,7 @@ module.exports = function aisvc(ctx) {
     const paid = owner || a.paid; let sys;
     if (urgent) { ug.n++; urgentUse.set(uid, ug); stats.urgent++; sys = sysFor(c, true).replace(SYS_PAID, SYS_URGENT); }
     else { const q = ai.take(String(uid), 'chat', 1, owner, paid ? c.paidChatDay : c.freeChatDay); if (!q.ok) { if (!paid && c.paywall) { stats.paywalls++; return { ok: true, text: '', paywall: 'limit' }; } return { ok: false, error: 'ai_limit' }; } sys = sysFor(c, paid); }
+    sys += '\n\n' + clockInfo() + await newsInfo(text);
     sys += SYS_GUARD + '\n\n[ከድረ-ገጹ የተገኘ ወቅታዊ መረጃ — ስለ ገበያው ሲጠየቅ ከዚህ ብቻ ተመርኩዘህ ንገር፤ የሌለውን አትፍጠር፤ ዕቃ ሲጠቅስ ዋጋ እና አገናኝ ስጥ]\n' + await siteInfo(text);
     let out; try { out = await ai.chat(String(key || uid), text, sys, media); } catch (e) { if (!urgent) ai.refund(String(uid), 'chat', 1); throw e; }
     stats.chats++; const wants = /\[\[PAID\]\]/.test(out), clean = out.replace(MARK, ' ').trim();
@@ -139,6 +167,6 @@ module.exports = function aisvc(ctx) {
     if (ch.length) await saveMany(ch).catch(() => { }); return ch.length;
   }
   const timer = setInterval(() => { tick().catch(() => { }); }, 3600e3); timer.unref && timer.unref(); setTimeout(() => tick().catch(() => { }), 60e3).unref();
-  return { tbOnly, autoVerify, cfg, acc, info, converse, takePages, buy, decide, tick, stats, ai, isOwner };
+  return { clockInfo, ethDate, newsInfo, tbOnly, autoVerify, cfg, acc, info, converse, takePages, buy, decide, tick, stats, ai, isOwner };
 };
 module.exports.DEFAULTS = DEFAULTS;

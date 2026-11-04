@@ -36,9 +36,22 @@ function wrap(par, sz, maxW) {           // አንቀጽ → መስመሮች
   if (cur.trim()) out.push(cur.trimEnd()); return out.length ? out : [''];
 }
 
+/* ---------- ቅጦች (ፎንት + መጠን) ---------- */
+const PRESETS = {
+  classic: { label: 'ክላሲክ — Nyala + Calibri', am: 'Nyala', en: 'Calibri', hd: '1F6B45', amc: '0B2E63', pdf: [0.05, 0.2, 0.5] },
+  modern: { label: 'ዘመናዊ — Ebrima + Arial', am: 'Ebrima', en: 'Arial', hd: '1D4ED8', amc: '14325C', pdf: [0.08, 0.25, 0.6] },
+  scholar: { label: 'ምሁራዊ — Abyssinica SIL + Times', am: 'Abyssinica SIL', en: 'Times New Roman', hd: '7C2D12', amc: '5B1A0A', pdf: [0.4, 0.12, 0.05] },
+  clean: { label: 'ንጹህ — Noto Sans Ethiopic + Segoe UI', am: 'Noto Sans Ethiopic', en: 'Segoe UI', hd: '0F172A', amc: '1E293B', pdf: [0.1, 0.1, 0.18] },
+  serif: { label: 'ሰሪፍ — Noto Serif Ethiopic + Georgia', am: 'Noto Serif Ethiopic', en: 'Georgia', hd: '4C1D95', amc: '3B1670', pdf: [0.23, 0.09, 0.44] },
+  mac: { label: 'ማክ — Kefa + Helvetica', am: 'Kefa', en: 'Helvetica', hd: '0F766E', amc: '134E4A', pdf: [0.07, 0.32, 0.3] },
+};
+const SIZES = { s: ['ትንሽ', 0.85], m: ['መካከለኛ', 1], l: ['ትልቅ', 1.2] };
+const optOf = o => ({ preset: PRESETS[o && o.preset] ? o.preset : 'classic', size: SIZES[o && o.size] ? o.size : 'm' });
+
 /* ---------- PDF ---------- */
-function buildPdf(title, items) {
-  const W = 842, H = 595, M = 42, SZ = 12.5, LEAD = 17, maxW = W - 2 * M, pages = [];
+function buildPdf(title, items, opts) {
+  const OP = optOf(opts), PS = PRESETS[OP.preset], K = SIZES[OP.size][1];
+  const W = 842, H = 595, M = 42, SZ = 12.5 * K, LEAD = 17 * K, maxW = W - 2 * M, pages = [];
   const ttl = clean(title).slice(0, 80), total = items.length;
   const cm = [], hex = ch => { const g = glyph(ch.codePointAt(0))[0]; return g.toString(16).padStart(4, '0'); };
   const txt = (s, x, y, sz, rgb) => { let h = ''; for (const ch of s) h += hex(ch); return `BT ${rgb} rg /F1 ${sz} Tf ${x.toFixed(1)} ${y.toFixed(1)} Td <${h}> Tj ET\n`; };
@@ -48,7 +61,7 @@ function buildPdf(title, items) {
   let cur = null;
   for (const it of items) {
     cur = it; newPage(it);
-    for (const [lab, body, rgb, lrgb] of [['ENGLISH — original', clean(it.en), '0.1 0.1 0.1', '0.5 0.5 0.5'], ['አማርኛ — ትርጉም', clean(it.am), '0.05 0.2 0.5', '0.05 0.35 0.2']]) {
+    for (const [lab, body, rgb, lrgb] of [['ENGLISH — original', clean(it.en), '0.1 0.1 0.1', '0.5 0.5 0.5'], ['አማርኛ — ትርጉም', clean(it.am), PS.pdf.join(' '), '0.05 0.35 0.2']]) {
       if (!body) continue; if (y < M + 60) newPage(it); put(lab, 9.5, lrgb);
       pg.c += `${lrgb} RG 0.5 w ${M} ${(y + LEAD * 0.55).toFixed(1)} m ${W - M} ${(y + LEAD * 0.55).toFixed(1)} l S\n`; y -= 3;
       for (const par of body.split('\n')) { if (!par.trim()) { y -= 5; continue; } for (const ln of wrap(par, SZ, maxW)) put(ln, SZ, rgb); }
@@ -88,10 +101,11 @@ function groups(text, n) {                 // አንቀጾችን በርዝመት
   const tot = ps.reduce((a, p) => a + p.length, 0), out = Array.from({ length: n }, () => []); let acc = 0;
   for (const p of ps) { const k = Math.min(n - 1, Math.floor(acc / (tot / n + 1))); out[k].push(p); acc += p.length; } return out;
 }
-function para(t, sz, face, rgb) { const bullet = /^\s*[•\-–]\s+/.test(t); return `<a:p><a:pPr${bullet ? ' marL="228600" indent="-228600"' : ' marL="0" indent="0"'}>${bullet ? '<a:buChar char="•"/>' : '<a:buNone/>'}</a:pPr><a:r><a:rPr lang="${face === 'Nyala' ? 'am-ET' : 'en-US'}" sz="${sz}" dirty="0"><a:solidFill><a:srgbClr val="${rgb}"/></a:solidFill><a:latin typeface="${face}"/><a:ea typeface="${face}"/><a:cs typeface="${face}"/></a:rPr><a:t>${esc(t.replace(/^\s*[•\-–]\s+/, ''))}</a:t></a:r></a:p>`; }
+let AMF = 'Nyala';
+function para(t, sz, face, rgb) { const bullet = /^\s*[•\-–]\s+/.test(t); return `<a:p><a:pPr${bullet ? ' marL="228600" indent="-228600"' : ' marL="0" indent="0"'}>${bullet ? '<a:buChar char="•"/>' : '<a:buNone/>'}</a:pPr><a:r><a:rPr lang="${face === AMF ? 'am-ET' : 'en-US'}" sz="${sz}" dirty="0"><a:solidFill><a:srgbClr val="${rgb}"/></a:solidFill><a:latin typeface="${face}"/><a:ea typeface="${face}"/><a:cs typeface="${face}"/></a:rPr><a:t>${esc(t.replace(/^\s*[•\-–]\s+/, ''))}</a:t></a:r></a:p>`; }
 function box(id, name, x, y, w, h, body, fill, line) { return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${name}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${fill ? `<a:solidFill><a:srgbClr val="${fill}"/></a:solidFill>` : '<a:noFill/>'}${line ? `<a:ln w="9525"><a:solidFill><a:srgbClr val="${line}"/></a:solidFill></a:ln>` : '<a:ln><a:noFill/></a:ln>'}</p:spPr><p:txBody><a:bodyPr wrap="square" lIns="109728" tIns="73152" rIns="109728" bIns="73152" rtlCol="0" anchor="t"><a:normAutofit/></a:bodyPr><a:lstStyle/>${body || '<a:p><a:endParaRPr lang="en-US"/></a:p>'}</p:txBody></p:sp>`; }
-function buildPptx(title, items) {
-  const slides = [], B = 950;                          // በአንድ አምድ የሚመች የፊደል ብዛት
+function buildPptx(title, items, opts) {
+  const OP = optOf(opts), PS = PRESETS[OP.preset], K = SIZES[OP.size][1], slides = [], B = Math.round(950 / K);                          // በአንድ አምድ የሚመች የፊደል ብዛት
   for (const it of items) {
     const n = Math.max(1, Math.ceil(Math.max(clean(it.en).length, clean(it.am).length) / B)), ge = groups(it.en, n), ga = groups(it.am, n);
     for (let k = 0; k < n; k++) slides.push({ head: `${esc(clean(it.title || '') || (title || ''))}`.slice(0, 90), n: it.n, part: n > 1 ? ` (${k + 1}/${n})` : '', en: ge[k], am: ga[k] });
@@ -99,11 +113,11 @@ function buildPptx(title, items) {
   if (!slides.length) slides.push({ head: title || '', n: 0, part: '', en: [], am: [] });
   const EMU = 12192000, MX = 365760, GAP = 182880, CW = Math.floor((EMU - 2 * MX - GAP) / 2), TOP = 868680, CH = 6858000 - TOP - 320040;
   const sl = slides.map((s, i) => {
-    const size = t => (t.join('').length > 700 ? 1200 : t.join('').length > 450 ? 1400 : 1600);
+    const size = t => Math.round((t.join('').length > 700 ? 1200 : t.join('').length > 450 ? 1400 : 1600) * K / 100) * 100;
     const body = [
-      box(2, 'Header', 0, 0, EMU, 640080, `<a:p><a:pPr marL="0" indent="0"><a:buNone/></a:pPr><a:r><a:rPr lang="en-US" sz="1600" b="1" dirty="0"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:latin typeface="Calibri"/><a:cs typeface="Nyala"/></a:rPr><a:t>${esc(s.head)}${esc(s.part)}  ·  ${s.n}/${items.length}</a:t></a:r></a:p>`, '1F6B45'),
-      box(3, 'English', MX, TOP, CW, CH, `<a:p><a:pPr marL="0" indent="0"><a:buNone/></a:pPr><a:r><a:rPr lang="en-US" sz="1000" b="1" dirty="0"><a:solidFill><a:srgbClr val="777777"/></a:solidFill><a:latin typeface="Calibri"/></a:rPr><a:t>ENGLISH — ORIGINAL</a:t></a:r></a:p>` + s.en.map(t => para(t, size(s.en), 'Calibri', '111111')).join(''), 'F7F7F7', 'D0D0D0'),
-      box(4, 'Amharic', MX + CW + GAP, TOP, CW, CH, `<a:p><a:pPr marL="0" indent="0"><a:buNone/></a:pPr><a:r><a:rPr lang="am-ET" sz="1000" b="1" dirty="0"><a:solidFill><a:srgbClr val="1F6B45"/></a:solidFill><a:latin typeface="Nyala"/><a:cs typeface="Nyala"/></a:rPr><a:t>አማርኛ — ትርጉም</a:t></a:r></a:p>` + s.am.map(t => para(t, size(s.am), 'Nyala', '0B2E63')).join(''), 'F2F8F4', 'BFD9C9'),
+      box(2, 'Header', 0, 0, EMU, 640080, `<a:p><a:pPr marL="0" indent="0"><a:buNone/></a:pPr><a:r><a:rPr lang="en-US" sz="1600" b="1" dirty="0"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:latin typeface="${PS.en}"/><a:cs typeface="${PS.am}"/></a:rPr><a:t>${esc(s.head)}${esc(s.part)}  ·  ${s.n}/${items.length}</a:t></a:r></a:p>`, PS.hd),
+      box(3, 'English', MX, TOP, CW, CH, `<a:p><a:pPr marL="0" indent="0"><a:buNone/></a:pPr><a:r><a:rPr lang="en-US" sz="1000" b="1" dirty="0"><a:solidFill><a:srgbClr val="777777"/></a:solidFill><a:latin typeface="${PS.en}"/></a:rPr><a:t>ENGLISH — ORIGINAL</a:t></a:r></a:p>` + s.en.map(t => para(t, size(s.en), PS.en, '111111')).join(''), 'F7F7F7', 'D0D0D0'),
+      box(4, 'Amharic', MX + CW + GAP, TOP, CW, CH, `<a:p><a:pPr marL="0" indent="0"><a:buNone/></a:pPr><a:r><a:rPr lang="am-ET" sz="1000" b="1" dirty="0"><a:solidFill><a:srgbClr val="${PS.hd}"/></a:solidFill><a:latin typeface="${PS.am}"/><a:cs typeface="${PS.am}"/></a:rPr><a:t>አማርኛ — ትርጉም</a:t></a:r></a:p>` + s.am.map(t => para(t, size(s.am), PS.am, PS.amc)).join(''), 'F2F8F4', 'BFD9C9'),
     ].join('');
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld name="Slide ${i + 1}"><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>${body}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`;
   });
@@ -121,4 +135,4 @@ function splitBoth(out) {
   const m = /\[\[EN\]\]([\s\S]*?)\[\[AM\]\]([\s\S]*)/.exec(String(out || '')); if (!m) return { en: '', am: String(out || '').replace(/\[\[(EN|AM)\]\]/g, '').trim() };
   return { en: m[1].trim(), am: m[2].trim() };
 }
-module.exports = { buildPdf, buildPptx, zip, splitBoth, clean };
+module.exports = { PRESETS, SIZES, optOf, buildPdf, buildPptx, zip, splitBoth, clean };
