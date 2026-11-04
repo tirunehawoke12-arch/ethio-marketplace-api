@@ -26,8 +26,8 @@ test('PPTX ስላይድ ትርጉም፣ ስህተት ኮዶች፣ ረዳቶች',
 test('ቦት፦ ጽሑፍ → AI፣ PDF ሰነድ → ገጽ በገጽ + «ቀጥል»', async () => {
   process.env.ANTHROPIC_API_KEY = 'k'; process.env.AI_DOC_BATCH = '2'; const errs = [], origErr = console.error; console.error = (...a) => errs.push(a.join(' '));
   const srv = http.createServer((q, r) => { r.setHeader('content-type', 'application/json'); r.end(JSON.stringify({ ok: true, items: [] })); }); await new Promise(r => srv.listen(0, r)); const port = srv.address().port;
-  const realFetch = global.fetch, aiLog = [], fileSent = []; global.fetch = async (url, o) => {
-    if (/anthropic/.test(url)) { const body = JSON.parse(o.body), txt = Array.isArray(body.messages[0].content) ? body.messages[0].content[1].text : body.messages[0].content; aiLog.push(txt); return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: Array.isArray(body.messages[0].content) ? 'ትርጉም ' + /ገጽ (\d+) ብቻ/.exec(txt)[1] : 'የ AI መልስ' }] }) }; }
+  const realFetch = global.fetch, aiLog = [], fileSent = [], imgSeen = []; global.fetch = async (url, o) => {
+    if (/anthropic/.test(url)) { const body = JSON.parse(o.body), txt = Array.isArray(body.messages[0].content) ? body.messages[0].content[1].text : body.messages[0].content; aiLog.push(txt); { const lm = body.messages[body.messages.length - 1].content; if (Array.isArray(lm) && lm[0].type === 'image') imgSeen.push(lm[1].text); } return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: Array.isArray(body.messages[0].content) ? 'ትርጉም ' + (/ገጽ (\d+) ብቻ/.exec(txt) || [0, '?'])[1] : 'የ AI መልስ' }] }) }; }
     if (/sendDocument/.test(url)) { fileSent.push(o.body.get('document').name); return { ok: true, status: 200 }; }
     if (/api\.telegram\.org\/file/.test(url)) return { ok: true, arrayBuffer: async () => Buffer.from('%PDF /Type /Page /Type /Page /Type /Page') };
     return realFetch(url, o); };
@@ -43,6 +43,8 @@ test('ቦት፦ ጽሑፍ → AI፣ PDF ሰነድ → ገጽ በገጽ + «ቀ�
     sent.length = 0; await bot.handle({ callback_query: { id: '1', data: 'adn', message: { chat: { id: 1, type: 'private' } } } });
     assert.ok(msgs().some(m => /ገጽ 3\/3/.test(m.text))); assert.ok(msgs().some(m => /ተጠናቀቀ/.test(m.text))); assert.equal(fileSent.length, 1); assert.match(fileSent[0], /^Book_am\.pdf$/);
     sent.length = 0; await bot.handle({ callback_query: { id: '2', data: 'axd', message: { chat: { id: 999, type: 'private' } } } }); assert.ok(msgs().some(m => /መማሪያ ፋይሎች/.test(m.text))); sent.length = 0; await bot.handle({ callback_query: { id: '3', data: 'axd', message: { chat: { id: 1, type: 'private' } } } }); assert.ok(msgs().some(m => /አድሚን ብቻ/.test(m.text)));
+    sent.length = 0; await bot.handle({ message: { chat: { id: 1, type: 'private' }, photo: [{ file_id: 'P', width: 100, file_size: 1000 }], caption: 'ይህ ምንድን ነው?' } }); assert.equal(imgSeen.length, 1); assert.match(imgSeen[0], /ይህ ምንድን ነው/); assert.ok(msgs().some(m => /ተጨማሪ ጥያቄ/.test(m.text)));
+    await bot.handle({ message: { chat: { id: 1, type: 'private' }, text: 'እና ቀለሙ?' } }); assert.equal(imgSeen.length, 2);
     sent.length = 0; await bot.handle({ message: { chat: { id: 1, type: 'private' }, document: { file_id: 'F', file_name: 'a.exe', file_size: 10 } } }); assert.ok(msgs().some(m => /PDF/.test(m.text)));
   } finally { global.fetch = realFetch; console.error = origErr; srv.close(); delete process.env.ANTHROPIC_API_KEY; delete process.env.AI_DOC_BATCH; }
   assert.deepEqual(errs, []);

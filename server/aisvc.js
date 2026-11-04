@@ -39,7 +39,7 @@ module.exports = function aisvc(ctx) {
   }
 
   /* የጽሑፍ ውይይት፦ → { ok, text, paywall: ''|'premium'|'limit' } */
-  async function converse({ uid, key, text, admin }) {
+  async function converse({ uid, key, text, admin, media }) {
     const c = cfg(); if (!ai.enabled) return { ok: false, error: 'ai_off' }; const owner = admin || isOwner(uid); if (!c.enabled && !owner) return { ok: false, error: 'ai_disabled' };
     const a = acc(uid); if (a.blocked && !owner) return { ok: false, error: 'ai_blocked' };
     const t = now(), day = Math.floor((t + 3 * 3600e3) / 86400e3), ug = urgentUse.get(uid) || { d: day, n: 0 }; if (ug.d !== day) { ug.d = day; ug.n = 0; }
@@ -48,7 +48,7 @@ module.exports = function aisvc(ctx) {
     if (urgent) { ug.n++; urgentUse.set(uid, ug); stats.urgent++; sys = sysFor(c, true).replace(SYS_PAID, SYS_URGENT); }
     else { const q = ai.take(String(uid), 'chat', 1, owner, paid ? c.paidChatDay : c.freeChatDay); if (!q.ok) { if (!paid && c.paywall) { stats.paywalls++; return { ok: true, text: '', paywall: 'limit' }; } return { ok: false, error: 'ai_limit' }; } sys = sysFor(c, paid); }
     sys += SYS_GUARD + '\n\n[ከድረ-ገጹ የተገኘ ወቅታዊ መረጃ — ስለ ገበያው ሲጠየቅ ከዚህ ብቻ ተመርኩዘህ ንገር፤ የሌለውን አትፍጠር፤ ዕቃ ሲጠቅስ ዋጋ እና አገናኝ ስጥ]\n' + await siteInfo(text);
-    let out; try { out = await ai.chat(String(key || uid), text, sys); } catch (e) { if (!urgent) ai.refund(String(uid), 'chat', 1); throw e; }
+    let out; try { out = await ai.chat(String(key || uid), text, sys, media); } catch (e) { if (!urgent) ai.refund(String(uid), 'chat', 1); throw e; }
     stats.chats++; const wants = /\[\[PAID\]\]/.test(out), clean = out.replace(MARK, ' ').trim();
     if (wants && !paid && !urgent && c.paywall) { stats.paywalls++; return { ok: true, text: clean, paywall: 'premium' }; }
     return { ok: true, text: clean, paywall: '', urgent };
