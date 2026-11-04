@@ -49,21 +49,32 @@ module.exports = function aisvc(ctx) {
     return `[አሁን ያለው ትክክለኛ ጊዜ — ስለ ቀን፣ ሰዓት ወይም «ዛሬ» ሲጠየቅ ይህን ብቻ ተጠቀም]\nዛሬ ${WD_AM[t.getUTCDay()]}፣ ${MO_EN[m - 1]} ${d}፣ ${y} (ግሪጎሪያን) = ${MO_ET[e.m - 1]} ${e.d}፣ ${e.y} ዓ.ም (ኢትዮጵያ ካሌንደር)\nሰዓት፦ ${String(hh).padStart(2, '0')}:${String(mi).padStart(2, '0')} (አለም አቀፍ 24 ሰዓት፣ ኢትዮጵያ ሰዓት አቆጣጠር UTC+3) = ${h12}:${String(mi).padStart(2, '0')} ${hh >= 12 ? 'PM' : 'AM'} = የኢትዮጵያ (ግዕዝ) ሰዓት ${et}:${String(mi).padStart(2, '0')} ${hh >= 6 && hh < 18 ? 'ቀን' : 'ሌሊት/ምሽት'}`;
   };
   const TIMELY = /ዛሬ|አሁን|ዜና|የቅርብ|ትናንት|ዘንድሮ|በቅርቡ|ወቅታዊ|ውጤት|ምርጫ|ሰበር|ዋጋ ስንት|today|now|latest|news|current|recent|yesterday|breaking|score|result|this week|tonight/i, TIME_ONLY = /^(ዛሬ|አሁን|ዜና|የቅርብ|ትናንት|ምን|ተደረገ|ሆነ|ነገር|ወቅታዊ|ሁነቶች|ሁኔታ|today|what|happened|news|latest|now)$/i;
-  const newsCache = new Map(), xml = x => String(x || '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/<[^>]+>/g, '').trim();
-  async function feed(url) {
-    const hit = newsCache.get(url); if (hit && now() - hit.t < 5 * 60e3) return hit.v; const ac = new AbortController(), tm = setTimeout(() => ac.abort(), 6000);
-    try { const r = await newsFetch(url, { signal: ac.signal, headers: { 'user-agent': 'Mozilla/5.0 EtioDigitalMarket' } }); if (!r.ok) return []; const x = await r.text(), v = [...x.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, 7).map(m => { const g = tag => { const q = new RegExp('<' + tag + '[^>]*>([\\s\\S]*?)</' + tag + '>').exec(m[1]); return q ? xml(q[1]) : ''; }; return { title: g('title'), link: g('link'), date: g('pubDate'), src: g('source') }; }).filter(i => i.title); newsCache.set(url, { t: now(), v }); return v; }
-    catch (e) { return []; } finally { clearTimeout(tm); }
+  const newsCache = new Map(), xml = x => String(x || '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&#x27;/g, "'").replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+  const nd = stats.news = { ok: 0, empty: 0, fail: 0, last: '', by: {} };          // ምርመራ፦ ምንጭ በምንጭ
+  const mark = (name, state, note) => { const b = nd.by[name] || (nd.by[name] = { ok: 0, empty: 0, fail: 0, note: '' }); b[state]++; nd[state]++; if (note) { b.note = nd.last = name + ': ' + note; } };
+  async function getText(name, url) {
+    const hit = newsCache.get(url); if (hit && now() - hit.t < 5 * 60e3) return hit.v; const ac = new AbortController(), tm = setTimeout(() => ac.abort(), 7000);
+    try { const r = await newsFetch(url, { signal: ac.signal, redirect: 'follow', headers: { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36', accept: 'text/html,application/xml,application/rss+xml,*/*', 'accept-language': 'en-US,en;q=0.8,am;q=0.6' } }); if (!r.ok) { mark(name, 'fail', 'HTTP ' + r.status); return ''; } const v = await r.text(); newsCache.set(url, { t: now(), v }); return v; }
+    catch (e) { mark(name, 'fail', String(e && e.message || e).slice(0, 80)); return ''; } finally { clearTimeout(tm); }
   }
-  async function newsInfo(text) {
-    if (!TIMELY.test(text) || process.env.AI_NEWS === '0') return '';
-    const words = keywords(text).filter(w => !TIME_ONLY.test(w)).slice(0, 3), q = words.join(' '), am = /[ሀ-፿]/.test(text), B = 'https://news.google.com/rss', jobs = [];
-    const mk = (lang, ceid, hl) => q ? `${B}/search?q=${encodeURIComponent(q + ' when:2d')}&hl=${hl}&gl=ET&ceid=${ceid}` : `${B}?hl=${hl}&gl=ET&ceid=${ceid}`;
-    if (am) jobs.push(feed(mk('am', 'ET:am', 'am'))); jobs.push(feed(mk('en', 'ET:en', 'en-ET'))); if (q && !am) jobs.push(feed(`${B}/search?q=${encodeURIComponent(q + ' when:2d')}&hl=en&gl=US&ceid=US:en`));
-    const seen = new Set(), items = []; for (const l of await Promise.all(jobs)) for (const i of l) if (!seen.has(i.title)) { seen.add(i.title); items.push(i); }
-    if (!items.length) return '\n\n[ወቅታዊ ዜና ፍለጋ] አሁን ከዜና ምንጭ መረጃ ማግኘት አልተቻለም — ስለ ዛሬ ሁነቶች እርግጠኛ መረጃ እንደሌለህ በግልጽ ንገር፤ አትገምት።';
-    return '\n\n[ወቅታዊ ዜና — ከ Google News ዛሬ የተገኘ፤ ስለ ቅርብ ጊዜ ሁነቶች ከዚህ ብቻ ተመርኩዘህ መልስ፤ እያንዳንዱን ሲጠቅስ ምንጩን እና አገናኙን ጻፍ፤ የሌለ ነገር አትጨምር]\n' + items.slice(0, 10).map(i => `• ${i.title}${i.src && !i.title.endsWith(i.src) ? ' — ' + i.src : ''} (${i.date.slice(0, 22)}) ${i.link}`).join('\n');
+  const rssItems = (x, src) => [...String(x).matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, 7).map(m => { const g = tag => { const q = new RegExp('<' + tag + '[^>]*>([\\s\\S]*?)</' + tag + '>').exec(m[1]); return q ? xml(q[1]) : ''; }; return { title: g('title'), link: g('link'), date: g('pubDate'), src: g('source') || g('News:Source') || src, desc: g('description').slice(0, 160) }; }).filter(i => i.title);
+  const ddgItems = x => { const html = String(x), ms = [...html.matchAll(/<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g)]; return ms.slice(0, 6).map((m, i) => { let u = m[1].replace(/&amp;/g, '&'); const q = /[?&]uddg=([^&]+)/.exec(u); if (q) { try { u = decodeURIComponent(q[1]); } catch (e) { } } const seg = html.slice(m.index + m[0].length, ms[i + 1] ? ms[i + 1].index : undefined), sn = /class="result__snippet"[^>]*>([\s\S]*?)<\/a>/.exec(seg); return { title: xml(m[2]), link: u.startsWith('//') ? 'https:' + u : u, date: '', src: 'web', desc: xml(sn ? sn[1] : '').slice(0, 200) }; }).filter(i => i.title && /^https?:/.test(i.link)); };
+  async function newsInfo(text, force) {
+    if (process.env.AI_NEWS === '0' || (!force && !TIMELY.test(text))) return '';
+    const words = keywords(text).filter(w => !TIME_ONLY.test(w)).slice(0, 3), q = words.join(' '), am = /[ሀ-፿]/.test(text), enc = encodeURIComponent, G = 'https://news.google.com/rss';
+    const jobs = [
+      ['GoogleNews-ET', q ? `${G}/search?q=${enc(q + ' when:2d')}&hl=en-ET&gl=ET&ceid=ET:en` : `${G}?hl=en-ET&gl=ET&ceid=ET:en`, x => rssItems(x, 'Google News')],
+      ['Bing-News', `https://www.bing.com/news/search?q=${enc(q || 'Ethiopia')}&format=rss`, x => rssItems(x, 'Bing News')],
+    ];
+    if (am) jobs.push(['GoogleNews-AM', q ? `${G}/search?q=${enc(q + ' when:2d')}&hl=am&gl=ET&ceid=ET:am` : `${G}?hl=am&gl=ET&ceid=ET:am`, x => rssItems(x, 'Google News አማርኛ')]);
+    if (!q) jobs.push(['BBC-Africa', 'https://feeds.bbci.co.uk/news/world/africa/rss.xml', x => rssItems(x, 'BBC')]);
+    if (q) jobs.push(['DuckDuckGo', `https://html.duckduckgo.com/html/?q=${enc(q)}`, ddgItems]);
+    const seen = new Set(), items = [];
+    for (const l of await Promise.all(jobs.map(async ([name, url, parse]) => { const x = await getText(name, url); if (!x) return []; const v = parse(x); mark(name, v.length ? 'ok' : 'empty', v.length ? '' : 'ምንም ውጤት የለም'); return v; }))) for (const i of l) if (!seen.has(i.title)) { seen.add(i.title); items.push(i); }
+    if (!items.length) return '\n\n[ወቅታዊ ዜና ፍለጋ] አሁን ከዜና ምንጮች መረጃ ማግኘት አልተቻለም — ስለ ዛሬ ሁነቶች እርግጠኛ መረጃ እንደሌለህ በግልጽ ንገር፤ አትገምት።';
+    return '\n\n[ወቅታዊ ዜና/ድር ፍለጋ — አሁን የተገኘ፤ ስለ ዛሬ እና ቅርብ ጊዜ ሁነቶች ከዚህ ተመርኩዘህ በእርግጠኝነት መልስ ስጥ ("መረጃ የለኝም" አትበል፤ ከታች ያለው አለ)። ርዕሱን፣ ምንጩን እና አገናኙን ጥቀስ፤ የሌለ ነገር አትጨምር]\n' + items.slice(0, 14).map(i => `• ${i.title}${i.src && !i.title.endsWith(i.src) ? ' — ' + i.src : ''}${i.date ? ' (' + i.date.slice(0, 22) + ')' : ''}${i.desc && i.desc !== i.title ? '\n  ' + i.desc : ''}\n  ${i.link}`).join('\n');
   }
+  const newsDiag = async () => { const r = await newsInfo('latest news today Ethiopia', true); return { ...nd, ok: !/አልተቻለም/.test(r), items: (r.match(/^• /gm) || []).length }; };
 
   /* የጽሑፍ ውይይት፦ → { ok, text, paywall: ''|'premium'|'limit' } */
   async function converse({ uid, key, text, admin, media }) {
@@ -138,6 +149,7 @@ module.exports = function aisvc(ctx) {
   });
   app.post('/api/ai/buy', async (req, res) => { const u = user(req, res); if (!u) return; if (u.admin) return bad(res, 403, 'admin_cannot'); if (!limit('aib' + u.uid, 10, 3600e3)) return bad(res, 429, 'slow_down'); const r = await buy(u.uid, req.body || {}); r.ok ? res.json(r) : bad(res, r.error === 'storage' ? 503 : r.error.startsWith('duplicate') || r.error === 'already_requested' ? 409 : 400, r.error); });
   const admin = (req, res) => adminOnly(req, res);
+  app.get('/api/ai/admin/newsdiag', async (req, res) => { if (!admin(req, res)) return; res.json({ ok: true, ...(await newsDiag()) }); });
   app.get('/api/ai/admin/overview', (req, res) => {
     if (!admin(req, res)) return; const c = cfg(), reqs = Object.values(col(REQ)), t = now();
     const users = Object.values(col(ACC)).map(a => { const d = (col('data/users/' + a.id) || {}).acct || {}; return { uid: a.id, name: d.name || '', phone: d.phone || '', email: d.email || '', until: a.until || 0, active: (a.until || 0) > t, blocked: !!a.blocked }; }).sort((x, y) => y.until - x.until).slice(0, 200);
@@ -167,6 +179,6 @@ module.exports = function aisvc(ctx) {
     if (ch.length) await saveMany(ch).catch(() => { }); return ch.length;
   }
   const timer = setInterval(() => { tick().catch(() => { }); }, 3600e3); timer.unref && timer.unref(); setTimeout(() => tick().catch(() => { }), 60e3).unref();
-  return { clockInfo, ethDate, newsInfo, tbOnly, autoVerify, cfg, acc, info, converse, takePages, buy, decide, tick, stats, ai, isOwner };
+  return { newsDiag, clockInfo, ethDate, newsInfo, tbOnly, autoVerify, cfg, acc, info, converse, takePages, buy, decide, tick, stats, ai, isOwner };
 };
 module.exports.DEFAULTS = DEFAULTS;

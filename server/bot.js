@@ -553,7 +553,7 @@ module.exports = function bot(c) {
     return send(chat, `🤖 <b>AI ቁጥጥር</b> · ${H(r.provider || '—')} ${H(r.model || '')}\n⏳ የሚጠብቁ ክፍያዎች፦ ${r.pending} · 💰 ገቢ፦ ${ETB(r.revenue)}\n💬 ዛሬ፦ ${r.stats.chats} ውይይት · ${r.stats.pages} ገጽ · ${r.stats.paywalls} ክፍያ ጥያቄ\n\n${ONOFF(c.enabled)} AI · ${ONOFF(c.paywall)} ክፍያ ግድግዳ · ${ONOFF(c.autoApprove)} ራስ-ማጽደቅ · ${ONOFF(c.requireProof)} ማስረጃ ግዴታ\n🆓 ነጻ፦ ${c.freeChatDay} መልእክት · ${c.freePagesDay} ገጽ በቀን | 💎 የተከፈለ፦ ${c.paidChatDay} · ${c.paidPagesDay}\n📦 ${c.plans.map(x => `${x.label} ${x.price} ብር`).join(' · ')}`, ik([
       [b(`${c.enabled ? '⏸ AI አጥፋ' : '▶️ AI አብራ'}`, 'axt:enabled'), b(`${c.paywall ? '🔓 ክፍያ አጥፋ' : '🔒 ክፍያ አብራ'}`, 'axt:paywall')],
       [b(`${c.autoApprove ? '✋ ራስ-ማጽደቅ አጥፋ' : '🤖 ራስ-ማጽደቅ አብራ'}`, 'axt:autoApprove'), b(`${c.requireProof ? '📎 ማስረጃ ተው' : '📎 ማስረጃ ጠይቅ'}`, 'axt:requireProof')],
-      [b(`⏳ ክፍያ ጥያቄዎች (${r.pending})`, 'axq')], [b('💵 የእቅድ ዋጋ', 'axpr'), b('🔢 ገደቦች', 'axlm')], [b('🎁 ለተጠቃሚ ቀን ስጥ/አግድ', 'axg')]]));
+      [b(`⏳ ክፍያ ጥያቄዎች (${r.pending})`, 'axq')], [b('💵 የእቅድ ዋጋ', 'axpr'), b('🔢 ገደቦች', 'axlm')], [b('🎁 ለተጠቃሚ ቀን ስጥ/አግድ', 'axg'), b('🌐 ዜና ፈትሽ', 'axnews')]]));
   }
   async function axAiReqs(chat) {
     const r = await AD('GET', '/api/ai/admin/requests?status=pending'); if (!r.ok) return send(chat, bad(r)); if (!r.items.length) return send(chat, '✅ የሚጠብቅ የ AI ክፍያ የለም።');
@@ -577,7 +577,12 @@ module.exports = function bot(c) {
     const r = await AD('POST', `/api/learn/decks/${c.id}/content`, { slides }); if (!r.ok) return send(chat, bad(r));
     return send(chat, `✅ «${H(name)}» ተጫነ — ${slides.length} ስላይድ። አሁን ዋጋ/ካታሎግ ያስተካክሉ።`, ik([[b('🛒 በካታሎግ ዘርዝር', `axdl:${c.id}`), b('▶️ ክፈት', `axds:${c.id}`)], [b('💵 ዋጋ ቀይር', `axdp:${c.id}`), b('🔗 ሊንክ', `axdk:${c.id}`)]]));
   }
+  async function axNews(chat) {
+    await send(chat, '🌐 የዜና/ድር ፍለጋ ምንጮችን እየፈተሽሁ ነው…'); const r = await svc.newsDiag();
+    return send(chat, `🌐 <b>የዜና ፍለጋ ምርመራ</b> — ${r.ok ? '✅ ይሠራል' : '❌ ምንም ምንጭ አልደረሰም'} (${r.items} ውጤት)\n\n` + (Object.entries(r.by).map(([k2, v]) => `${v.ok ? '✅' : v.empty ? '⚪' : '❌'} ${H(k2)} — ✅${v.ok} ⚪${v.empty} ❌${v.fail}${v.note ? '\n   ' + H(v.note) : ''}`).join('\n') || '—') + (r.ok ? '' : '\n\n<i>Render ከውጭ ድረ-ገጾች እንዳይደርስ ሊታገድ ይችላል፤ ቀኑ/ሰዓቱ ግን ይሠራል።</i>'));
+  }
   async function axRoute(chat, k, a, x) {
+    if (k === 'axnews') return axNews(chat);
     if (k === 'axai') return axAi(chat); if (k === 'axq') return axAiReqs(chat); if (k === 'axl') return axLearnReqs(chat); if (k === 'axd') return axDecks(chat);
     if (k === 'axt') { if (!/^(enabled|paywall|autoApprove|requireProof)$/.test(a)) return; const o = await AD('GET', '/api/ai/admin/overview'); const r = await AD('POST', '/api/ai/admin/config', { [a]: !o.cfg[a] }); if (!r.ok) return send(chat, bad(r)); return axAi(chat); }
     if (k === 'axpr') { const o = await AD('GET', '/api/ai/admin/overview'); return send(chat, 'የትኛውን እቅድ ዋጋ ይቀይራሉ?', ik(o.cfg.plans.map(p => [b(`${p.label} — ${p.price} ብር`, 'axps:' + p.id)]))); }
@@ -713,7 +718,7 @@ module.exports = function bot(c) {
     const ld = /^\/start\s+d_([\w-]{4,40})$/.exec(t); if (ld) return learnStart(chat, ld[1]);
     const dl = /^\/start\s+([sgpwej])_([\w-]{4,40})$/.exec(t); if (dl) s.deep = { t: dl[1], id: dl[2] };       // deep link — ከመግባት በኋላም ይከፈታል
     if (t === '✖️ ተው') { s.await = null; s.flow = null; s.aiproof = null; save(); return home(chat); }
-    if (uid && /^\/ai\b/.test(t)) return aiIntro(chat, uid); if (uid && /^\/voice\b/.test(t)) { const s2 = ses(chat), nx = { undefined: 'on', auto: 'on', on: 'off', off: 'auto' }[s2.vo || 'auto']; s2.vo = nx; save(); return send(chat, nx === 'on' ? '🔊 ሁልጊዜ በድምፅም እመልሳለሁ።' : nx === 'off' ? '🔇 የድምፅ መልስ ጠፍቷል (ድምፅ ቢልኩም በጽሑፍ ብቻ)።' : '🎙 በድምፅ ሲጠይቁ በድምፅ እመልሳለሁ (ነባሪ)።'); } if (uid && /^\/(new|reset)\b/.test(t)) { ai.reset(String(chat)); return send(chat, '🧹 አዲስ ውይይት ጀምረናል።', menuKb(chat)); }
+    if (uid && /^\/ai\b/.test(t)) return aiIntro(chat, uid); if (isAdmin(chat) && /^\/newstest\b/.test(t)) return axNews(chat); if (uid && /^\/voice\b/.test(t)) { const s2 = ses(chat), nx = { undefined: 'on', auto: 'on', on: 'off', off: 'auto' }[s2.vo || 'auto']; s2.vo = nx; save(); return send(chat, nx === 'on' ? '🔊 ሁልጊዜ በድምፅም እመልሳለሁ።' : nx === 'off' ? '🔇 የድምፅ መልስ ጠፍቷል (ድምፅ ቢልኩም በጽሑፍ ብቻ)።' : '🎙 በድምፅ ሲጠይቁ በድምፅ እመልሳለሁ (ነባሪ)።'); } if (uid && /^\/(new|reset)\b/.test(t)) { ai.reset(String(chat)); return send(chat, '🧹 አዲስ ውይይት ጀምረናል።', menuKb(chat)); }
     if (uid && /^\/lang\b/.test(t)) return langMenu(chat);
     if (uid && /^\/(search|near|alerts|messages)\b/.test(t)) return action(chat, uid, /^\/(\w+)/.exec(t)[1]);
     if (/^\/(start|menu|login)\b/.test(t)) { s.flow = null; if (uid) return home(chat, `🇪🇹 <b>ኢትዮ ዲጂታል ማርኬት</b>\n${tx(chat, 'welcome')} ${H(userOf(uid).name)}!`); s.auth = null; return authStart(chat); }

@@ -82,3 +82,10 @@ test('AI፦ የአሁን ቀን/ሰዓት (ግሪጎሪያን + ኢትዮጵያ 
   urls.length = 0; await h.call('POST', '/api/ai/chat', { tok: U, body: { text: 'ሰላም እንዴት ነህ' } }); assert.equal(urls.length, 0);          // ዜና የማይፈልግ ጥያቄ አይፈልግም
   const h2 = harness(() => 'እሺ', { now: () => Date.UTC(2026, 10, 4, 11, 17), newsFetch: async () => ({ ok: false }) }); await h2.call('POST', '/api/ai/chat', { tok: U, body: { text: 'latest news today' } }); assert.match(h2.prompts[0], /አትገምት/);
 });
+
+test('ዜና ምርመራ፦ ብዙ ምንጮች (Google/Bing/DDG) ተጣምረው ይገባሉ፤ አንዱ ሲወድቅ ሌላው ይሠራል፤ ምርመራ ይመዘገባል', async () => {
+  const f = async u => { if (/google/.test(u)) return { ok: false, status: 503 }; if (/bing/.test(u)) return { ok: true, text: async () => '<rss><channel><item><title>Bing story</title><link>https://b.com/1</link><pubDate>Wed, 04 Nov 2026 09:00:00 GMT</pubDate><News:Source>Reuters</News:Source></item></channel></rss>' }; if (/duckduckgo/.test(u)) return { ok: true, text: async () => '<a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fex.com%2Fp&amp;rut=1">Result <b>T</b></a><a class="result__snippet" href="x">A snippet</a>' }; return { ok: false, status: 500 }; };
+  const h = harness(() => 'እሺ', { now: () => Date.UTC(2026, 10, 4, 11, 17), newsFetch: f }); await h.call('POST', '/api/ai/chat', { tok: U, body: { text: 'latest Abiy news today' } });
+  const sys = h.prompts[h.prompts.length - 1]; assert.match(sys, /Bing story — Reuters/); assert.match(sys, /https:\/\/ex\.com\/p/); assert.match(sys, /A snippet/);
+  const d = await h.svc.newsDiag(); assert.equal(d.ok, true); assert.ok(d.by['GoogleNews-ET'].fail >= 1); assert.ok(d.by['Bing-News'].ok >= 1); assert.match(d.last, /HTTP 503/);
+});
