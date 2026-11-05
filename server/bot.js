@@ -984,17 +984,17 @@ module.exports = function bot(c) {
   }
 
   /* ===== 🧑‍🏫 የቀጥታ ሰሌዳ፦ መምህሩ በጠቆረ ሰሌዳ ላይ እየጻፈ/እየሳለ በድምፅ ያስረዳል (Mini App ገጽ /board/<id>) ===== */
-  async function boardMake(chat, uid, topicIdx) {
+  async function boardMake(chat, uid) {
     const lm = MEDIA.get(chat); if (!lm) return send(chat, '⌛ ፋይሉ ጊዜው አልፏል — እንደገና ይላኩ።'); if (!aiReady()) return send(chat, aiOff); if (!svc.boardPut) return send(chat, '⚠️ ሰሌዳ አልተዘጋጀም።');
-    const T = lm.tc, topic = T ? T.topics[topicIdx == null ? T.i : topicIdx] : '';
-    typing(chat); const tm = setInterval(() => typing(chat), 4500); let out;
+    typing(chat); let src = null;
     try {
-      const q = `${TEACHER}\n\nአሁን በክፍል ውስጥ በጥቁር ሰሌዳ ላይ እየጻፍክ እና እየሳልክ እንደምታስተምር አስተምር። ርዕስ፦ ${topic ? '«' + topic + '»' : 'የፋይሉ ዋና ርዕስ (በጣም አስፈላጊው ክፍል)'}።\nውጤቱን በትክክል በዚህ JSON ቅርጸት ብቻ ስጥ (ከJSON ውጪ ምንም ጽሑፍ፣ ምልክት ወይም \`\`\` አትጨምር)፦\n{"title":"የትምህርቱ ርዕስ","steps":[{"say":"መምህሩ በድምፅ የሚናገረው (1-3 አጭር የተፈጥሮ አረፍተ ነገሮች)","clear":false,"write":[{"k":"title","t":"..."},{"k":"bullet","t":"..."},{"k":"formula","t":"..."},{"k":"note","t":"..."},{"k":"draw","shapes":[{"k":"rect","x":10,"y":8,"w":30,"h":14},{"k":"circle","x":70,"y":15,"r":8},{"k":"arrow","x1":40,"y1":15,"x2":62,"y2":15},{"k":"line","x1":0,"y1":30,"x2":100,"y2":30},{"k":"label","x":12,"y":18,"t":"ጽሑፍ"}]}]}]}\nህጎች፦ 7 እስከ 12 እርምጃዎች፤ እያንዳንዱ እርምጃ በሰሌዳ ላይ አጭር ጽሑፍ (k=title/text/bullet/formula/note — ቃላት እንጂ ረጅም አንቀጽ አይደለም) እና አስፈላጊ ሲሆን ሥዕላዊ መግለጫ (draw፤ ሸራው ስፋት 100 × ቁመት 56፤ ቅርጾች rect/circle/line/arrow/label) ይኑረው። say ከሚጻፈው ጋር ይመሳሰል ግን ሙሉ ማብራሪያ ይስጥ። ምሳሌ ጨምር። የመጨረሻው እርምጃ ማጠቃለያ እና አንድ የመረዳት ጥያቄ። ርዕሱ ሲቀየር clear:true።`;
-      out = await askAI(chat, uid, lmBody(lm, q), lm.m);
-    } finally { clearInterval(tm); }
-    if (out == null) return; let j = null; try { const a = out.indexOf('{'), z = out.lastIndexOf('}'); j = JSON.parse(out.slice(a, z + 1)); } catch (e) { }
-    const id = j && svc.boardPut(uid || 'admin', j.title || topic || lm.name, j.steps); if (!id) return send(chat, '⚠️ ሰሌዳውን ማዘጋጀት አልተቻለም — እንደገና ይሞክሩ።', ik([[b('🔁 እንደገና', 'tc:bd')]]));
-    const url = web('/board/' + id); return tg('sendMessage', { chat_id: chat, text: `🧑‍🏫 <b>የቀጥታ ሰሌዳ ዝግጁ ነው</b>${topic ? '\n📘 ' + H(topic) : ''}\n\nመምህሩ በሰሌዳ ላይ እየጻፈና እየሳለ በድምፅ ያስረዳል። ⏯ ማቆም/መቀጠል፣ ⏮⏭ እርምጃ መለወጥ ይችላሉ።\n(ሊንኩ ለ48 ሰዓት ይሠራል)`, parse_mode: 'HTML', reply_markup: /^https:/.test(baseUrl) ? { inline_keyboard: [[{ text: '🧑‍🏫 ሰሌዳውን ክፈት', web_app: { url } }], [b('➡️ ቀጣይ ርዕስ በሰሌዳ', 'tc:bdn')]] } : undefined }).catch(e => console.warn('board send', e.message));
+      if (lm.isPdf && lm.buf) { const sp = await pdfSplit(lm.buf), total = sp ? sp.n : AIM.countPdfPages(lm.buf); if (total > 0) src = { total, pageSrc: async n => (sp ? { pdfBuf: await sp.page(n - 1), real: true } : { pdfBuf: lm.buf }) }; }
+      else if (lm.isPpt && lm.buf) { const { parsePptx } = require('../src/lib/pptx'), r = await parsePptx(lm.buf), tx = r.slides.map((x, i) => AIM.slideText({ title: x.title, blocks: x.blocks }, i)); if (tx.length) src = { total: tx.length, pageSrc: async n => ({ text: tx[n - 1] || '' }) }; }
+      else if (lm.t) { const ps = []; let cur = ''; for (const para of lm.t.split(/\n+/)) { if ((cur + '\n' + para).length > 1400 && cur) { ps.push(cur); cur = ''; } cur += (cur ? '\n' : '') + para; } if (cur) ps.push(cur); if (ps.length) src = { total: Math.min(ps.length, 60), pageSrc: async n => ({ text: ps[n - 1] || '' }) }; }
+      else if (lm.m && !lm.isPdf) src = { total: 1, pageSrc: async () => ({ media: lm.m }) };
+    } catch (e) { console.warn('boardMake', e.message); }
+    const id = src && svc.boardPut(uid || 'admin', lm.name, src, { admin: isAdmin(chat), domain: '' }); if (!id) return send(chat, '⚠️ ሰሌዳውን ማዘጋጀት አልተቻለም — ፋይሉ መነበብ አልቻለም።');
+    const url = web('/board/' + id); return tg('sendMessage', { chat_id: chat, text: `🧑‍🏫 <b>የቀጥታ ክፍል ዝግጁ ነው</b>\n📘 ${H(clip(lm.name, 60))} — ${src.total} ${lm.isPdf ? 'ገጽ' : 'ስላይድ/ክፍል'}\n\nመምህሩ ሁሉንም ስላይድ አንድ በአንድ በሰሌዳ ላይ ይለጥፋል፤ መስመር በመስመር ቃል በቃል እያሰመረ በድምፅ ያስረዳል። «ቀጣይ» ሲሉ የቀደመውን አጥፍቶ ቀጣዩን ይለጥፋል። ጥያቄ ሲኖርዎ ተማሪ እንደሚያደርገው ይጠይቁ።\n(ሊንኩ ለ48 ሰዓት ይሠራል)`, parse_mode: 'HTML', reply_markup: /^https:/.test(baseUrl) ? { inline_keyboard: [[{ text: '🧑‍🏫 ክፍሉን ክፈት', web_app: { url } }]] } : undefined }).catch(e => console.warn('board send', e.message));
   }
   /* ===== 🎓 ትምህርት ዋና ክፍል + 📚 የመማሪያ መጻሕፍት ቤተ-መጻሕፍት ===== */
   async function eduHome(chat, uid) {

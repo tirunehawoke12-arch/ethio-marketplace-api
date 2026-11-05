@@ -26,9 +26,8 @@ test('መምህር ሁነታ፦ ርዕሶች፣ ትምህርት፣ ጥያቄ፣ 
     sent.length = 0; await cb(1, 'tc:nx'); assert.ok(msgs().some(m => /ትምህርት 2\/3/.test(m.text))); assert.match(seen[seen.length - 1], /ዋና ነጥቦች/);
     sent.length = 0; await cb(1, 'tc:qz'); assert.ok(msgs().some(m => /ፈተና/.test(m.text))); await cb(1, 'tc:vo'); assert.ok(msgs().some(m => /ድምፅ ጠፍቷል/.test(m.text)));
     await cb(1, 'tc:nx'); sent.length = 0; await cb(1, 'tc:nx'); assert.ok(msgs().some(m => /ተጠናቀቀ/.test(m.text)));
-    // የቀጥታ ሰሌዳ
-    sent.length = 0; await cb(1, 'tc:bd'); const bm = msgs().find(m => /ሰሌዳ ዝግጁ/.test(m.text)); assert.ok(bm, 'ሰሌዳ ተዘጋጅቷል'); assert.match(JSON.stringify(bm.reply_markup), /web_app[\s\S]*https:\/\/x\.et\/board\/[\w-]{8,}/);
-    assert.equal(svc.boardPut('u', 'x', [{ write: [{ k: 'zzz', t: 'a' }] }]), null); const bid = svc.boardPut('u', 't', [{ say: 'a', write: [{ k: 'draw', shapes: [{ k: 'rect', w: 9999, h: 1 }, { k: 'evil' }] }] }]); assert.ok(bid);
+    // የቀጥታ ክፍል
+    sent.length = 0; await cb(1, 'tc:bd'); const bm = msgs().find(m => /ክፍል ዝግጁ/.test(m.text)); assert.ok(bm, 'ክፍል ተዘጋጅቷል'); assert.match(JSON.stringify(bm.reply_markup), /web_app[\s\S]*https:\/\/x\.et\/board\/[\w-]{8,}/);
     // አጠቃቀም ክትትል (አድሚን)
     sent.length = 0; await cb(999, 'axus:s:d'); const us = msgs().find(m => /የቦት አጠቃቀም/.test(m.text)); assert.ok(us); assert.match(us.text, /ጠቅላላ ተጠቃሚ፦ <b>[2-9]/); assert.match(JSON.stringify(us.reply_markup), /axus:u:1/);
     sent.length = 0; await cb(999, 'axus:u:1'); assert.ok(msgs().some(m => /መልእክት\/ጠቅታ/.test(m.text) && /axus:bk:1/.test(JSON.stringify(m.reply_markup))));
@@ -39,4 +38,20 @@ test('መምህር ሁነታ፦ ርዕሶች፣ ትምህርት፣ ጥያቄ፣ 
     // ተማሪ መጽሐፍ መጨመር አይችልም
     sent.length = 0; await cb(1, 'axbk:new'); assert.ok(msgs().some(m => /አድሚን ብቻ/.test(m.text)));
   } finally { global.fetch = realFetch; srv.close(); delete process.env.ANTHROPIC_API_KEY; }
+});
+
+test('ሰሌዳ API፦ ገጽ በፍላጎት፣ ጽዳት፣ መሸጎጥ፣ ድምፅ፣ ጥያቄ', async () => {
+  const routes = {}, app = { get: (p, f) => { routes['GET ' + p] = f; }, post: (p, f) => { routes['POST ' + p] = f; } }; let calls = 0, speaks = 0;
+  const ai = { enabled: true, provider: 'gemini', lim: { chat: 5 }, refund() { }, take: () => ({ ok: true }), usage: () => ({}), speak: async () => { speaks++; return { pcm: Buffer.alloc(4800), rate: 24000 }; }, boardPage: async (t, n) => { calls++; return { title: 'ገጽ ' + n, lines: [{ k: 'bullet', t: 'Nucleus', am: 'ኒውክሊየስ', say: 'ማብራሪያ ' + 'ሀ'.repeat(2000) }, { k: 'zzz', t: '', say: '' }, { k: 'evil', t: 'X', say: 'y' }], draw: [{ k: 'rect', w: 9999, h: 1 }, { k: 'bad' }] }; }, boardAsk: async () => 'መልስ' };
+  const svc = require('../server/aisvc')({ app, col: (() => { const d = {}; return p => d[p] || (d[p] = {}); })(), who: () => null, adminOnly: () => false, saveMany: async () => { }, bad: (res, c, e) => res.status(c).json({ ok: false, error: e }), S: (x, n) => String(x == null ? '' : x).slice(0, n || 1e9), N: Number, nid: () => 'x' + Math.random(), limit: () => true, ai });
+  const id = svc.boardPut('u1', 'ባዮሎጂ', { total: 3, pageSrc: async n => ({ text: 'p' + n }) }, { admin: true }); assert.ok(id);
+  const call = async (key, params, body) => { let out = { code: 200 }; const res = { status(c) { out.code = c; return this; }, json(j) { out.json = j; return this; }, set() { return this; }, send(b) { out.body = b; return this; }, end() { out.ended = true; return this; } }; await routes[key]({ params, body, ip: '1.1.1.1' }, res); return out; };
+  let r = await call('GET /api/ai/board/:id', { id }); assert.equal(r.json.total, 3); assert.equal(r.json.tts, true);
+  r = await call('GET /api/ai/board/:id/page/:n', { id, n: '2' }); assert.equal(r.json.page.title, 'ገጽ 2'); assert.equal(r.json.page.lines.length, 2, 'ባዶ መስመር ይወገዳል'); assert.equal(r.json.page.lines[1].k, 'text', 'ያልታወቀ አይነት → text'); assert.ok(r.json.page.lines[0].say.length <= 1400); assert.equal(r.json.page.draw.length, 1); assert.equal(r.json.page.draw[0].w, 100);
+  await call('GET /api/ai/board/:id/page/:n', { id, n: '2' }); assert.equal(calls, 1, 'ገጽ ይሸጎጣል');
+  r = await call('GET /api/ai/board/:id/page/:n', { id, n: '9' }); assert.equal(r.code, 404);
+  r = await call('GET /api/ai/board/:id/tts/:n/:i', { id, n: '2', i: '0' }); assert.ok(Buffer.isBuffer(r.body) && r.body.slice(0, 4).toString() === 'RIFF'); await call('GET /api/ai/board/:id/tts/:n/:i', { id, n: '2', i: '0' }); assert.equal(speaks, 1, 'ድምፅ ይሸጎጣል');
+  r = await call('GET /api/ai/board/:id/tts/:n/:i', { id, n: '5', i: '0' }); assert.ok(r.ended);
+  r = await call('POST /api/ai/board/:id/ask', { id }, { q: 'ኒውክሊየስ ምንድን ነው?', n: 2 }); assert.equal(r.json.text, 'መልስ'); r = await call('GET /api/ai/board/:id/tta/:aid', { id, aid: r.json.aid }); assert.equal(r.body.slice(0, 4).toString(), 'RIFF');
+  r = await call('GET /api/ai/board/:id', { id: 'nope' }); assert.equal(r.code, 404);
 });

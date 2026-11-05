@@ -112,6 +112,24 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
     const msg = `የሰነዱ ርዕስ፦ «${title}»` + (src && src.text ? `\n\n[የሰነዱ ናሙና]\n${String(src.text).slice(0, 6000)}` : '\n\nሰነዱን ተመልከት።');
     const out = await ask({ system: sys, max: 900, ...(src && src.pdf ? { pdf: src.pdf } : {}), msgs: [{ role: 'user', content: msg }] }); return String(out || '').trim();
   }
+  /* 🧑‍🏫 ሰሌዳ፦ የአንድ ገጽ/ስላይድ ሙሉ ይዘት (ምንም ሳይዘለል) መስመር በመስመር + የእያንዳንዱ መስመር የመምህር ማብራሪያ — JSON */
+  const BOARD_SYS = `አንተ ትዕግሥተኛ፣ ብቁ የኢትዮጵያ መምህር ነህ። ለተማሪዎች አንድን የፋይል ገጽ/ስላይድ በሰሌዳ ላይ ልትለጥፍና መስመር በመስመር ልታስረዳ ነው።
+ከገጹ ሙሉ ይዘት (ርዕስ፣ እያንዳንዱ ነጥብ/መስመር፣ ሠንጠረዥ ረድፍ፣ ቀመር፣ የሥዕል ጽሑፍ) ምንም ሳትዘልና ሳታሳጥር ሁሉንም አካትት።
+ውጤቱን በዚህ JSON ቅርጸት ብቻ ስጥ (ከJSON ውጪ ምንም ጽሑፍ ወይም \`\`\` አትጨምር)፦
+{"title":"የገጹ ርዕስ","lines":[{"k":"title|text|bullet|formula|note","t":"መስመሩ በገጹ ላይ እንዳለ (የገጹ ቋንቋ፣ አጭር)","am":"ገጹ እንግሊዝኛ ከሆነ የአማርኛ ትርጉሙ (አማርኛ ከሆነ ባዶ)","say":"ይህን መስመር እንደ መምህር የምታብራራበት ሙሉ ንግግር (3-6 አረፍተ ነገሮች፤ ትርጉም፣ ምክንያት፣ ምሳሌ)"}],"draw":[{"k":"rect","x":10,"y":8,"w":30,"h":14},{"k":"circle","x":70,"y":15,"r":8},{"k":"arrow","x1":40,"y1":15,"x2":62,"y2":15},{"k":"label","x":12,"y":18,"t":"ጽሑፍ"}]}
+ህጎች፦ lines እስከ 28፤ በገጹ ቅደም ተከተል፤ say በቀላል ተፈጥሯዊ አማርኛ (የቴክኒክ ቃል እንግሊዝኛው በቅንፍ)፣ ለድምፅ ምቹ ሙሉ አረፍተ ነገሮች፣ ምልክት/ሰንጠረዥ አትጠቀም። draw አማራጭ ነው (ገጹ ሥዕላዊ መግለጫ ሲኖረው ወይም ለማብራራት ሲጠቅም፤ ሸራው 100×56)። ገጹ ባዶ ከሆነ lines: [] ስጥ።`;
+  async function boardPage(title, n, total, src, domain) {
+    const sys = BOARD_SYS + (domain ? ctxText({ domain }) : ''); const head = `ሰነድ፦ «${title}» — ገጽ/ስላይድ ${n}${total ? ' ከ' + total : ''}።`;
+    let o;
+    if (src.pdfBuf) o = { pdf: src.pdfBuf, msgs: [{ role: 'user', content: head + (src.real ? ' ይህ PDF የዚህ አንድ ገጽ ብቻ ነው፤ ሙሉውን አስተምር።' : ` የዚህን PDF ገጽ ${n} ብቻ አስተምር።`) }] };
+    else if (src.media) o = { media: src.media, msgs: [{ role: 'user', content: head + ' ይህን ፎቶ/ምስል አስተምር።' }] };
+    else o = { msgs: [{ role: 'user', content: head + '\n\n[የገጹ ጽሑፍ]\n' + String(src.text || '').slice(0, 12000) }] };
+    const out = await ask({ system: sys, max: 8000, ...o }); const a = out.indexOf('{'), z = out.lastIndexOf('}'); if (a < 0 || z < a) throw new Error('board_parse'); return JSON.parse(out.slice(a, z + 1));
+  }
+  async function boardAsk(title, page, q) {
+    const ctx = page ? [page.title, ...(page.lines || []).map(l => l.t + (l.am ? ' — ' + l.am : ''))].join('\n').slice(0, 5000) : '';
+    return ask({ system: 'አንተ ትዕግሥተኛ የኢትዮጵያ መምህር ነህ። ተማሪ በክፍል ውስጥ ጥያቄ ጠየቀህ፤ በቀላል አማርኛ ከ6 አረፍተ ነገር ባልበለጠ፣ ምሳሌ ጨምረህ መልስ፤ ከዚያ «ገባዎት?» በል። ምልክት/ሰንጠረዥ አትጠቀም።', max: 900, msgs: [{ role: 'user', content: `ሰነድ፦ «${title}»\nአሁን በሰሌዳ ላይ ያለው ገጽ፦\n${ctx}\n\nየተማሪው ጥያቄ፦ ${String(q).slice(0, 600)}` }] });
+  }
   /* PPTX — የስላይድ ትርጉም፤ prev = የቀደመው ስላይድ ርዕስ (አውድ) */
   async function slideTr(deckTitle, s, i, total, cx) {
     return ask({ system: TR + ctxText({ title: deckTitle, ...cx }), max: 4000, msgs: [{ role: 'user', content: `ሰነድ፦ «${deckTitle}» (ስላይድ ${i + 1}/${total})። ይህን ስላይድ ተርጉም፦\n\n${slideText(s, i)}` }] });
@@ -136,7 +154,7 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
     }
     return null;
   }
-  return { enabled: !!prov, provider: prov, model, lim, chat, reset, take, refund, usage, pdfPage, slideTr, domainBrief, transcribe, speak };
+  return { enabled: !!prov, provider: prov, model, lim, chat, reset, take, refund, usage, pdfPage, slideTr, domainBrief, boardPage, boardAsk, transcribe, speak };
 }
 let inst = null; const shared = () => inst || (inst = create());
 module.exports = { create, shared, countPdfPages, chunkText, slideText, SYS, TR };

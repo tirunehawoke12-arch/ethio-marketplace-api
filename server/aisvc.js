@@ -142,30 +142,45 @@ module.exports = function aisvc(ctx) {
   }
 
 
-  /* ---------- 🧑‍🏫 የቀጥታ ሰሌዳ (ካፒቴብል ሊንክ፤ በ RAM ለ48 ሰዓት) ---------- */
-  const BOARDS = new Map(), BTTS = new Map(), BK = ['title', 'text', 'bullet', 'formula', 'note', 'draw'], SH = ['line', 'arrow', 'rect', 'circle', 'label'];
+  /* ---------- 🧑‍🏫 የቀጥታ ሰሌዳ፦ ገጽ በገጽ በፍላጎት ይዘጋጃል (ካፒቴብል ሊንክ፤ በ RAM ለ48 ሰዓት) ---------- */
+  const BOARDS = new Map(), BTTS = new Map(), BK = ['title', 'text', 'bullet', 'formula', 'note'], SH = ['line', 'arrow', 'rect', 'circle', 'label'];
   const cl = (v, a, b) => Math.min(b, Math.max(a, Number(v) || 0));
-  function cleanSteps(raw) {
-    const out = []; for (const st of (Array.isArray(raw) ? raw : []).slice(0, 16)) {
-      if (!st || typeof st !== 'object') continue; const w = [];
-      for (const it of (Array.isArray(st.write) ? st.write : []).slice(0, 8)) {
-        if (!it || !BK.includes(it.k)) continue;
-        if (it.k === 'draw') { const sh = (Array.isArray(it.shapes) ? it.shapes : []).filter(x => x && SH.includes(x.k)).slice(0, 24).map(x => ({ k: x.k, x1: cl(x.x1, 0, 100), y1: cl(x.y1, 0, 56), x2: cl(x.x2, 0, 100), y2: cl(x.y2, 0, 56), x: cl(x.x, 0, 100), y: cl(x.y, 0, 56), w: cl(x.w, 1, 100), h: cl(x.h, 1, 56), r: cl(x.r, 1, 40), t: S(x.t, 40) })); if (sh.length) w.push({ k: 'draw', shapes: sh }); }
-        else { const t = S(it.t, 400); if (t) w.push({ k: it.k, t }); }
-      }
-      const say = S(st.say, 700); if (say || w.length) out.push({ say, write: w, clear: !!st.clear });
-    } return out;
+  function cleanPage(j) {
+    if (!j || typeof j !== 'object') return null; const lines = [];
+    for (const l of (Array.isArray(j.lines) ? j.lines : []).slice(0, 32)) { if (!l || typeof l !== 'object') continue; const t = S(l.t, 300), say = S(l.say, 1400); if (!t && !say) continue; lines.push({ k: BK.includes(l.k) ? l.k : 'text', t, am: S(l.am, 300), say }); }
+    const draw = (Array.isArray(j.draw) ? j.draw : []).filter(x => x && SH.includes(x.k)).slice(0, 24).map(x => ({ k: x.k, x1: cl(x.x1, 0, 100), y1: cl(x.y1, 0, 56), x2: cl(x.x2, 0, 100), y2: cl(x.y2, 0, 56), x: cl(x.x, 0, 100), y: cl(x.y, 0, 56), w: cl(x.w, 1, 100), h: cl(x.h, 1, 56), r: cl(x.r, 1, 40), t: S(x.t, 40) }));
+    return { title: S(j.title, 120), lines, draw };
   }
-  function boardPut(uid, title, raw) {
-    const steps = cleanSteps(raw); if (!steps.length) return null; const t = now(); for (const [k, v] of BOARDS) if (t - v.ts > 48 * 3600e3) { BOARDS.delete(k); for (const x of BTTS.keys()) if (x.startsWith(k + ':')) BTTS.delete(x); }
-    if (BOARDS.size > 300) { const k0 = BOARDS.keys().next().value; BOARDS.delete(k0); } const id = require('crypto').randomBytes(9).toString('base64url'); BOARDS.set(id, { id, uid, title: S(title, 80), steps, ts: t }); return id;
+  /* src = { total, pageSrc: async n => ({ pdfBuf, real } | { media } | { text }) } */
+  function boardPut(uid, title, src, opt = {}) {
+    if (!src || !src.pageSrc) return null; const t = now(); for (const [k, v] of BOARDS) if (t - v.ts > 48 * 3600e3) { BOARDS.delete(k); for (const x of BTTS.keys()) if (x.startsWith(k + ':')) BTTS.delete(x); }
+    if (BOARDS.size > 200) { const k0 = BOARDS.keys().next().value; BOARDS.delete(k0); } const id = require('crypto').randomBytes(9).toString('base64url');
+    BOARDS.set(id, { id, uid, admin: !!opt.admin, title: S(title, 80), total: Math.max(1, Math.min(200, src.total || 1)), pageSrc: src.pageSrc, domain: opt.domain || '', pages: {}, pend: {}, start: Math.max(1, opt.start || 1), ts: t }); return id;
+  }
+  async function boardGet(bd, n) {
+    if (bd.pages[n]) return bd.pages[n]; if (bd.pend[n]) return bd.pend[n];
+    return (bd.pend[n] = (async () => {
+      const q = takePages(bd.uid, bd.admin); if (!q.ok) { const e = new Error('ai_limit'); e.paywall = q.paywall; throw e; }
+      try {
+        let last; for (let tr = 0; tr < 3; tr++) { try { const raw = await ai.boardPage(bd.title, n, bd.total, await bd.pageSrc(n), bd.domain), pg = cleanPage(raw); if (pg) return (bd.pages[n] = pg); last = new Error('board_parse'); } catch (e) { last = e; if (/^ai_(busy|timeout|network)$/.test(e.message)) await new Promise(r => setTimeout(r, 2500 * (tr + 1))); } }
+        throw last || new Error('board_parse');
+      } catch (e) { ai.refund(String(bd.uid), 'pages', 1); throw e; }
+    })().finally(() => { delete bd.pend[n]; }));
   }
   const wavOf = (pcm, rate) => { const h = Buffer.alloc(44); h.write('RIFF', 0); h.writeUInt32LE(36 + pcm.length, 4); h.write('WAVEfmt ', 8); h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20); h.writeUInt16LE(1, 22); h.writeUInt32LE(rate, 24); h.writeUInt32LE(rate * 2, 28); h.writeUInt16LE(2, 32); h.writeUInt16LE(16, 34); h.write('data', 36); h.writeUInt32LE(pcm.length, 40); return Buffer.concat([h, pcm]); };
-  app.get('/api/ai/board/:id', (req, res) => { const bd = BOARDS.get(String(req.params.id)); if (!bd) return bad(res, 404, 'not_found'); res.set('cache-control', 'no-store'); res.json({ ok: true, title: bd.title, steps: bd.steps, tts: ai.provider === 'gemini' }); });
-  app.get('/api/ai/board/:id/tts/:i', async (req, res) => {
-    const bd = BOARDS.get(String(req.params.id)), i = Number(req.params.i), st = bd && bd.steps[i]; if (!st || !st.say) return res.status(204).end(); if (!limit('btts' + req.ip, 60, 60e3)) return res.status(429).end();
-    const key = bd.id + ':' + i; try { let w = BTTS.get(key); if (!w) { const a = await ai.speak(st.say); if (!a) return res.status(204).end(); w = wavOf(a.pcm, a.rate); if (BTTS.size > 120) BTTS.delete(BTTS.keys().next().value); BTTS.set(key, w); } res.set({ 'content-type': 'audio/wav', 'cache-control': 'private, max-age=3600' }); res.send(w); } catch (e) { res.status(204).end(); }
+  const sendWav = async (res, key, text) => { try { let w = BTTS.get(key); if (!w) { const a = await ai.speak(text); if (!a) return res.status(204).end(); w = wavOf(a.pcm, a.rate); if (BTTS.size > 150) BTTS.delete(BTTS.keys().next().value); BTTS.set(key, w); } res.set({ 'content-type': 'audio/wav', 'cache-control': 'private, max-age=3600' }); res.send(w); } catch (e) { res.status(204).end(); } };
+  const bdOf = req => BOARDS.get(String(req.params.id));
+  app.get('/api/ai/board/:id', (req, res) => { const bd = bdOf(req); if (!bd) return bad(res, 404, 'not_found'); res.set('cache-control', 'no-store'); res.json({ ok: true, title: bd.title, total: bd.total, start: bd.start, tts: ai.provider === 'gemini' }); });
+  app.get('/api/ai/board/:id/page/:n', async (req, res) => {
+    const bd = bdOf(req), n = Number(req.params.n); if (!bd || !(n >= 1 && n <= bd.total)) return bad(res, 404, 'not_found'); if (!limit('bpg' + bd.id, 150, 3600e3)) return bad(res, 429, 'slow_down');
+    try { const pg = await boardGet(bd, n); res.set('cache-control', 'no-store'); res.json({ ok: true, n, total: bd.total, page: pg }); } catch (e) { bad(res, e.message === 'ai_limit' ? 429 : 503, e.message === 'ai_limit' ? 'ai_limit' : /^ai_/.test(e.message) ? e.message : 'board_failed'); }
   });
+  app.get('/api/ai/board/:id/tts/:n/:i', async (req, res) => { const bd = bdOf(req), pg = bd && bd.pages[Number(req.params.n)], l = pg && pg.lines[Number(req.params.i)]; if (!l || !l.say) return res.status(204).end(); if (!limit('btts' + req.ip, 90, 60e3)) return res.status(429).end(); return sendWav(res, bd.id + ':' + req.params.n + ':' + req.params.i, l.say); });
+  app.post('/api/ai/board/:id/ask', async (req, res) => {
+    const bd = bdOf(req); if (!bd) return bad(res, 404, 'not_found'); if (!limit('bak' + bd.id, 30, 3600e3)) return bad(res, 429, 'slow_down'); const q = S((req.body || {}).q, 600); if (q.length < 2) return bad(res, 400, 'missing_text');
+    try { const text = String(await ai.boardAsk(bd.title, bd.pages[Number(req.body.n)] || null, q) || '').trim(); const aid = 'a' + nid(); bd.ans = bd.ans || {}; if (Object.keys(bd.ans).length > 40) delete bd.ans[Object.keys(bd.ans)[0]]; bd.ans[aid] = text; res.json({ ok: true, text, aid }); } catch (e) { bad(res, 503, /^ai_/.test(e.message) ? e.message : 'board_failed'); }
+  });
+  app.get('/api/ai/board/:id/tta/:aid', async (req, res) => { const bd = bdOf(req), t = bd && bd.ans && bd.ans[req.params.aid]; if (!t) return res.status(204).end(); if (!limit('btts' + req.ip, 90, 60e3)) return res.status(429).end(); return sendWav(res, bd.id + ':' + req.params.aid, t); });
 
   /* ---------- HTTP ---------- */
   const user = (req, res) => who(req, res);
