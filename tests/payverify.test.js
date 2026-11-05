@@ -23,3 +23,10 @@ test('lookup — ቁልፍ እና ትክክለኛ አካል ይልካል፤ HTTP
   const r = await v.lookup({ method: 'telebirr', ref: 'ABC', amount: 500, accounts: ACC }); assert.equal(seen[1].headers.authorization, 'Bearer k'); assert.equal(JSON.parse(seen[1].body).ref, 'ABC'); assert.equal(r.amount, 500); assert.ok(Number.isFinite(r.ts));
   await assert.rejects(() => create({ PAY_VERIFIER_URL: 'http://v' }, async () => ({ ok: false, status: 500 })).lookup({}), /verifier 500/);
 });
+
+test('SMS ሙሉ ጽሑፍ ቢለጠፍ የግብይት ቁጥሩ ይወጣል', () => {
+  const { extractRef } = require('../server/payverify'), assert = require('node:assert/strict');
+  assert.equal(extractRef('DK12ABC345'), 'DK12ABC345');
+  assert.equal(extractRef('You have received ETB 500.00 from Abebe. Your transaction number is DK12ABC345. Thank you'), 'DK12ABC345');
+  assert.equal(extractRef('ወደ ሂሳብዎ 500 ብር ገብቷል። https://transactioninfo.ethiotelecom.et/receipt/dk12abc345'), 'DK12ABC345');
+});

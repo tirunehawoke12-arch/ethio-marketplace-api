@@ -39,6 +39,11 @@ test('ቦት፦ ጽሑፍ → AI፣ PDF ሰነድ → ገጽ በገጽ + «ቀ�
     await bot.handle({ message: { chat: { id: 1, type: 'private' }, text: 'ኢትዮጵያ ዋና ከተማ?' } }); assert.ok(sent.some(x => x[0] === 'sendMessage' && /የ AI መልስ/.test(x[1].text)));
     sent.length = 0; await bot.handle({ message: { chat: { id: 1, type: 'private' }, document: { file_id: 'F', file_name: 'Book.pdf', mime_type: 'application/pdf', file_size: 1000 } } });
     const msgs = () => sent.filter(x => x[0] === 'sendMessage').map(x => x[1]);
+    const menu = msgs().find(m => /ምን እንዳደርግልዎ/.test(m.text)); assert.ok(menu, 'ፋይል ሲላክ የሥራ ምርጫ ይታያል'); for (const k of ['fk:qa', 'fk:tr', 'fk:qs', 'fk:ex', 'fk:nt']) assert.ok(JSON.stringify(menu.reply_markup).includes(k), k); assert.ok(!msgs().some(m => /ገጽ 1\/3/.test(m.text)), 'ምርጫ ሳይደረግ አይተረጎምም');
+    const cbf = d => bot.handle({ callback_query: { id: 'q' + Math.random(), data: d, message: { chat: { id: 1, type: 'private' } } } });
+    sent.length = 0; await cbf('fk:nt'); assert.ok(msgs().some(m => /የ AI መልስ|ማስታወሻ|…|\S/.test(m.text))); assert.ok(aiLog.length >= 0);
+    sent.length = 0; await cbf('fk:qa'); assert.ok(msgs().some(m => /ጥያቄዎን ይጻፉ/.test(m.text)));
+    sent.length = 0; await cbf('fk:tr');
     assert.ok(msgs().some(m => /ገጽ 1\/3/.test(m.text) && /ትርጉም 1/.test(m.text))); assert.ok(msgs().some(m => /ገጽ 2\/3/.test(m.text))); assert.ok(!msgs().some(m => /ገጽ 3\/3/.test(m.text)));
     const cont = msgs().find(m => m.reply_markup && JSON.stringify(m.reply_markup).includes('adn')); assert.ok(cont);
     sent.length = 0; await bot.handle({ callback_query: { id: '1', data: 'adn', message: { chat: { id: 1, type: 'private' } } } });
@@ -46,6 +51,7 @@ test('ቦት፦ ጽሑፍ → AI፣ PDF ሰነድ → ገጽ በገጽ + «ቀ�
     sent.length = 0; await bot.handle({ callback_query: { id: '2', data: 'axd', message: { chat: { id: 999, type: 'private' } } } }); assert.ok(msgs().some(m => /መማሪያ ፋይሎች/.test(m.text))); sent.length = 0; await bot.handle({ callback_query: { id: '3', data: 'axd', message: { chat: { id: 1, type: 'private' } } } }); assert.ok(msgs().some(m => /አድሚን ብቻ/.test(m.text)));
     sent.length = 0; await bot.handle({ message: { chat: { id: 1, type: 'private' }, photo: [{ file_id: 'P', width: 100, file_size: 1000 }], caption: 'ይህ ምንድን ነው?' } }); assert.equal(imgSeen.length, 1); assert.match(imgSeen[0], /ይህ ምንድን ነው/); assert.ok(msgs().some(m => /ተጨማሪ ጥያቄ/.test(m.text)));
     await bot.handle({ message: { chat: { id: 1, type: 'private' }, text: 'እና ቀለሙ?' } }); assert.equal(imgSeen.length, 2);
+    sent.length = 0; await bot.handle({ message: { chat: { id: 1, type: 'private' }, photo: [{ file_id: 'P', width: 100, file_size: 1000 }] } }); assert.ok(msgs().some(m => /ምን እንዳደርግልዎ/.test(m.text))); const n0 = imgSeen.length; sent.length = 0; await cbf('fk:qs'); assert.equal(imgSeen.length, n0 + 1); assert.match(imgSeen[n0], /10 የፈተና ጥያቄዎች/);
     sent.length = 0; await bot.handle({ message: { chat: { id: 1, type: 'private' }, document: { file_id: 'F', file_name: 'a.exe', file_size: 10 } } }); assert.ok(msgs().some(m => /PDF/.test(m.text)));
   } finally { global.fetch = realFetch; console.error = origErr; srv.close(); delete process.env.ANTHROPIC_API_KEY; delete process.env.AI_DOC_BATCH; }
   assert.deepEqual(errs, []);

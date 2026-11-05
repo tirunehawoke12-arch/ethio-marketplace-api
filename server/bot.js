@@ -749,6 +749,7 @@ module.exports = function bot(c) {
     const s = ses(chat);
     if (/^ax/.test(k)) return isAdmin(chat) ? axRoute(chat, k, a, x) : send(chat, '⛔ አድሚን ብቻ');
     if (k === 'aih') return send(chat, { m: '🛍 ለምሳሌ ይጻፉ፦\n• «ሶፋ ምን ዋጋ አለ?»\n• «በአዲስ አበባ ክፍት ሥራዎች አሉ?»\n• «ሱቅ እንዴት እከፍታለሁ?»\n• «ክፍያው እንዴት ይሠራል?»', d: '📄 PDF ወይም PowerPoint (.pptx) ፋይል ይላኩ — እንግሊዝኛውን ገጽ በገጽ በአውድ ወደ አማርኛ እተረጉማለሁ።', u: '🩺 አጣዳፊ ጥያቄ ሁልጊዜ ነጻ ነው፤ ለምሳሌ «አሞኛል፣ ትኩሳት እና ራስ ምታት አለኝ ምን ላድርግ?» ብለው ይጻፉ። (ከባድ አደጋ ከሆነ ወዲያው ሆስፒታል/አምቡላንስ 907)', s: '🎓 ለምሳሌ «የ cell membrane ተግባር ምንድን ነው?» ወይም «ይህን ርዕስ አጭር ማስታወሻ አድርግልኝ» ብለው ይጻፉ።' }[a] || '🤖'); if (k === 'aipay') return aiPayStart(chat, uid, a); if (k === 'aiap') { const r = await svc.decide(a, x === '1'); return send(chat, r.ok ? (x === '1' ? '✅ ጸድቋል' : '❌ ውድቅ ተደርጓል') : bad(r)); }
+    if (k === 'fk') return fkRun(chat, uid, a);
     if (k === 'adn') return docRun(chat, uid); if (k === 'adfo') return fontMenu(chat, DOCS.get(chat)); if (k === 'adfp' || k === 'adfs') { const dd = DOCS.get(chat), o = { ...DO.optOf((dd && dd.opt) || ses(chat).docopt) }; if (k === 'adfp' && DO.PRESETS[a]) o.preset = a; if (k === 'adfs' && DO.SIZES[a]) o.size = a; ses(chat).docopt = o; if (dd) dd.opt = o; save(); return fontMenu(chat, dd); }
     if (k === 'adf') { const d = DOCS.get(chat); return d ? docFile(chat, d) : send(chat, '⌛ ፋይሉ ጊዜው አልፏል።'); } if (k === 'adx') { DOCS.delete(chat); return send(chat, '✖️ ትርጉሙ ቆሟል።'); }
     switch (k) {
@@ -885,19 +886,41 @@ module.exports = function bot(c) {
     const cap = String(m.caption || '').trim().slice(0, 1500), d = m.document; let fileId, name = 'photo.jpg', mime = 'image/jpeg', size = 0;
     if (m.photo) { const p = (m.photo || []).filter(x => (x.file_size || 0) <= 5 * 1048576).sort((a, b2) => (b2.width || 0) - (a.width || 0))[0] || m.photo[0]; fileId = p.file_id; size = p.file_size || 0; }
     else { fileId = d.file_id; name = d.file_name || 'file'; mime = d.mime_type || ''; size = d.file_size || 0; }
-    if (size > 14 * 1048576) return send(chat, '⚠️ ፋይሉ ከ14MB በላይ ነው።'); typing(chat); let buf; try { buf = await tgDownload(fileId); } catch (e) { return send(chat, '⚠️ ፋይሉን ማውረድ አልተቻለም — እንደገና ይላኩ።'); }
+    if (size > (/\.(pdf|pptx)$/i.test(name) ? 19.5 : 14) * 1048576) return send(chat, `⚠️ ፋይሉ ከ${/\.(pdf|pptx)$/i.test(name) ? 20 : 14}MB በላይ ነው።`); typing(chat); let buf; try { buf = await tgDownload(fileId); } catch (e) { return send(chat, '⚠️ ፋይሉን ማውረድ አልተቻለም — እንደገና ይላኩ።'); }
     let media = null, text = cap || QA_DEF;
     if (/^image\/(jpeg|png|webp|gif)$/.test(mime)) media = { mime, buf };
     else if (/pdf/i.test(mime) || /\.pdf$/i.test(name)) media = { mime: 'application/pdf', buf };
     else if (/\.pptx$/i.test(name)) { try { const { parsePptx } = require('../src/lib/pptx'); const r = await parsePptx(buf); text = `${cap || QA_DEF}\n\n[የፋይሉ ጽሑፍ — ${name}]\n` + r.slides.map((s, i) => AIM.slideText({ title: s.title, blocks: s.blocks }, i)).join('\n\n').slice(0, 40000); } catch (e) { return send(chat, '⚠️ PPTX መነበብ አልቻለም።'); } }
     else if (TXT_RE.test(name)) { let body = ''; try { if (/\.docx$/i.test(name)) { const { readZip } = require('../src/lib/pptx'), z = readZip(buf), x = await z.text('word/document.xml'); body = x.replace(/<\/w:p>/g, '\n').replace(/<w:tab\/>/g, ' ').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'); } else body = buf.toString('utf8'); } catch (e) { return send(chat, '⚠️ ፋይሉ መነበብ አልቻለም።'); } text = `${cap || QA_DEF}\n\n[የፋይሉ ጽሑፍ — ${name}]\n` + body.slice(0, 40000); }
     else return send(chat, '📎 ፎቶ (JPG/PNG)፣ PDF፣ PPTX፣ DOCX ወይም TXT/CSV ይላኩ።');
-    if (media) MEDIA.set(chat, { m: media, ts: Date.now() }); else MEDIA.delete(chat);
-    const tm = setInterval(() => typing(chat), 4500);
+    const body = media ? '' : text.slice((cap || QA_DEF).length), isPdf = /pdf/i.test(mime) || /\.pdf$/i.test(name), isPpt = /\.pptx$/i.test(name);
+    MEDIA.set(chat, { m: media, t: body, name, isPdf, isPpt, buf: isPdf || isPpt ? buf : null, img: !!media && !isPdf, ts: Date.now() });
+    if (!cap) return fileMenu(chat, name);          // ምንጊዜም ምን እንደሚፈልጉ ይጠይቃል
+    return runMedia(chat, uid, media, text);
+  }
+  const FK = { qa: '❓ ጥያቄዎችን መመለስ', tr: '🌐 መተርጎም', qs: '📝 ጥያቄ ማውጣት', ex: '📖 ማብራራት', nt: '🗒 አጭር ማስታወሻ', sm: '📌 ማጠቃለያ', tx: '🔤 ጽሑፍ ማውጣት' };
+  const FKP = {
+    qs: 'ከዚህ ፋይል ይዘት ብቻ በመነሳት የተለያዩ 10 የፈተና ጥያቄዎች (ምርጫ እና አጭር መልስ) ከትክክለኛ መልሶቻቸው ጋር በአማርኛ አውጣ። ጥያቄዎቹ ዋና ዋና ነጥቦችን ይሸፍኑ።',
+    ex: 'የዚህን ፋይል ዋና ዋና ርዕሶች አንድ በአንድ በቀላል አማርኛ አብራራ፤ አስፈላጊ ቃላትን በቅንፍ እንግሊዝኛውን ጠብቅ፤ ምሳሌ ጨምር።',
+    nt: 'ከዚህ ፋይል አጭር የጥናት ማስታወሻ (short note) በአማርኛ ሥራ፤ ዋና ዋና ነጥቦችን በነጥብ (•) ብቻ፣ ርዕስ በርዕስ፣ በተቻለ መጠን አጭር።',
+    sm: 'ይህን ፋይል በአማርኛ ከ8 ነጥብ ባልበለጠ አጠቃልል።',
+    tx: 'በፋይሉ/ፎቶው ውስጥ ያለውን ጽሑፍ ሁሉ እንዳለ በትክክል አውጣ (ምንም ሳትጨምር)።',
+    trx: 'በዚህ ፋይል/ፎቶ ውስጥ ያለውን ጽሑፍ ሁሉ በአውድ ወደ ተፈጥሯዊ አማርኛ ተርጉም (የሥዕል/ሰንጠረዥ ጽሑፍም ጭምር)።'
+  };
+  const fileMenu = (chat, name) => send(chat, `📎 <b>${H(clip(name || 'ፋይል', 60))}</b> ተቀብያለሁ።\nምን እንዳደርግልዎ ይፈልጋሉ?`, ik([[b(FK.qa, 'fk:qa'), b(FK.tr, 'fk:tr')], [b(FK.qs, 'fk:qs'), b(FK.ex, 'fk:ex')], [b(FK.nt, 'fk:nt'), b(FK.sm, 'fk:sm')], [b(FK.tx, 'fk:tx')]]));
+  async function fkRun(chat, uid, act) {
+    const lm = MEDIA.get(chat); if (!lm || Date.now() - lm.ts > 20 * 60e3) return send(chat, '⌛ ፋይሉ ጊዜው አልፏል — እንደገና ይላኩ።');
+    if (act === 'qa') return send(chat, '❓ ስለ ፋይሉ ጥያቄዎን ይጻፉ (ወይም በድምፅ ይጠይቁ) — ለ20 ደቂቃ ፋይሉን አስታውሳለሁ።');
+    if (act === 'tr' && (lm.isPdf || lm.isPpt)) { if (!aiReady()) return send(chat, aiOff); return startDoc(chat, uid, lm.buf, lm.name, lm.isPdf); }
+    const q = act === 'tr' ? FKP.trx : FKP[act]; if (!q) return;
+    await runMedia(chat, uid, lm.m, lm.t ? q + '\n\n[የፋይሉ ጽሑፍ — ' + lm.name + ']\n' + lm.t : q, true);
+  }
+  async function runMedia(chat, uid, media, text, again) {
+    const tm = setInterval(() => typing(chat), 4500); typing(chat);
     try {
       const r = await svc.converse({ uid: uid || 'admin', key: String(chat), text, admin: isAdmin(chat), media });
       if (!r.ok) return send(chat, r.error === 'ai_disabled' ? '⏸ AI ለጊዜው በአድሚን ተዘግቷል።' : r.error === 'ai_blocked' ? '⛔ የ AI አገልግሎት ለእርስዎ ተዘግቷል።' : r.error === 'ai_limit' ? '⛔ የዛሬው የ AI መልእክት ገደብ አልቋል።' : aiOff, menuKb(chat));
-      if (r.paywall) return await paywall(chat, uid, r.paywall, r.text); await sendLong(chat, '', r.text || '…'); if (media) await send(chat, '💬 ስለዚህ ፋይል ተጨማሪ ጥያቄ ይጻፉ (ለ20 ደቂቃ ይታወሳል)።');
+      if (r.paywall) return await paywall(chat, uid, r.paywall, r.text); await sendLong(chat, '', r.text || '…'); const lm2 = MEDIA.get(chat); await send(chat, '💬 ስለዚህ ፋይል ተጨማሪ ጥያቄ ይጻፉ (ለ20 ደቂቃ ይታወሳል) ወይም ሌላ ይምረጡ፦', ik([[b(FK.qs, 'fk:qs'), b(FK.ex, 'fk:ex')], [b(FK.nt, 'fk:nt'), b(FK.tr, 'fk:tr')]]));
     } catch (e) { await send(chat, aiErr(e, chat)); } finally { clearInterval(tm); }
   }
   /* ===== ድምፅ፦ መጠየቅ (voice/audio → ጽሑፍ) እና መመለስ (ጽሑፍ → ድምፅ፣ ffmpeg ካለ OGG/Opus voice) ===== */
@@ -933,7 +956,7 @@ module.exports = function bot(c) {
     typing(chat); const tm = setInterval(() => typing(chat), 4500);
     try {
       const lm = MEDIA.get(chat), media = lm && Date.now() - lm.ts < 20 * 60e3 ? lm.m : null;          // የቅርብ ጊዜ ፎቶ/PDF ለተከታይ ጥያቄዎች ይታወሳል (20 ደቂቃ)
-      const r = await svc.converse({ uid: uid || 'admin', key: String(chat), text: t, admin: isAdmin(chat), media });
+      const r = await svc.converse({ uid: uid || 'admin', key: String(chat), text: lm && lm.t && media === null && Date.now() - lm.ts < 20 * 60e3 ? t + '\n\n[የፋይሉ ጽሑፍ — ' + lm.name + ']\n' + lm.t : t, admin: isAdmin(chat), media });
       if (!r.ok) return send(chat, r.error === 'ai_disabled' ? '⏸ AI ለጊዜው በአድሚን ተዘግቷል።' : r.error === 'ai_blocked' ? '⛔ የ AI አገልግሎት ለእርስዎ ተዘግቷል።' : r.error === 'ai_limit' ? '⛔ የዛሬው የ AI መልእክት ገደብ አልቋል — ነገ ይሞክሩ።' : aiOff, menuKb(chat));
       if (r.paywall) return await paywall(chat, uid, r.paywall, r.text); await sendLong(chat, '', r.text || '…'); const vo = ses(chat).vo; if (vo === 'on' || (vo !== 'off' && voice)) await speakTo(chat, r.text);
     } catch (e) { await send(chat, aiErr(e, chat)); } finally { clearInterval(tm); }
@@ -946,6 +969,10 @@ module.exports = function bot(c) {
     if ((d.file_size || 0) > 19.5 * 1048576) return send(chat, '⚠️ ፋይሉ ከ20MB በላይ ነው — ትንሽ ክፍል አድርገው ይላኩ።');
     for (const [k, v] of DOCS) if (Date.now() - v.ts > 3600e3) DOCS.delete(k); if (DOCS.size > 40) return send(chat, '⏳ አሁን ብዙ ሰው እየተረጎመ ነው — ከጥቂት ደቂቃ በኋላ ይሞክሩ።');
     typing(chat); let buf; try { buf = await tgDownload(d.file_id); } catch (e) { return send(chat, '⚠️ ፋይሉን ማውረድ አልተቻለም — እንደገና ይላኩ።'); }
+    return startDoc(chat, uid, buf, name, isPdf);
+  }
+  async function startDoc(chat, uid, buf, name, isPdf) {
+    for (const [k, v] of DOCS) if (Date.now() - v.ts > 3600e3) DOCS.delete(k); if (DOCS.size > 40) return send(chat, '⏳ አሁን ብዙ ሰው እየተረጎመ ነው — ከጥቂት ደቂቃ በኋላ ይሞክሩ።');
     const job = { kind: isPdf ? 'pdf' : 'pptx', name, ts: Date.now(), next: 1, total: 0, busy: false, orig: buf };
     if (isPdf) { job.buf = buf; job.split = await pdfSplit(buf); job.total = job.split ? job.split.n : AIM.countPdfPages(buf); if (job.total > 100) return send(chat, `⚠️ ፋይሉ ${job.total} ገጽ ነው — AI በአንድ ጊዜ እስከ 100 ገጽ ብቻ ያነባል። በ100 ገጽ ክፍል አድርገው ይላኩ።`); }
     else { try { const { parsePptx } = require('../src/lib/pptx'); const r = await parsePptx(buf); job.slides = r.slides.map(s => ({ title: s.title, blocks: s.blocks })); job.total = job.slides.length; } catch (e) { return send(chat, '⚠️ PPTX መነበብ አልቻለም — (PowerPoint 2007+ .pptx መሆኑን ያረጋግጡ)'); } if (!job.total) return send(chat, '⚠️ ስላይድ አልተገኘም።'); }
@@ -1025,7 +1052,7 @@ module.exports = function bot(c) {
       if (m.contact) return await authContact(chat, m);
       if (m.document && ses(chat).axup && isAdmin(chat)) return await axUpload(chat, m);
       if ((m.photo || m.document) && ses(chat).aiproof) return await aiProof(chat, m);
-      if (m.document) { const nm = m.document.file_name || '', tr = /pdf|presentationml/i.test(m.document.mime_type || '') || /\.(pdf|pptx)$/i.test(nm); return tr && !(m.caption && !/ተርጉ|ትርጉም|translat/i.test(m.caption)) ? await onDocument(chat, m) : await onMedia(chat, m); }
+      if (m.document) { const nm = m.document.file_name || '', tr = /pdf|presentationml/i.test(m.document.mime_type || '') || /\.(pdf|pptx)$/i.test(nm); return tr && m.caption && /ተርጉ|ትርጉም|translat/i.test(m.caption) ? await onDocument(chat, m) : await onMedia(chat, m); }
       if (m.photo && !ses(chat).flow) return await onMedia(chat, m);
       if (m.photo) return ses(chat).flow ? await flowPhoto(chat, m) : send(chat, '📷 ፎቶ ለመጠቀም መጀመሪያ ተገቢውን ቅጽ (ለምሳሌ ዕቃ መጨመር) ይክፈቱ።');
       if (typeof m.text === 'string') return await onText(chat, m.text, m);

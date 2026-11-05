@@ -79,4 +79,11 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a)) {
   return { get enabled() { return baseEnabled || sources.length > 0; }, get auto() { return this.enabled && autoOk; }, lookup, judge, check, isTb, kind,
     addSource: fn => { sources.push(fn); }, setClaim: fn => { claimFn = fn; }, onLedger: fn => { listeners.push(fn); }, notifyLedger: e => { for (const l of listeners) { try { Promise.resolve(l(e)).catch(() => { }); } catch (x) { } } } };
 }
-module.exports = { create, refKey, parseTelebirr };
+/* ተጠቃሚው የቴሌብር/ባንክ SMS ሙሉውን ቢለጥፍ የግብይት ቁጥሩን ያወጣል (መተግበሪያ አያስፈልግም) — ቁጥር ካልተገኘ ግብዓቱን እንዳለ ይመልሳል */
+function extractRef(t) {
+  const x = String(t == null ? '' : t).trim(); if (x.length <= 24 && !/\s/.test(x)) return x;
+  const u = /transactioninfo\.ethiotelecom\.et\/receipt\/([A-Z0-9]{6,20})/i.exec(x); if (u) return u[1].toUpperCase();
+  const k = /(?:transaction\s*(?:number|no\.?|id)|trans(?:action)?\s*ref(?:erence)?|ref(?:erence)?\s*(?:no\.?|number)?|ቁጥር|መለያ)\s*(?:is|:|፦|፡)?\s*([A-Z0-9]{6,20})\b/i.exec(x); if (k && /\d/.test(k[1])) return k[1].toUpperCase();
+  const c = (x.match(/\b[A-Z0-9]{8,14}\b/g) || []).filter(w => /\d/.test(w) && /[A-Z]/.test(w)); return c.length ? c[0] : x;
+}
+module.exports = { create, refKey, parseTelebirr, extractRef };

@@ -106,7 +106,7 @@ module.exports = function aisvc(ctx) {
     const mime = h.startsWith('ffd8ff') ? 'image/jpeg' : h.startsWith('89504e47') ? 'image/png' : buf.slice(0, 4).toString() === 'RIFF' && buf.slice(8, 12).toString() === 'WEBP' ? 'image/webp' : buf.slice(0, 4).toString() === '%PDF' ? 'application/pdf' : ''; return mime ? { mime, d, sz: buf.length } : 'bad';
   }
   async function buy(uid, b) {
-    const c = cfg(), p = planOf(c, S(b.plan, 12)); if (!p) return { ok: false, error: 'not_found' }; const method = S(b.method, 20), ref = S(b.ref, 40);
+    const c = cfg(), p = planOf(c, S(b.plan, 12)); if (!p) return { ok: false, error: 'not_found' }; const method = S(b.method, 20), ref = S(require('./payverify').extractRef(S(b.ref, 800)), 40);
     if (method.length < 2 || ref.length < 4) return { ok: false, error: 'payment_proof_required' }; if (tbOnly() && !isTb(method)) return { ok: false, error: 'telebirr_only' }; if (Object.values(col(REQ)).some(r => r.uid === uid && r.status === 'pending')) return { ok: false, error: 'already_requested' };
     const pf = readProof(b.proof); if (pf === 'bad') return { ok: false, error: 'bad_proof' }; if (!pf && c.requireProof) return { ok: false, error: 'proof_required' };
     const k = x => String(x).toUpperCase().replace(/[\s\-_.]/g, ''); if (Object.values(col(REQ)).some(r => r.status !== 'rejected' && k(r.ref) === k(ref))) return { ok: false, error: 'duplicate_reference' };
