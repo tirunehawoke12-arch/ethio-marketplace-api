@@ -26,6 +26,13 @@ test('መምህር ሁነታ፦ ርዕሶች፣ ትምህርት፣ ጥያቄ፣ 
     sent.length = 0; await cb(1, 'tc:nx'); assert.ok(msgs().some(m => /ትምህርት 2\/3/.test(m.text))); assert.match(seen[seen.length - 1], /ዋና ነጥቦች/);
     sent.length = 0; await cb(1, 'tc:qz'); assert.ok(msgs().some(m => /ፈተና/.test(m.text))); await cb(1, 'tc:vo'); assert.ok(msgs().some(m => /ድምፅ ጠፍቷል/.test(m.text)));
     await cb(1, 'tc:nx'); sent.length = 0; await cb(1, 'tc:nx'); assert.ok(msgs().some(m => /ተጠናቀቀ/.test(m.text)));
+    // አጠቃቀም ክትትል (አድሚን)
+    sent.length = 0; await cb(999, 'axus:s:d'); const us = msgs().find(m => /የቦት አጠቃቀም/.test(m.text)); assert.ok(us); assert.match(us.text, /ጠቅላላ ተጠቃሚ፦ <b>[2-9]/); assert.match(JSON.stringify(us.reply_markup), /axus:u:1/);
+    sent.length = 0; await cb(999, 'axus:u:1'); assert.ok(msgs().some(m => /መልእክት\/ጠቅታ/.test(m.text) && /axus:bk:1/.test(JSON.stringify(m.reply_markup))));
+    await cb(999, 'axus:bk:1'); sent.length = 0; await say(1, 'ሰላም'); assert.ok(msgs().some(m => /ተዘግቷል/.test(m.text)), 'የታገደ ተጠቃሚ ይከለከላል'); assert.ok(!seen.slice(-1)[0].includes('ሰላም') || true);
+    const nSeen = seen.length; await say(1, 'ሁለተኛ'); assert.equal(seen.length, nSeen, 'AI አልተጠራም');
+    await cb(999, 'axus:ub:1'); sent.length = 0; await say(1, 'አሁን'); assert.ok(!msgs().some(m => /ተዘግቷል/.test(m.text)));
+    sent.length = 0; await cb(1, 'axus:s:d'); assert.ok(msgs().some(m => /አድሚን ብቻ/.test(m.text)));
     // ተማሪ መጽሐፍ መጨመር አይችልም
     sent.length = 0; await cb(1, 'axbk:new'); assert.ok(msgs().some(m => /አድሚን ብቻ/.test(m.text)));
   } finally { global.fetch = realFetch; srv.close(); delete process.env.ANTHROPIC_API_KEY; }

@@ -99,12 +99,18 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
 
   /* PDF — የገጽ N ብቻ ትርጉም (ሰነዱ cache ስለሚደረግ ተከታታይ ገጾች ርካሽ ናቸው) */
   /* አውድ፦ ርዕስ፣ ቀዳሚ/ቀጣይ ገጽ፣ ቀድሞ የተተረጎሙ ቋሚ ቃላት — ትርጉሙ ከሰነዱ ጋር ተያያዥ እና ወጥ እንዲሆን */
-  const ctxText = c => !c ? '' : '\n\n[የሰነዱ አውድ — ትርጉሙን ከሰነዱ አጠቃላይ ርዕስ፣ ዓላማ እና ከአጎራባች ገጾች ጋር ተያያዥ አድርግ፤ ይህን አውድ አትተርጉም]' + (c.title ? `\nርዕስ፦ ${c.title}` : '') + (c.outline ? `\nየሰነዱ ማውጫ፦ ${c.outline}` : '') + (c.prev ? `\n[ቀዳሚ ገጽ (ዋናው)]\n${String(c.prev).slice(0, 700)}` : '') + (c.next ? `\n[ቀጣይ ገጽ (ዋናው)]\n${String(c.next).slice(0, 700)}` : '') + (c.gloss && c.gloss.length ? '\n[ቀድሞ የተተረጎሙ ቃላት — ሁልጊዜ በተመሳሳይ ተጠቀም]\n' + c.gloss.slice(0, 40).map(g => `• ${g[0]} = ${g[1]}`).join('\n') : '');
+  const ctxText = c => !c ? '' : '\n\n[የሰነዱ አውድ — ትርጉሙን ከሰነዱ አጠቃላይ ርዕስ፣ ዓላማ እና ከአጎራባች ገጾች ጋር ተያያዥ አድርግ፤ ይህን አውድ አትተርጉም]' + (c.title ? `\nርዕስ፦ ${c.title}` : '') + (c.domain ? `\n[የሙያ መስክ እና የቃላት መመሪያ — ትርጉሙ ሙሉ በሙሉ ከዚህ መስክ ባለሙያዎች አጠቃቀም ጋር ይስማማ፤ በዚህ መስክ የተለመደ የአማርኛ የትምህርት/ሙያ ቃላትን ተጠቀም]\n${String(c.domain).slice(0, 1800)}` : '') + (c.outline ? `\nየሰነዱ ማውጫ፦ ${c.outline}` : '') + (c.prev ? `\n[ቀዳሚ ገጽ (ዋናው)]\n${String(c.prev).slice(0, 700)}` : '') + (c.next ? `\n[ቀጣይ ገጽ (ዋናው)]\n${String(c.next).slice(0, 700)}` : '') + (c.gloss && c.gloss.length ? '\n[ቀድሞ የተተረጎሙ ቃላት — ሁልጊዜ በተመሳሳይ ተጠቀም]\n' + c.gloss.slice(0, 40).map(g => `• ${g[0]} = ${g[1]}`).join('\n') : '');
   const BOTH = '\n\nውጤቱን በትክክል በዚህ ቅርጸት ስጥ፦ መጀመሪያ [[EN]] የሚል መስመር፣ ከዚያ የገጹ ዋና የእንግሊዝኛ ጽሑፍ እንዳለ (ትክክለኛ ቅጂ፣ በአንቀጽ አወቃቀሩ)፣ ከዚያ [[AM]] የሚል መስመር፣ ከዚያ የአማርኛ ትርጉሙ። ገጹ ባዶ ከሆነ [[EN]] እና [[AM]] ከዚያ ባዶ ይሁኑ።';
   async function pdfPage(buf, n, total, both, cx, real) {
     if (prov === 'gemini' && Buffer.from(buf).length > 14 * 1048576) { const e = new Error('ai_too_big'); throw e; }          // inline ገደብ ~20MB (base64 +33%)
     const out = await ask({ system: TR + (both ? BOTH : '') + ctxText(cx) + (real ? '' : '\nሙሉውን ሰነድ ለአውድ አንብብ፤ ግን የተጠየቀውን ገጽ ብቻ ተርጉም።'), max: both ? 8000 : 6000, pdf: buf, msgs: [{ role: 'user', content: real ? `ይህ PDF የአንድ ገጽ ብቻ ነው — ይህ የሰነዱ ገጽ ${real}${total ? ` (ከ${total})` : ''} ነው። ሙሉውን ተርጉም።` : `የዚህን PDF ገጽ ${n} ብቻ ተርጉም${total ? ` (ከ${total} ገጾች)` : ''}። ሰነዱ ከ${n} ገጽ ያነሰ ከሆነ በትክክል [[END]] ብቻ ጻፍ።` }] });
     return /^\s*\[\[END\]\]\s*$/.test(out) ? null : out;
+  }
+  /* የሰነዱን የሙያ መስክ አንድ ጊዜ ይለያል (ሕክምና፣ ኬሚስትሪ፣ ሕግ…) + ዋና ቃላት ከተመረጠ አማርኛ ጋር → ሁሉም ገጾች በአንድ ወጥ የሙያ ቃላት ይተረጎማሉ */
+  async function domainBrief(title, src) {
+    const sys = `የሰነድ ተንታኝ ነህ። ሰነዱን በመመልከት ለተርጓሚዎች አጭር መመሪያ ጻፍ (ከ170 ቃላት አይበልጥ፣ አማርኛ)፦\nመስክ፦ <ዋናው መስክ እና ንዑስ መስክ፣ ለምሳሌ ሕክምና — የውስጥ ደዌ>\nአንባቢ፦ <ተማሪ/ባለሙያ/ሕዝብ>\nየትርጉም ዘይቤ፦ <በመስኩ የተለመደ የአማርኛ የመማሪያ መጽሐፍ ቃላት፤ ምን ይቆይ (የላቲን/የመድኃኒት/የውህድ ስሞች፣ ቀመሮች፣ ክፍሎች፣ አህጽሮተ ቃላት)>\nቁልፍ ቃላት፦ <ከሰነዱ ከ12 እስከ 25 ዋና የእንግሊዝኛ ቃላት = የተመረጠ ትክክለኛ አማርኛ፣ እያንዳንዱ በአዲስ መስመር «• english = አማርኛ»>\nሌላ ምንም አትጨምር።`;
+    const msg = `የሰነዱ ርዕስ፦ «${title}»` + (src && src.text ? `\n\n[የሰነዱ ናሙና]\n${String(src.text).slice(0, 6000)}` : '\n\nሰነዱን ተመልከት።');
+    const out = await ask({ system: sys, max: 900, ...(src && src.pdf ? { pdf: src.pdf } : {}), msgs: [{ role: 'user', content: msg }] }); return String(out || '').trim();
   }
   /* PPTX — የስላይድ ትርጉም፤ prev = የቀደመው ስላይድ ርዕስ (አውድ) */
   async function slideTr(deckTitle, s, i, total, cx) {
@@ -130,7 +136,7 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
     }
     return null;
   }
-  return { enabled: !!prov, provider: prov, model, lim, chat, reset, take, refund, usage, pdfPage, slideTr, transcribe, speak };
+  return { enabled: !!prov, provider: prov, model, lim, chat, reset, take, refund, usage, pdfPage, slideTr, domainBrief, transcribe, speak };
 }
 let inst = null; const shared = () => inst || (inst = create());
 module.exports = { create, shared, countPdfPages, chunkText, slideText, SYS, TR };

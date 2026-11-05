@@ -525,7 +525,7 @@ module.exports = function bot(c) {
     const c = r.counts;
     return send(chat, `🛡 <b>አድሚን</b>\n🏪 ሱቆች ${c.shops} · 🛍 ዕቃዎች ${c.products} · 📦 ትዕዛዞች ${c.orders}\n💵 GMV፦ ${ETB(c.gmv)} · 💰 ኮሚሽን፦ ${ETB(c.commission)}\n⚙️ ኮሚሽን ${r.config.commissionPct}%`, ik([
       [b('🛡 እምነት (ባጅ/ሪፖርት)', 'atr'), b('📣 ማስታወቂያ', 'abc'), b('📊 ሪፖርት', 'arp')],
-      [b(`💳 ክፍያ ለማረጋገጥ (${r.payments.length})`, 'apay')], [b(`🏪 ሱቅ ለማጽደቅ (${r.pendingShops.length})`, 'ashp'), b(`💰 ለሻጭ ለመክፈል (${r.toSettle.length})`, 'asl')], [b(`↩️ ተመላሽ (${r.refunds.length})`, 'arfl'), b(`⚖️ ክርክር (${r.disputes.length})`, 'adis')], [b('🌐 ገጾች/ሰዎች ቁጥጥር', 'amod')], [b('🤖 AI ቁጥጥር', 'axai'), b('🎓 መማሪያ ቁጥጥር', 'axd')], [b('📚 መማሪያ መጻሕፍት', 'axbk:l')], [u('🖥 የአድሚን ድረ-ገጽ', web('/admin'))]]));
+      [b(`💳 ክፍያ ለማረጋገጥ (${r.payments.length})`, 'apay')], [b(`🏪 ሱቅ ለማጽደቅ (${r.pendingShops.length})`, 'ashp'), b(`💰 ለሻጭ ለመክፈል (${r.toSettle.length})`, 'asl')], [b(`↩️ ተመላሽ (${r.refunds.length})`, 'arfl'), b(`⚖️ ክርክር (${r.disputes.length})`, 'adis')], [b('🌐 ገጾች/ሰዎች ቁጥጥር', 'amod')], [b('🤖 AI ቁጥጥር', 'axai'), b('🎓 መማሪያ ቁጥጥር', 'axd')], [b('📚 መማሪያ መጻሕፍት', 'axbk:l'), b('📊 አጠቃቀም', 'axus:s:d')], [u('🖥 የአድሚን ድረ-ገጽ', web('/admin'))]]));
   }
   async function adminList(chat, kind) {
     const r = await AD('GET', '/api/market/admin/overview'); if (!r.ok) return send(chat, bad(r));
@@ -747,6 +747,7 @@ module.exports = function bot(c) {
     if (!uid && !(isAdmin(chat) && /^(ax|axbk|ad|avp|ast|arf|arl|ash|apt|amod|apay|asl|arfl|adis|ashp|atr|abc|bcgo|bcx|arp|aiap)/.test(k))) return authStart(chat);
     if (/^(ad|avp|ast|arf|arl|ash|ashr|apt|amod|apay|asl|arfl|adis|ashp|atr|atrq|atrp|atrph|abc|bcgo|bcx|arp|aiap)$/.test(k) && !isAdmin(chat)) return send(chat, '⛔ አድሚን ብቻ');
     const s = ses(chat);
+    if (k === 'axus') return axUsRoute(chat, a, x, data.split(':')[3]);
     if (/^ax/.test(k) && k !== 'axbk') return isAdmin(chat) ? axRoute(chat, k, a, x) : send(chat, '⛔ አድሚን ብቻ');
     if (k === 'aih') return send(chat, { m: '🛍 ለምሳሌ ይጻፉ፦\n• «ሶፋ ምን ዋጋ አለ?»\n• «በአዲስ አበባ ክፍት ሥራዎች አሉ?»\n• «ሱቅ እንዴት እከፍታለሁ?»\n• «ክፍያው እንዴት ይሠራል?»', d: '📄 PDF ወይም PowerPoint (.pptx) ፋይል ይላኩ — እንግሊዝኛውን ገጽ በገጽ በአውድ ወደ አማርኛ እተረጉማለሁ።', u: '🩺 አጣዳፊ ጥያቄ ሁልጊዜ ነጻ ነው፤ ለምሳሌ «አሞኛል፣ ትኩሳት እና ራስ ምታት አለኝ ምን ላድርግ?» ብለው ይጻፉ። (ከባድ አደጋ ከሆነ ወዲያው ሆስፒታል/አምቡላንስ 907)', s: '🎓 ለምሳሌ «የ cell membrane ተግባር ምንድን ነው?» ወይም «ይህን ርዕስ አጭር ማስታወሻ አድርግልኝ» ብለው ይጻፉ።' }[a] || '🤖'); if (k === 'aipay') return aiPayStart(chat, uid, a); if (k === 'aiap') { const r = await svc.decide(a, x === '1'); return send(chat, r.ok ? (x === '1' ? '✅ ጸድቋል' : '❌ ውድቅ ተደርጓል') : bad(r)); }
     if (k === 'fk') return fkRun(chat, uid, a);
@@ -1008,6 +1009,43 @@ module.exports = function bot(c) {
   async function axBooks(chat) {
     const bs = TB().books; return send(chat, `📚 <b>መማሪያ መጻሕፍት</b> (${bs.length})\n\n➕ ለመጨመር፦ ፋይሉን ከ caption «ርዕስ | ክፍል/ትምህርት» ጋር ይላኩ።`, ik([[b('➕ መጽሐፍ ጨምር', 'axbk:new')], ...bs.slice(0, 30).map(k => [b('🗑 ' + clip(k.title, 40), 'axbk:d:' + k.id)])]));
   }
+
+  /* ===== 📊 የቦት አጠቃቀም ክትትል (አድሚን)፦ ማን፣ መቼ፣ ለምን ያህል ጊዜ — እና ማገድ/ዕለታዊ የጊዜ ገደብ ===== */
+  const US = () => (S.__use || (S.__use = { users: {}, cfg: { cap: 0 } })), dayKey = t => new Date((t || Date.now()) + 3 * 3600e3).toISOString().slice(0, 10), GAP = 5 * 60e3;
+  const dur = ms => { const m = Math.round(ms / 60e3); return m >= 60 ? Math.floor(m / 60) + ' ሰዓት ' + (m % 60) + ' ደ' : m + ' ደቂቃ'; };
+  function track(chat, from, kind) {          // በእያንዳንዱ መልእክት/ጠቅታ፦ የክፍለ-ጊዜ ጊዜ ይጨምራል (ከ5 ደቂቃ ያነሰ ልዩነት ብቻ እንደ ንቁ ጊዜ)
+    const U = US(), now = Date.now(), k = String(chat), u = U.users[k] || (U.users[k] = { f: now, l: 0, n: 0, t: 0, d: {}, name: '' });
+    if (u.l) { const g = now - u.l; if (g > 0 && g < GAP) { u.t += g; const dk = dayKey(now); u.d[dk] = (u.d[dk] || 0) + g; } }
+    u.l = now; u.n++; if (from) u.name = [from.first_name, from.last_name].filter(Boolean).join(' ').slice(0, 40) + (from.username ? ' @' + from.username : '');
+    const ks = Object.keys(u.d); if (ks.length > 30) for (const x of ks.sort().slice(0, ks.length - 30)) delete u.d[x]; save(); return u;
+  }
+  function gate(chat) {          // ከታገደ ወይም የዕለት ገደብ ካለፈ ጽሑፍ ይመልሳል (አድሚን አይታገድም)
+    if (isAdmin(chat)) return null; const U = US(), u = U.users[String(chat)]; if (!u) return null;
+    if (u.blk) return '⛔ የቦቱ አገልግሎት ለእርስዎ ተዘግቷል። አድሚንን ያነጋግሩ።';
+    const cap = Number(U.cfg.cap) || 0; if (cap > 0 && (u.d[dayKey()] || 0) >= cap * 60e3) return `⏳ የዛሬው የቦት አጠቃቀም ጊዜዎ (${cap} ደቂቃ) አልቋል — ነገ ይቀጥሉ።`; return null;
+  }
+  const sumDays = (u, n) => { let t = 0; for (let i = 0; i < n; i++) t += u.d[dayKey(Date.now() - i * 86400e3)] || 0; return t; };
+  const uName = (chat, u) => { const uid = uidOf(chat); let nm = u.name || ''; try { const a = uid && (getStore().docs['data/users/' + uid] || {}).acct; if (a && a.name) nm = a.name + (a.phone ? ' · ' + a.phone : ''); } catch (e) { } return nm || ('#' + chat); };
+  async function axUsage(chat, mode) {
+    const U = US(), all = Object.entries(U.users), now = Date.now(), dk = dayKey();
+    const online = all.filter(([, u]) => now - u.l < GAP).length, today = all.filter(([, u]) => (u.d[dk] || 0) > 0 || dayKey(u.l) === dk), wk = all.filter(([, u]) => now - u.l < 7 * 86400e3);
+    const tT = today.reduce((a, [, u]) => a + (u.d[dk] || 0), 0), blk = all.filter(([, u]) => u.blk).length;
+    const rank = (mode === 'w' ? all.map(([c, u]) => [c, u, sumDays(u, 7)]) : mode === 'a' ? all.map(([c, u]) => [c, u, u.t]) : all.map(([c, u]) => [c, u, u.d[dk] || 0])).filter(x => x[2] > 0).sort((a, b2) => b2[2] - a[2]).slice(0, 12);
+    const head = `📊 <b>የቦት አጠቃቀም</b>\n👥 ጠቅላላ ተጠቃሚ፦ <b>${all.length}</b>\n🟢 አሁን ንቁ (5 ደ)፦ <b>${online}</b>\n📅 ዛሬ፦ <b>${today.length}</b> ሰው · ${dur(tT)} ጠቅላላ${today.length ? ' (አማካይ ' + dur(tT / today.length) + ')' : ''}\n🗓 ባለፉት 7 ቀን፦ <b>${wk.length}</b> ሰው\n🚫 የታገዱ፦ ${blk}\n⏱ የዕለት ገደብ፦ ${Number(U.cfg.cap) ? U.cfg.cap + ' ደቂቃ/ሰው' : 'የለም'}\n\n🏆 <b>${mode === 'w' ? 'የ7 ቀን' : mode === 'a' ? 'ሁሉም ጊዜ' : 'የዛሬ'} ከፍተኛ ተጠቃሚዎች</b>`;
+    return send(chat, head, ik([...rank.map(([c, u, t]) => [b(`${now - u.l < GAP ? '🟢' : u.blk ? '🚫' : '👤'} ${clip(uName(c, u), 26)} · ${dur(t)}`, 'axus:u:' + c)]), [b('📅 ዛሬ', 'axus:s:d'), b('🗓 7 ቀን', 'axus:s:w'), b('♾ ሁሉም', 'axus:s:a')], [b('⏱ የዕለት ገደብ', 'axus:cap'), b('🔄 አድስ', 'axus:s:' + (mode || 'd'))]]));
+  }
+  async function axUser(chat, id) {
+    const u = US().users[id]; if (!u) return send(chat, '❌ አልተገኘም።'); const dk = dayKey(), cap = Number(US().cfg.cap) || 0;
+    const days = Object.keys(u.d).sort().slice(-7).map(x => `${x.slice(5)}፦ ${dur(u.d[x])}`).join(' · ') || '—';
+    return send(chat, `👤 <b>${H(uName(id, u))}</b>\n🆔 ${H(id)}\nየመጀመሪያ፦ ${new Date(u.f + 3 * 3600e3).toISOString().slice(0, 16).replace('T', ' ')}\nመጨረሻ፦ ${new Date(u.l + 3 * 3600e3).toISOString().slice(0, 16).replace('T', ' ')}${Date.now() - u.l < GAP ? ' 🟢 አሁን ንቁ' : ''}\n💬 መልእክት/ጠቅታ፦ ${u.n}\n⏱ ዛሬ፦ ${dur(u.d[dk] || 0)}${cap ? ' / ' + cap + ' ደ' : ''} · 7 ቀን፦ ${dur(sumDays(u, 7))} · ጠቅላላ፦ ${dur(u.t)}\n📆 ${days}\n${u.blk ? '🚫 <b>ታግዷል</b>' : '✅ ክፍት'}`, ik([[u.blk ? b('✅ ፍታ', 'axus:ub:' + id) : b('🚫 አግድ', 'axus:bk:' + id)], [b('⬅️ ዝርዝር', 'axus:s:d')]]));
+  }
+  async function axUsRoute(chat, a, x, y) {
+    if (!isAdmin(chat)) return send(chat, '⛔ አድሚን ብቻ');
+    if (a === 'u') return axUser(chat, x || y); if (a === 'bk' || a === 'ub') { const u = US().users[x]; if (u) { u.blk = a === 'bk'; save(); if (a === 'bk') send(x, '⛔ የቦቱ አገልግሎት ለእርስዎ ተዘግቷል።').catch(() => { }); } return axUser(chat, x); }
+    if (a === 'cap') return startFlow(chat, 'uscap', [{ k: 'cap', q: '⏱ በቀን ለእያንዳንዱ ተጠቃሚ የሚፈቀድ የቦት አጠቃቀም (ደቂቃ)፦ — 0 = ገደብ የለም', t: 'num', min: 0, max: 1440 }]);
+    return axUsage(chat, x || 'd');
+  }
+  FIN.uscap = async (chat, uid, d) => { US().cfg.cap = Number(d.cap) || 0; save(); return axUsage(chat, 'd'); };
   /* ===== ድምፅ፦ መጠየቅ (voice/audio → ጽሑፍ) እና መመለስ (ጽሑፍ → ድምፅ፣ ffmpeg ካለ OGG/Opus voice) ===== */
   const ffmpegBin = () => { if (process.env.FFMPEG_PATH) return process.env.FFMPEG_PATH; try { return require('ffmpeg-static') || 'ffmpeg'; } catch (e) { return 'ffmpeg'; } };
   const toOgg = (pcm, rate) => new Promise(res => {
@@ -1091,15 +1129,20 @@ module.exports = function bot(c) {
     const d = DOCS.get(chat); if (!d) return send(chat, '⌛ ፋይሉ ጊዜው አልፏል — እንደገና ይላኩ።'); if (d.busy) return; d.busy = true; d.ts = Date.now();
     let ticks = 0; const tm = setInterval(() => { typing(chat); if (++ticks === 6 && !done) send(chat, `⏳ ገጽ ${d.next} እየተተረጎመ ነው — ትልቅ ፋይል ስለሆነ ትንሽ ይወስዳል፤ አይቆምም…`).catch(() => { }); }, 4500); let done = 0, stop = false; d.cache = d.cache || {}; d.gloss = d.gloss || new Map();
     try {
+      if (d.domain === undefined) {          // የሰነዱ የሙያ መስክ (ሕክምና/ኬሚስትሪ…) አንድ ጊዜ ተለይቶ በሁሉም ገጾች ትርጉም ላይ ይተገበራል
+        d.domain = ''; typing(chat);
+        try { const src = d.kind === 'pdf' ? { pdf: d.buf && d.buf.length <= 8 * 1048576 ? d.buf : d.split ? await d.split.page(Math.min(1, Math.max(0, (d.total || 1) - 1))) : d.buf } : { text: d.slides.slice(0, 8).map((s2, i) => AIM.slideText(s2, i)).join('\n\n') }; d.domain = await ai.domainBrief(d.title, src); } catch (e) { d.domain = ''; }
+        const f = /መስክ\s*[፦:]\s*([^\n]{2,80})/.exec(d.domain || ''); if (f) send(chat, `🔬 የሰነዱ መስክ፦ <b>${H(f[1].trim())}</b> — ትርጉሙ በዚህ መስክ የሙያ ቃላት ይሠራል።`).catch(() => { });
+      }
       const last = d.total ? Math.min(d.total, d.next + ai.lim.batch - 1) : d.next + ai.lim.batch - 1, ns = [], tasks = new Map(); let limitHit = null, active = 0; const waiters = [];
       const gate = async fn => { while (active >= (d.par || ai.lim.par)) await new Promise(r => waiters.push(r)); active++; try { return await fn(); } finally { active--; const w = waiters.shift(); if (w) w(); } };
       const slideTx = i => (d.slides[i] ? AIM.slideText(d.slides[i], i).split('\n').slice(1).join('\n') : '');
       const outline = d.kind === 'pptx' ? d.slides.map((s2, i) => `${i + 1}. ${s2.title || ''}`).join('; ').slice(0, 700) : '';
       const work = n => gate(async () => {
-        const cx = { gloss: [...d.gloss.values()].slice(-40), outline, ...(d.kind === 'pptx' ? { prev: slideTx(n - 2), next: slideTx(n) } : {}) };
+        const cx = { gloss: [...d.gloss.values()].slice(-40), outline, domain: d.domain, ...(d.kind === 'pptx' ? { prev: slideTx(n - 2), next: slideTx(n) } : {}) };
         let both = false;          // ዋናው ፋይል ሳይነካ ስለሚቀመጥ እንግሊዝኛውን መድገም አያስፈልግም (ፈጣን)
         for (let tr = 0; ; tr++) {
-          try { const v = d.kind === 'pdf' ? (d.split ? await ai.pdfPage(await d.split.page(n - 1), 1, d.total, both, { title: d.title, gloss: cx.gloss }, n) : await ai.pdfPage(d.buf, n, d.total, both, { title: d.title, gloss: cx.gloss })) : await ai.slideTr(d.title, d.slides[n - 1], n - 1, d.total, cx); d.cache[n] = v; return { ok: true, v }; }
+          try { const v = d.kind === 'pdf' ? (d.split ? await ai.pdfPage(await d.split.page(n - 1), 1, d.total, both, { title: d.title, gloss: cx.gloss, domain: d.domain }, n) : await ai.pdfPage(d.buf, n, d.total, both, { title: d.title, gloss: cx.gloss, domain: d.domain })) : await ai.slideTr(d.title, d.slides[n - 1], n - 1, d.total, cx); d.cache[n] = v; return { ok: true, v }; }
           catch (e) {
             const busy = /^ai_(busy|timeout|network)$/.test(e.message);
             if (busy && !d.warned) { d.warned = true; send(chat, '⏳ AI ሥራ በዝቶበታል/ዘግይቷል — በራሴ እንደገና እየሞከርኩ ነው፤ ትንሽ ይታገሱ…').catch(() => { }); }
@@ -1122,7 +1165,7 @@ module.exports = function bot(c) {
         let en = '', am = r.v; if (d.kind === 'pdf') ({ en, am } = DO.splitBoth(r.v)); else en = slideTx(n - 1);
         (d.out = d.out || []).push({ n, title: d.kind === 'pptx' ? (d.slides[n - 1].title || '') : '', en, am }); delete d.cache[n];
         for (const m of String(am).matchAll(GLOSS_RE)) d.gloss.set(m[2].toLowerCase(), [m[2], m[1]]);
-        await sendLong(chat, `📄 <b>${d.kind === 'pdf' ? 'ገጽ' : 'ስላይድ'} ${n}${d.total ? '/' + d.total : ''}</b>`, am || r.v); d.next = n + 1; done++;
+        d.next = n + 1; done++;          // የገጽ ጽሑፍ በመልእክት አይላክም — በመጨረሻ ፋይል ብቻ
       }
       if (!stop && limitHit && !(d.total && d.next > d.total)) { stop = true; if (limitHit.paywall) await paywall(chat, uid, 'pages'); else await send(chat, '⛔ የዛሬው የትርጉም ገጽ ገደብ አልቋል — ነገ ከገጽ ' + d.next + ' ይቀጥሉ (ፋይሉን እንደገና ይላኩ)።'); }
       if (stop) return;
@@ -1132,9 +1175,10 @@ module.exports = function bot(c) {
   }
   async function handle(upd) {
     try {
-      if (upd.callback_query) { const cq = upd.callback_query; tg('answerCallbackQuery', { callback_query_id: cq.id }).catch(() => { }); if (!cq.message) return; return await route(cq.message.chat.id, String(cq.data || '')); }
+      if (upd.callback_query) { const cq = upd.callback_query; tg('answerCallbackQuery', { callback_query_id: cq.id }).catch(() => { }); if (!cq.message) return; if (cq.message.chat.type === 'private') { track(cq.message.chat.id, cq.from, 'cb'); const gt = gate(cq.message.chat.id); if (gt) return send(cq.message.chat.id, gt); } return await route(cq.message.chat.id, String(cq.data || '')); }
       if (upd.inline_query) return await inline(upd.inline_query);
       const m = upd.message; if (!m || !m.chat || m.chat.type !== 'private') return; const chat = m.chat.id;
+      track(chat, m.from, 'msg'); { const gt = gate(chat); if (gt) return send(chat, gt); }
       if (m.voice || m.audio) return await onVoice(chat, m);
       if (m.location) return await onLocation(chat, m);
       if (m.contact) return await authContact(chat, m);
