@@ -22,12 +22,25 @@ function Requests({ onChange }) {
       {r.status === 'pending' && <div className="mt-2 grid grid-cols-2 gap-2"><button className="btn-primary" onClick={() => act(r.id, 'approve')}>✅ አጽድቅ</button><button className="btn-ghost !text-red-700" onClick={() => act(r.id, 'reject')}>❌ ውድቅ</button></div>}</div>)}</div>);
 }
 
+function SmsCard() {
+  const [d, setD] = useState(null), [m, setM] = useState('');
+  const load = useCallback(() => get('/api/pay/admin/sms').then(setD), []); useEffect(() => { load(); }, [load]);
+  async function rotate() { if (!confirm('አዲስ ሚስጥር ይፈጠር? አሮጌው ሊንክ መሥራት ያቆማል።')) return; const r = await post('/api/pay/admin/sms/rotate', {}); setM(r.ok ? '✅ ተቀይሯል' : errText(r.error)); load(); }
+  if (!d) return <Spinner />; if (!d.ok) return null;
+  return (<div className="card"><b>📲 የ SMS ራስ-ማረጋገጫ (በጣም ትክክለኛ፣ ነጻ)</b>
+    <p className="mt-1 text-xs opacity-80">የቴሌብር/ባንክ «ገንዘብ ተቀብለዋል» SMS ወደሚደርስበት ስልክ ነጻ የ SMS-forwarder (SMS Forwarder / MacroDroid / Tasker) ይጫኑ። SMS ሲደርስ በ HTTP POST ወደ ታች ያለው አድራሻ እንዲልክ ያድርጉ፤ የሰውነት (JSON)፦ <code>{'{"from":"{sender}","text":"{message}"}'}</code></p>
+    <input className="input mt-2 select-all text-xs" readOnly value={d.url} onFocus={e => e.target.select()} />
+    <p className="mt-2 text-sm">ተቀባይ SMS፦ <b>{d.count}</b> · የመጨረሻ፦ {when(d.last)}</p>
+    {d.recent.length > 0 && <ul className="mt-1 space-y-1 text-xs">{d.recent.map(x => <li key={x.ref} className="rounded-lg bg-slate-100 p-1.5 dark:bg-slate-800">{x.used ? '✔️' : '🕒'} <b>{x.ref}</b> · {x.method} · {x.amount} ብር · {x.payer} · {when(x.ts)}</li>)}</ul>}
+    <button className="btn-soft mt-2" onClick={rotate}>🔑 ሚስጥሩን ቀይር</button><Msg>{m}</Msg></div>);
+}
 function Settings({ o, reload }) {
   const [f, setF] = useState(() => ({ ...o.cfg, plans: o.cfg.plans.map(p => ({ ...p })) })), [m, setM] = useState(''), [ok, setOk] = useState(false);
   const set = (k, v) => setF(x => ({ ...x, [k]: v })), plan = (i, k, v) => setF(x => ({ ...x, plans: x.plans.map((p, j) => (j === i ? { ...p, [k]: v } : p)) }));
   async function save() { const r = await post('/api/ai/admin/config', f); setOk(!!r.ok); setM(r.ok ? '✅ ተቀምጧል' : errText(r.error)); if (r.ok) reload(); }
   const Num = ({ k, l }) => <label className="text-sm font-bold">{l}<input type="number" min="0" className="input mt-1" value={f[k]} onChange={e => set(k, e.target.value)} /></label>;
   return (<div className="space-y-3">
+    <SmsCard />
     <div className="card"><div className="flex items-center gap-3"><label className="flex flex-1 items-center gap-2 font-bold"><input type="checkbox" className="h-5 w-5 accent-brand" checked={!!f.enabled} onChange={e => set('enabled', e.target.checked)} />AI ክፍት ነው (ለሁሉም)</label></div>
       <label className="mt-2 flex items-center gap-2 text-sm font-bold"><input type="checkbox" className="h-5 w-5 accent-brand" checked={!!f.paywall} onChange={e => set('paywall', e.target.checked)} />ጥልቅ ርዕስ/ገደብ ሲያልፍ ክፍያ ጠይቅ (ከተዘጋ ሁሉም ነጻ)</label>
       <label className="mt-2 flex items-center gap-2 text-sm font-bold"><input type="checkbox" className="h-5 w-5 accent-brand" checked={!!f.autoApprove} onChange={e => set('autoApprove', e.target.checked)} />🤖 የቴሌብር ክፍያ ከኢትዮ ቴሌኮም ደረሰኝ ጋር ሙሉ ሲመሳሰል በራስ አጽድቅ (ነፃ)</label>

@@ -28,8 +28,9 @@ const refKey = x => String(x == null ? '' : x).toUpperCase().replace(/[\s\-_.]/g
 function create(env = process.env, fetchImpl = (...a) => fetch(...a)) {
   const url = env.PAY_VERIFIER_URL || '', key = env.PAY_VERIFIER_KEY || '';
   const free = env.PAY_FREE_TELEBIRR !== '0', base = (env.PAY_RECEIPT_BASE || 'https://transactioninfo.ethiotelecom.et/receipt/').replace(/\/?$/, '/');
-  const enabled = !!url || free, auto = enabled && (env.PAY_AUTO_CONFIRM === '1' || (!url && free && env.PAY_AUTO_CONFIRM !== '0'));          // ነፃው አብሮ-የተሰራ ፍተሻ በነባሪ በራስ ያረጋግጣል (PAY_AUTO_CONFIRM=0 ያጠፋል)
-  const isTb = m => /telebirr|ቴሌብር|tele\s*birr/i.test(String(m || ''));
+  const sources = [], listeners = []; let claimFn = null;
+  const baseEnabled = !!url || free, autoOk = env.PAY_AUTO_CONFIRM === '1' || (!url && env.PAY_AUTO_CONFIRM !== '0');          // ነፃው አብሮ-የተሰራ ፍተሻ በነባሪ በራስ ያረጋግጣል (PAY_AUTO_CONFIRM=0 ያጠፋል)
+  const kind = m => (/telebirr|ቴሌብር|tele\s*birr/i.test(String(m || '')) ? 'telebirr' : /cbe|ንግድ ባንክ|commercial/i.test(String(m || '')) ? 'cbe' : 'other'), isTb = m => /telebirr|ቴሌብር|tele\s*birr/i.test(String(m || ''));
   async function freeTelebirr(ref) {
     const k = refKey(ref); if (!/^[A-Z0-9]{8,14}$/.test(k)) return { found: false };
     const ac = new AbortController(), t = setTimeout(() => ac.abort(), 10000);
@@ -42,7 +43,8 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a)) {
     } finally { clearTimeout(t); }
   }
   async function lookup({ method, ref, amount, accounts }) {
-    if (!url) { if (free && isTb(method)) return freeTelebirr(ref); return { found: false, unsupported: true }; }
+    for (const src of sources) { const e = await src({ method, ref }); if (e && e.found) return { found: true, amount: Number(e.amount), receiver: '', ts: e.ts == null ? NaN : e.ts, trusted: true, method: e.method || '' }; }          // ከባለቤቱ ስልክ የደረሰ የባንክ/ቴሌብር SMS (በጣም አስተማማኝ)
+    if (!url) { if (free && isTb(method)) return freeTelebirr(ref); return { found: false, unsupported: !sources.length }; }
     const ac = new AbortController(), t = setTimeout(() => ac.abort(), 8000);
     try {
       const r = await fetchImpl(url, { method: 'POST', signal: ac.signal, headers: { 'content-type': 'application/json', ...(key ? { authorization: 'Bearer ' + key } : {}) }, body: JSON.stringify({ method, ref, amount, accounts: accounts || [] }) });
@@ -56,8 +58,10 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a)) {
     if (!r.found) return { state: 'notfound', reasons: ['ማጣቀሻው በአረጋጋጩ አልተገኘም'] };
     const bad = [], unk = [];
     if (!Number.isFinite(r.amount)) unk.push('መጠኑ አልታወቀም'); else if (r.amount + 0.001 < order.total) bad.push(`መጠኑ ያንሳል (${r.amount} < ${order.total})`);
+    if (r.trusted) { if (r.method && kind(r.method) !== 'other' && kind(order.payment && order.payment.method) !== 'other' && kind(r.method) !== kind(order.payment.method)) bad.push('የክፍያ ዘዴው አይመሳሰልም'); }
     const mine = (accounts || []).filter(a => a.method === (order.payment && order.payment.method)), pool = mine.length ? mine : (accounts || []);
-    if (!r.receiver) unk.push('ተቀባዩ አልታወቀም');
+    if (r.trusted) { /* ተቀባዩ በባለቤቱ ስልክ ላይ የደረሰ ነው */ }
+    else if (!r.receiver) unk.push('ተቀባዩ አልታወቀም');
     else if (!pool.some(a => (digits(a.number).length >= 4 && digits(r.receiver).endsWith(digits(a.number).slice(-4))) || (words(a.holder).length >= 2 && words(a.holder).filter(w => words(r.receiver).includes(w)).length >= 2))) bad.push('ተቀባዩ ከእርስዎ አካውንት ጋር አይመሳሰልም');
     if (Number.isFinite(r.ts) && r.ts < order.ts - 5 * 60e3) bad.push('ክፍያው ከትዕዛዙ በፊት ነው የተፈጸመው');
     if (bad.length) return { state: 'mismatch', reasons: bad };
@@ -65,10 +69,14 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a)) {
     return { state: 'match', reasons: [] };
   }
   /* ማንኛውም ክፍያ (AI/መማሪያ) — ማጣቀሻ + መጠን + ጊዜ ብቻ ተሰጥቶ ይፈተሻል፤ ስህተት ከተከሰተ 'error' ይመልሳል */
-  async function check({ method, ref, amount, accounts, ts }) {
-    try { return judge({ total: amount, payment: { method }, ts: ts || 0 }, accounts, await lookup({ method, ref, amount, accounts })); }
-    catch (e) { return { state: 'error', reasons: [String(e.message).slice(0, 80)] }; }
+  async function check({ method, ref, amount, accounts, ts, by }) {
+    try {
+      const res = judge({ total: amount, payment: { method }, ts: ts || 0 }, accounts, await lookup({ method, ref, amount, accounts }));
+      if (res.state === 'match' && by && claimFn && !(await claimFn(ref, by))) return { state: 'mismatch', reasons: ['ይህ ማጣቀሻ ለሌላ ክፍያ ቀድሞ ተጠቅሟል'] };
+      return res;
+    } catch (e) { return { state: 'error', reasons: [String(e.message).slice(0, 80)] }; }
   }
-  return { enabled, auto, lookup, judge, check, isTb };
+  return { get enabled() { return baseEnabled || sources.length > 0; }, get auto() { return this.enabled && autoOk; }, lookup, judge, check, isTb, kind,
+    addSource: fn => { sources.push(fn); }, setClaim: fn => { claimFn = fn; }, onLedger: fn => { listeners.push(fn); }, notifyLedger: e => { for (const l of listeners) { try { Promise.resolve(l(e)).catch(() => { }); } catch (x) { } } } };
 }
 module.exports = { create, refKey, parseTelebirr };

@@ -553,7 +553,7 @@ module.exports = function bot(c) {
     return send(chat, `🤖 <b>AI ቁጥጥር</b> · ${H(r.provider || '—')} ${H(r.model || '')}\n⏳ የሚጠብቁ ክፍያዎች፦ ${r.pending} · 💰 ገቢ፦ ${ETB(r.revenue)}\n💬 ዛሬ፦ ${r.stats.chats} ውይይት · ${r.stats.pages} ገጽ · ${r.stats.paywalls} ክፍያ ጥያቄ\n\n${ONOFF(c.enabled)} AI · ${ONOFF(c.paywall)} ክፍያ ግድግዳ · ${ONOFF(c.autoApprove)} ራስ-ማጽደቅ · ${ONOFF(c.requireProof)} ማስረጃ ግዴታ\n🆓 ነጻ፦ ${c.freeChatDay} መልእክት · ${c.freePagesDay} ገጽ በቀን | 💎 የተከፈለ፦ ${c.paidChatDay} · ${c.paidPagesDay}\n📦 ${c.plans.map(x => `${x.label} ${x.price} ብር`).join(' · ')}`, ik([
       [b(`${c.enabled ? '⏸ AI አጥፋ' : '▶️ AI አብራ'}`, 'axt:enabled'), b(`${c.paywall ? '🔓 ክፍያ አጥፋ' : '🔒 ክፍያ አብራ'}`, 'axt:paywall')],
       [b(`${c.autoApprove ? '✋ ራስ-ማጽደቅ አጥፋ' : '🤖 ራስ-ማጽደቅ አብራ'}`, 'axt:autoApprove'), b(`${c.requireProof ? '📎 ማስረጃ ተው' : '📎 ማስረጃ ጠይቅ'}`, 'axt:requireProof')],
-      [b(`⏳ ክፍያ ጥያቄዎች (${r.pending})`, 'axq')], [b('💵 የእቅድ ዋጋ', 'axpr'), b('🔢 ገደቦች', 'axlm')], [b('🎁 ለተጠቃሚ ቀን ስጥ/አግድ', 'axg'), b('🌐 ዜና ፈትሽ', 'axnews')]]));
+      [b(`⏳ ክፍያ ጥያቄዎች (${r.pending})`, 'axq')], [b('💵 የእቅድ ዋጋ', 'axpr'), b('🔢 ገደቦች', 'axlm')], [b('🎁 ለተጠቃሚ ቀን ስጥ/አግድ', 'axg'), b('🌐 ዜና ፈትሽ', 'axnews')], [b('📲 SMS ራስ-ማረጋገጫ', 'axsms')]]));
   }
   async function axAiReqs(chat) {
     const r = await AD('GET', '/api/ai/admin/requests?status=pending'); if (!r.ok) return send(chat, bad(r)); if (!r.items.length) return send(chat, '✅ የሚጠብቅ የ AI ክፍያ የለም።');
@@ -581,7 +581,13 @@ module.exports = function bot(c) {
     await send(chat, '🌐 የዜና/ድር ፍለጋ ምንጮችን እየፈተሽሁ ነው…'); const r = await svc.newsDiag();
     return send(chat, `🌐 <b>የዜና ፍለጋ ምርመራ</b> — ${r.ok ? '✅ ይሠራል' : '❌ ምንም ምንጭ አልደረሰም'} (${r.items} ውጤት)\n\n` + (Object.entries(r.by).map(([k2, v]) => `${v.ok ? '✅' : v.empty ? '⚪' : '❌'} ${H(k2)} — ✅${v.ok} ⚪${v.empty} ❌${v.fail}${v.note ? '\n   ' + H(v.note) : ''}`).join('\n') || '—') + (r.ok ? '' : '\n\n<i>Render ከውጭ ድረ-ገጾች እንዳይደርስ ሊታገድ ይችላል፤ ቀኑ/ሰዓቱ ግን ይሠራል።</i>'));
   }
+  async function axSms(chat, rotate) {
+    const r = rotate ? await AD('POST', '/api/pay/admin/sms/rotate', {}) : await AD('GET', '/api/pay/admin/sms'); if (!r.ok) return send(chat, bad(r));
+    const g = rotate ? await AD('GET', '/api/pay/admin/sms') : r;
+    return send(chat, `📲 <b>SMS ራስ-ማረጋገጫ</b> (ነጻ፣ በጣም ትክክለኛ)\n\nየቴሌብር/ባንክ «ገንዘብ ተቀብለዋል» SMS የሚደርስበት ስልክ ላይ ነጻ <b>SMS Forwarder</b> (ወይም MacroDroid/Tasker) ይጫኑ፤ SMS ሲደርስ በ <b>HTTP POST</b> ወደዚህ አድራሻ እንዲልክ ያድርጉ፦\n<code>${H(g.url)}</code>\n\nየሰውነት (JSON)፦\n<code>{"from":"{sender}","text":"{message}"}</code>\n\n📥 እስካሁን የደረሰ፦ ${g.count}${(g.recent || []).length ? '\n' + g.recent.slice(0, 5).map(x => `${x.used ? '✔️' : '🕒'} ${H(x.ref)} · ${H(x.method)} · ${x.amount} ብር`).join('\n') : ''}\n\n<i>ክፍያ ሲገባ ተጠቃሚው ማጣቀሻ ያስገባል፤ ከ SMS ጋር መጠን+ማጣቀሻ ሲመሳሰል በራስ ይጸድቃል። ሚስጥሩን ለማንም አይስጡ።</i>`, ik([[b('🔑 ሚስጥር ቀይር', 'axsmsr')]]));
+  }
   async function axRoute(chat, k, a, x) {
+    if (k === 'axsms') return axSms(chat, false); if (k === 'axsmsr') return axSms(chat, true);
     if (k === 'axnews') return axNews(chat);
     if (k === 'axai') return axAi(chat); if (k === 'axq') return axAiReqs(chat); if (k === 'axl') return axLearnReqs(chat); if (k === 'axd') return axDecks(chat);
     if (k === 'axt') { if (!/^(enabled|paywall|autoApprove|requireProof)$/.test(a)) return; const o = await AD('GET', '/api/ai/admin/overview'); const r = await AD('POST', '/api/ai/admin/config', { [a]: !o.cfg[a] }); if (!r.ok) return send(chat, bad(r)); return axAi(chat); }
@@ -963,14 +969,21 @@ module.exports = function bot(c) {
     const tm = setInterval(() => typing(chat), 4500); let done = 0, stop = false; d.cache = d.cache || {}; d.gloss = d.gloss || new Map();
     try {
       const last = d.total ? Math.min(d.total, d.next + ai.lim.batch - 1) : d.next + ai.lim.batch - 1, ns = [], tasks = new Map(); let limitHit = null, active = 0; const waiters = [];
-      const gate = async fn => { while (active >= ai.lim.par) await new Promise(r => waiters.push(r)); active++; try { return await fn(); } finally { active--; const w = waiters.shift(); if (w) w(); } };
+      const gate = async fn => { while (active >= (d.par || ai.lim.par)) await new Promise(r => waiters.push(r)); active++; try { return await fn(); } finally { active--; const w = waiters.shift(); if (w) w(); } };
       const slideTx = i => (d.slides[i] ? AIM.slideText(d.slides[i], i).split('\n').slice(1).join('\n') : '');
       const outline = d.kind === 'pptx' ? d.slides.map((s2, i) => `${i + 1}. ${s2.title || ''}`).join('; ').slice(0, 700) : '';
       const work = n => gate(async () => {
         const cx = { gloss: [...d.gloss.values()].slice(-40), outline, ...(d.kind === 'pptx' ? { prev: slideTx(n - 2), next: slideTx(n) } : {}) };
+        let both = true;
         for (let tr = 0; ; tr++) {
-          try { const v = d.kind === 'pdf' ? await ai.pdfPage(d.buf, n, d.total, true, { title: d.title, gloss: cx.gloss }) : await ai.slideTr(d.title, d.slides[n - 1], n - 1, d.total, cx); d.cache[n] = v; return { ok: true, v }; }
-          catch (e) { if (tr >= 2 || !/^ai_(busy|timeout|network)$/.test(e.message)) { ai.refund(String(uid || 'admin'), 'pages', 1); return { ok: false, e }; } await new Promise(r => setTimeout(r, 4000 * (tr + 1))); }
+          try { const v = d.kind === 'pdf' ? await ai.pdfPage(d.buf, n, d.total, both, { title: d.title, gloss: cx.gloss }) : await ai.slideTr(d.title, d.slides[n - 1], n - 1, d.total, cx); d.cache[n] = v; return { ok: true, v }; }
+          catch (e) {
+            const busy = /^ai_(busy|timeout|network)$/.test(e.message);
+            if (busy) d.par = 1;          // ሞዴሉ ሲሞላ/ሲዘገይ ትይዩነት ወደ 1 ይወርዳል (ኮታ ይጠበቃል)
+            else if (d.kind === 'pdf' && both && tr < 3) { both = false; continue; }          // ባለሁለት ቋንቋ ቅርጸት ካልተሳካ ትርጉም ብቻ ይሞክራል
+            if (tr >= (busy ? 4 : 2) || (!busy && !(d.kind === 'pdf' && !both && tr < 3))) { ai.refund(String(uid || 'admin'), 'pages', 1); return { ok: false, e }; }
+            await new Promise(r => setTimeout(r, busy ? 5000 * (tr + 1) : 500));
+          }
         }
       });
       for (let n = d.next; n <= last; n++) {

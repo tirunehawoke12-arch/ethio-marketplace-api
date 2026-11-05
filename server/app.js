@@ -11,6 +11,7 @@ const mailer = require('./mailer');
 const app = express();
 app.disable('x-powered-by');
 app.use('/api/learn', express.json({ limit: '5mb' }));
+app.use('/api/pay', express.json({ limit: '200kb' }), express.urlencoded({ extended: false, limit: '200kb' }));
 app.use('/api/ai', express.json({ limit: '3mb' }));          // የክፍያ ማስረጃ (ምስል/PDF)      // ብዙ ገጽ ያለው ፋይል ይዘት
 app.use(express.json({ limit: '1mb' }));
 // የድሮው ገጽ አጠቃላይ የዳታቤዝ/የክፍለ-ጊዜ API ተዘግቷል (ያለ OTP አካውንት መፍጠር እንዳይቻል)። ለሙከራ ብቻ LEGACY_DB=1
@@ -265,7 +266,7 @@ const bump = p => { store.rev[p] = (store.rev[p] || REV0) + 1; persist(); };
 const validPath = p => typeof p === 'string' && p.length < 200 && /^[\w@+.:~\/-]+$/.test(p) && !p.includes('..');
 function can(tok, p, write, id) {
   if (tok && tok.k === 'admin') return true;
-  { const t0 = String(p).split('/')[0]; if (t0 === 'mk' || t0 === 'pp' || t0 === 'pg' || t0 === 'tr' || t0 === 'ch' || t0 === 'al' || t0 === 'rf' || t0 === 'ln' || t0 === 'ai' || t0[0] === '_') return false; }   // ገበያ እና ምስል መረጃ በልዩ API ብቻ
+  { const t0 = String(p).split('/')[0]; if (t0 === 'mk' || t0 === 'pp' || t0 === 'pg' || t0 === 'tr' || t0 === 'ch' || t0 === 'al' || t0 === 'rf' || t0 === 'ln' || t0 === 'ai' || t0 === 'pay' || t0[0] === '_') return false; }   // ገበያ እና ምስል መረጃ በልዩ API ብቻ
   const m = /^data\/users\/([\w-]+)$/.exec(p);
   if (m) return !!tok && tok.u === m[1];                       // የግል ውሂብ፦ ባለቤት ብቻ
   if (!tok) return false;
@@ -434,6 +435,7 @@ require('./chat')({ app, col, limit, notifyUser, notifyAdmin, ...mkApi });
 require('./trust')({ app, col, limit, notifyUser, notifyAdmin, ...mkApi });
 require('./geo')({ app, col, limit, ...mkApi });
 require('./learn')({ app, col, limit, pool, persist, bump, notifyUser, notifyAdmin, token: TOKEN, botUsername: BOT_USERNAME, miniShort: (process.env.TELEGRAM_MINIAPP_SHORT || '').replace(/[^\w]/g, ''), baseUrl: PUBLIC_BASE_URL, ...mkApi });
+require('./paysms')({ app, col, saveMany: mkApi.saveMany, adminOnly: mkApi.adminOnly, pv: mkApi.pv, bad: mkApi.bad, S: mkApi.S, baseUrl: PUBLIC_BASE_URL, notifyAdmin });
 const aiSvc = require('./aisvc')({ app, col, limit, notifyUser, notifyAdmin, findUid, tg, adminChat: adminChatId, baseUrl: PUBLIC_BASE_URL, adminPhone: ADMIN_PHONE, siteSearch: async q => { const r = await fetch(`http://127.0.0.1:${PORT}/api/search?q=${encodeURIComponent(q)}`, { signal: AbortSignal.timeout(3000) }); const j = await r.json(); return (j && j.groups) || []; }, ...mkApi });          // AI — አድሚን ቁጥጥር፣ ነጻ ገደብ፣ ክፍያ
 const couponsApi = require('./coupons')({ app, col, limit, ...mkApi });
 require('./referral')({ app, col, limit, notifyUser, coupons: couponsApi, baseUrl: PUBLIC_BASE_URL, getStore: () => store, ...mkApi });

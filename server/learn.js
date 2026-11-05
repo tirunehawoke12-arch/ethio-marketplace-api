@@ -126,6 +126,18 @@ module.exports = function learn(ctx) {
     d.roster = d.roster || []; if (!d.roster.some(x => x.id === st.sid)) { if (d.roster.length >= LIM.roster) throw new Error('roster_full'); d.roster.push({ name: st.name, id: st.sid }); }
     r.status = 'approved'; r.sid = st.sid; r.done = now(); await saveMany([[D, d.id], [R, r.id], [ST, st.id]]); return st;
   }
+  /* ነፃ ራስ-ሰር ክፍያ ፍተሻ — SMS ledger / ቴሌብር ደረሰኝ፤ ሙሉ ተዛምዶ ሲኖር ያጸድቃል */
+  async function autoVerifyReq(id) {
+    const r = col(R)[id], d = r && col(D)[r.deck]; if (!r || !d || r.status !== 'pending' || !ctx.pv) return;
+    const res = await ctx.pv.check({ method: r.method, ref: r.ref, amount: r.price, accounts: ctx.payAccounts ? ctx.payAccounts() : [], ts: r.ts - 24 * 3600e3, by: 'ln:' + r.id }); r.auto = { ...res, ts: now() };
+    if (res.state === 'match' && ctx.pv.auto) { await grant(r, d); await saveMany([[R, r.id]]); try { notifyAdmin(`🤖 የመማሪያ ክፍያ (${r.name} · ${r.price} ብር) በራስ-ሰር ተረጋግጧል።`); notifyUser(r.uid, `✅ ክፍያዎ ተረጋግጧል — «${d.title}» ተፈቅዶልዎታል።`); } catch (e) { } return; }
+    await saveMany([[R, r.id]]);
+    if (res.state === 'mismatch') { try { notifyUser(r.uid, `⚠️ ክፍያዎ ከደረሰኙ ጋር አልተመሳሰለም፦ ${res.reasons.join('፤ ')}። አድሚኑ በእጅ ይመለከተዋል።`); } catch (e) { } }
+    else if (res.state === 'notfound') { try { notifyUser(r.uid, `⏳ የክፍያ ማጣቀሻዎ እስካሁን አልተገኘም። ቁጥሩን ያረጋግጡ፤ ክፍያው ሲደርስ በራስ ይረጋገጣል፤ ካልሆነ አድሚኑ ይመለከተዋል።`); } catch (e) { } }
+    else { try { notifyUser(r.uid, '⏳ ክፍያዎ በአድሚን እየተረጋገጠ ነው።'); } catch (e) { } }
+    try { notifyAdmin(`🤖 ራስ-ሰር ፍተሻ (መማሪያ ${r.name} · ${r.price} ብር)፦ ${res.state}${res.reasons.length ? ' — ' + res.reasons.join('፤ ') : ''}`); } catch (e) { }
+  }
+  if (ctx.pv) ctx.pv.onLedger(async e => { for (const r of Object.values(col(R))) if (r.status === 'pending' && r.ref && String(r.ref).toUpperCase().replace(/[\s\-_.]/g, '') === e.id) await autoVerifyReq(r.id); });
   app.post('/api/learn/buy', async (req, res) => {
     const u = who(req, res); if (!u) return; if (u.admin) return bad(res, 403, 'admin_cannot'); if (!limit('lb' + u.uid, 10, 3600e3)) return bad(res, 429, 'slow_down'); const b = req.body || {};
     const d = col(D)[S(b.deck, 24)]; if (!d || !listable(d)) return bad(res, 404, 'not_found');
@@ -137,12 +149,7 @@ module.exports = function learn(ctx) {
       if (price === 0) { await grant(r, d); return res.json({ ok: true, status: 'approved' }); }
       await saveMany([[R, r.id]]); res.json({ ok: true, status: 'pending' });
       try { notifyAdmin(`🎓 አዲስ የመማሪያ ክፍያ ጥያቄ\n${name} · ${r.phone}\n📖 ${d.title} — ${price} ብር\n💳 ${method} · ማጣቀሻ ${ref}`); } catch (e) { }
-      if (ctx.pv && ctx.pv.enabled) (async () => {            // ነፃ ራስ-ሰር ፍተሻ፤ ማጽደቅ የሚሆነው PAY_AUTO_CONFIRM=1 እና ሙሉ ተዛምዶ ሲኖር ብቻ
-        const res = await ctx.pv.check({ method, ref, amount: price, accounts: ctx.payAccounts ? ctx.payAccounts() : [], ts: r.ts }); r.auto = { ...res, ts: now() };
-        if (res.state === 'match' && ctx.pv.auto && r.status === 'pending') { await grant(r, d); await saveMany([[R, r.id]]); try { notifyAdmin(`🤖 የመማሪያ ክፍያ (${name} · ${price} ብር) በራስ-ሰር ተረጋግጧል።`); notifyUser(r.uid, `✅ ክፍያዎ ተረጋግጧል — «${d.title}» ተፈቅዶልዎታል።`); } catch (e) { } return; }
-        await saveMany([[R, r.id]]); if (res.state === 'mismatch' || res.state === 'notfound') { try { notifyUser(r.uid, `⚠️ የክፍያ ማጣቀሻዎ አልተረጋገጠም (${res.state === 'notfound' ? 'በኢትዮ ቴሌኮም አልተገኘም' : res.reasons.join('፤ ')})። አድሚኑ በእጅ ይመለከተዋል።`); } catch (e) { } } else { try { notifyUser(r.uid, '⏳ ክፍያዎ በአድሚን እየተረጋገጠ ነው።'); } catch (e) { } }
-        try { notifyAdmin(`🤖 ራስ-ሰር ፍተሻ (መማሪያ ${name} · ${price} ብር)፦ ${res.state}${res.reasons.length ? ' — ' + res.reasons.join('፤ ') : ''}`); } catch (e) { }
-      })().catch(() => { });
+      if (ctx.pv && ctx.pv.enabled) autoVerifyReq(r.id).catch(() => { });
     } catch (e) { delete col(R)[r.id]; bad(res, e.message === 'roster_full' ? 400 : 503, e.message === 'roster_full' ? 'too_many' : 'storage'); }
   });
   app.get('/api/learn/admin/requests', (req, res) => {

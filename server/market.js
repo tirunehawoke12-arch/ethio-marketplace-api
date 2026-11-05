@@ -65,7 +65,7 @@ module.exports = function market(ctx) {
   const AUTO_L = { match: '✅ ተዛምዷል', mismatch: '❌ አይመሳሰልም', notfound: '❓ አልተገኘም', unknown: '⚠️ ማረጋገጥ አልተቻለም', error: '⚠️ ፍተሻው አልተሳካም' };
   async function autoCheck(o) {                       // ውጫዊ አረጋጋጭ ከተቀናበረ ብቻ ይሠራል
     if (!pv.enabled || !o.payment) return null; let res;
-    try { const accounts = cfg().accounts; res = pv.judge(o, accounts, await pv.lookup({ method: o.payment.method, ref: o.payment.ref, amount: o.total, accounts })); } catch (e) { console.error('pay verify failed:', e.message); res = { state: 'error', reasons: [String(e.message).slice(0, 80)] }; }
+    try { const accounts = cfg().accounts; res = await pv.check({ method: o.payment.method, ref: o.payment.ref, amount: o.total, accounts, ts: o.ts, by: 'mk:' + o.id }); if (res.state === 'error') throw new Error(res.reasons[0]); } catch (e) { console.error('pay verify failed:', e.message); res = { state: 'error', reasons: [String(e.message).slice(0, 80)] }; }
     o.payment.auto = { ...res, ts: Date.now() }; try { await saveMany([[P.orders, o.id]]); } catch (e) { }
     if (res.state === 'match' && pv.auto && o.status === 'payment_submitted') { const r = await applyAdmin(o, 'verify-payment', { ok: true, note: 'ራስ-ሰር ተረጋግጧል' }); if (r.ok) { tellAdmin(`🤖 ክፍያ ${short(o)} (${money(o.total)}) በራስ-ሰር ተረጋግጧል።`); return res; } }
     tellAdmin(`🤖 ራስ-ሰር ፍተሻ ${short(o)}፦ ${AUTO_L[res.state] || res.state}${res.reasons.length ? '\n' + res.reasons.map(x => '• ' + x).join('\n') : ''}${res.state === 'match' ? '\nበአንድ ጠቅታ ማረጋገጥ ይችላሉ።' : ''}`, res.state === 'match' ? KB(['✅ አረጋግጥ', `avp:${o.id}:1`]) : undefined);

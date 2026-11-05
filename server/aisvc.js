@@ -125,15 +125,16 @@ module.exports = function aisvc(ctx) {
   /* ነፃ ራስ-ሰር ማረጋገጫ — በአድሚን «autoApprove» ሲበራ እና ሙሉ ተዛምዶ ሲኖር ብቻ ያጸድቃል፤ አለበለዚያ ለአድሚን ጠቋሚ ብቻ */
   async function autoVerify(id) {
     const r = col(REQ)[id]; if (!r || r.status !== 'pending') return null; const c = cfg();
-    const res = await pv.check({ method: r.method, ref: r.ref, amount: r.price, accounts: payAccounts(), ts: r.ts });
+    const res = await pv.check({ method: r.method, ref: r.ref, amount: r.price, accounts: payAccounts(), ts: r.ts - 24 * 3600e3, by: 'ai:' + r.id });          // ተጠቃሚው መጀመሪያ ይከፍላል ከዚያ ይጠይቃል፤ የ24 ሰዓት መስኮት
     r.auto = { ...res, ts: now() }; try { await saveMany([[REQ, r.id]]); } catch (e) { }
     if (res.state === 'match' && c.autoApprove) { const d = await decide(r.id, true); if (d.ok) { try { notifyAdmin(`🤖 የ AI ክፍያ (${r.name} · ${r.price} ብር) በራስ-ሰር ተረጋግጧል።`); } catch (e) { } return res; } }
     const why = res.reasons.length ? '\n' + res.reasons.map(x => '• ' + x).join('\n') : '';
-    if (res.state === 'mismatch' || res.state === 'notfound') { try { notifyUser(r.uid, res.state === 'notfound' ? `⚠️ የክፍያ ማጣቀሻዎ (${r.ref}) በኢትዮ ቴሌኮም አልተገኘም። ቁጥሩን ያረጋግጡ፤ ትክክል ከሆነ አድሚኑ በእጅ ይመለከተዋል።` : `⚠️ ክፍያዎ ከደረሰኙ ጋር አልተመሳሰለም፦${why}\nአድሚኑ በእጅ ይመለከተዋል።`); } catch (e) { } }
+    if (res.state === 'mismatch' || res.state === 'notfound') { try { notifyUser(r.uid, res.state === 'notfound' ? `⏳ የክፍያ ማጣቀሻዎ (${r.ref}) እስካሁን አልተገኘም። ቁጥሩን ያረጋግጡ፤ ክፍያው ሲደርስ በራስ ይረጋገጣል፤ ካልሆነ አድሚኑ ይመለከተዋል።` : `⚠️ ክፍያዎ ከደረሰኙ ጋር አልተመሳሰለም፦${why}\nአድሚኑ በእጅ ይመለከተዋል።`); } catch (e) { } }
     else if (res.state !== 'match') { try { notifyUser(r.uid, '⏳ ክፍያዎ በአድሚን እየተረጋገጠ ነው — ሲጠናቀቅ ይነገርዎታል።'); } catch (e) { } }
     if (res.state !== 'unknown' || !/መፈተሽ አይቻልም/.test(res.reasons[0] || '')) try { notifyAdmin(`🤖 ራስ-ሰር ፍተሻ (AI ክፍያ ${r.name} · ${r.price} ብር)፦ ${AUTO_L[res.state] || res.state}${why}`, res.state === 'match' ? KB(['✅ አጽድቅ', `aiap:${r.id}:1`]) : KB(['✅ አጽድቅ', `aiap:${r.id}:1`], ['❌ ውድቅ', `aiap:${r.id}:0`])); } catch (e) { }
     return res;
   }
+  if (pv) pv.onLedger(async e => { for (const r of Object.values(col(REQ))) if (r.status === 'pending' && String(r.ref).toUpperCase().replace(/[\s\-_.]/g, '') === e.id) await autoVerify(r.id); });          // SMS ከክፍያው በኋላ ቢደርስ
   async function decide(id, approve, reason) {
     const r = col(REQ)[id]; if (!r) return { ok: false, error: 'not_found' }; if (r.status !== 'pending') return { ok: false, error: 'wrong_step:' + r.status };
     if (approve) { const a = col(ACC)[r.uid] || (col(ACC)[r.uid] = { id: r.uid }); a.until = Math.max(a.until || 0, now()) + r.days * DAY; a.warned = false; a.expired = false; r.status = 'approved'; r.done = now(); await saveMany([[ACC, r.uid], [REQ, r.id]]); try { notifyUser(r.uid, `🤖 የ AI ክፍያዎ ተረጋግጧል!\n📦 ${r.label}\n⏳ እስከ ${new Date(a.until + 3 * 3600e3).toISOString().slice(0, 10)} ድረስ ሙሉ መልስ ያገኛሉ።`); } catch (e) { } return { ok: true, until: a.until }; }
