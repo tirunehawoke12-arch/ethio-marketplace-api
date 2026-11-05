@@ -43,7 +43,7 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
   const gl = String(env.GEMINI_MODEL || '').split(',').map(x => x.trim()).filter(Boolean), uniq = a => [...new Set(a)];
   const models = { chat: uniq([...gl, 'gemini-flash-lite-latest', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.6-flash']), doc: uniq([...gl, 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-flash-lite-latest']) };
   const num = (v, d) => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? n : d; };
-  const lim = { chat: num(env.AI_CHAT_DAY, 30), pages: num(env.AI_DOC_PAGES_DAY, 60), batch: Math.max(1, num(env.AI_DOC_BATCH, 12)), par: Math.max(1, Math.min(8, num(env.AI_DOC_PAR, 3))) }, retryMs = num(env.AI_RETRY_MS, 15000), timeoutMs = num(env.AI_TIMEOUT_MS, 60000);
+  const lim = { chat: num(env.AI_CHAT_DAY, 30), pages: num(env.AI_DOC_PAGES_DAY, 60), batch: Math.max(1, num(env.AI_DOC_BATCH, 12)), par: Math.max(1, Math.min(8, num(env.AI_DOC_PAR, 3))) }, retryMs = num(env.AI_RETRY_MS, 15000), timeoutMs = num(env.AI_TIMEOUT_MS, 60000), docTimeoutMs = num(env.AI_DOC_TIMEOUT_MS, 120000);
   const hist = new Map(), used = new Map(), sleep = ms => new Promise(r => setTimeout(r, ms));
   const timer = setInterval(() => { const t = now(); for (const [k, v] of hist) if (t - v.ts > HIST_TTL) hist.delete(k); for (const [k, v] of used) if (v.d !== dayKey(t)) used.delete(k); }, 10 * 60e3); timer.unref && timer.unref();
 
@@ -72,10 +72,11 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
   async function ask(o) {
     const kind = o.pdf || o.media ? 'doc' : 'chat', all = prov === 'gemini' ? models[kind] : [model], alive = all.filter(m => !(dead.get(m) > now())), list = alive.length ? alive : all; let last = null, lastGood = null;
     const start = good[kind] && now() - good[kind].t < 10 * 60e3 ? Math.max(0, list.indexOf(good[kind].m)) : 0;
+    let tmo = 0;
     for (let n = 0; n < list.length; n++) {
       const m = list[(start + n) % list.length];
-      try { const out = await once(m, o, kind === 'doc' ? timeoutMs : Math.min(timeoutMs, 30000)); good[kind] = { m, t: now() }; return out; }
-      catch (e) { last = e; if (e.status === 404) dead.set(m, now() + 6 * 3600e3); else lastGood = e; if (!(e.message === 'ai_busy' || e.message === 'ai_timeout' || e.message === 'ai_network' || e.status === 404 || (e.status === 400 && /model/i.test(e.detail || '')))) throw e; }
+      try { const out = await once(m, o, kind === 'doc' ? docTimeoutMs : Math.min(timeoutMs, 30000)); good[kind] = { m, t: now() }; return out; }
+      catch (e) { last = e; if (e.message === 'ai_timeout' && kind === 'doc' && ++tmo >= 2) throw e; if (e.status === 404) dead.set(m, now() + 6 * 3600e3); else lastGood = e; if (!(e.message === 'ai_busy' || e.message === 'ai_timeout' || e.message === 'ai_network' || e.status === 404 || (e.status === 400 && /model/i.test(e.detail || '')))) throw e; }
     }
     const fin = lastGood || last;          // ከ404 ይልቅ ትክክለኛውን (ሥራ በዝቶ/ጊዜ) ስህተት ያሳያል
     if (fin && fin.message === 'ai_busy' && prov === 'gemini' && retryMs > 0 && o._r !== 1) { await sleep(retryMs); return ask({ ...o, _r: 1 }); }          // ሁሉም ሞዴል ሲሞላ አንድ ጊዜ ተጠብቆ እንደገና
@@ -100,9 +101,9 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
   /* አውድ፦ ርዕስ፣ ቀዳሚ/ቀጣይ ገጽ፣ ቀድሞ የተተረጎሙ ቋሚ ቃላት — ትርጉሙ ከሰነዱ ጋር ተያያዥ እና ወጥ እንዲሆን */
   const ctxText = c => !c ? '' : '\n\n[የሰነዱ አውድ — ትርጉሙን ከሰነዱ አጠቃላይ ርዕስ፣ ዓላማ እና ከአጎራባች ገጾች ጋር ተያያዥ አድርግ፤ ይህን አውድ አትተርጉም]' + (c.title ? `\nርዕስ፦ ${c.title}` : '') + (c.outline ? `\nየሰነዱ ማውጫ፦ ${c.outline}` : '') + (c.prev ? `\n[ቀዳሚ ገጽ (ዋናው)]\n${String(c.prev).slice(0, 700)}` : '') + (c.next ? `\n[ቀጣይ ገጽ (ዋናው)]\n${String(c.next).slice(0, 700)}` : '') + (c.gloss && c.gloss.length ? '\n[ቀድሞ የተተረጎሙ ቃላት — ሁልጊዜ በተመሳሳይ ተጠቀም]\n' + c.gloss.slice(0, 40).map(g => `• ${g[0]} = ${g[1]}`).join('\n') : '');
   const BOTH = '\n\nውጤቱን በትክክል በዚህ ቅርጸት ስጥ፦ መጀመሪያ [[EN]] የሚል መስመር፣ ከዚያ የገጹ ዋና የእንግሊዝኛ ጽሑፍ እንዳለ (ትክክለኛ ቅጂ፣ በአንቀጽ አወቃቀሩ)፣ ከዚያ [[AM]] የሚል መስመር፣ ከዚያ የአማርኛ ትርጉሙ። ገጹ ባዶ ከሆነ [[EN]] እና [[AM]] ከዚያ ባዶ ይሁኑ።';
-  async function pdfPage(buf, n, total, both, cx) {
+  async function pdfPage(buf, n, total, both, cx, real) {
     if (prov === 'gemini' && Buffer.from(buf).length > 14 * 1048576) { const e = new Error('ai_too_big'); throw e; }          // inline ገደብ ~20MB (base64 +33%)
-    const out = await ask({ system: TR + (both ? BOTH : '') + ctxText(cx) + '\nሙሉውን ሰነድ ለአውድ አንብብ፤ ግን የተጠየቀውን ገጽ ብቻ ተርጉም።', max: both ? 8000 : 6000, pdf: buf, msgs: [{ role: 'user', content: `የዚህን PDF ገጽ ${n} ብቻ ተርጉም${total ? ` (ከ${total} ገጾች)` : ''}። ሰነዱ ከ${n} ገጽ ያነሰ ከሆነ በትክክል [[END]] ብቻ ጻፍ።` }] });
+    const out = await ask({ system: TR + (both ? BOTH : '') + ctxText(cx) + (real ? '' : '\nሙሉውን ሰነድ ለአውድ አንብብ፤ ግን የተጠየቀውን ገጽ ብቻ ተርጉም።'), max: both ? 8000 : 6000, pdf: buf, msgs: [{ role: 'user', content: real ? `ይህ PDF የአንድ ገጽ ብቻ ነው — ይህ የሰነዱ ገጽ ${real}${total ? ` (ከ${total})` : ''} ነው። ሙሉውን ተርጉም።` : `የዚህን PDF ገጽ ${n} ብቻ ተርጉም${total ? ` (ከ${total} ገጾች)` : ''}። ሰነዱ ከ${n} ገጽ ያነሰ ከሆነ በትክክል [[END]] ብቻ ጻፍ።` }] });
     return /^\s*\[\[END\]\]\s*$/.test(out) ? null : out;
   }
   /* PPTX — የስላይድ ትርጉም፤ prev = የቀደመው ስላይድ ርዕስ (አውድ) */

@@ -947,7 +947,7 @@ module.exports = function bot(c) {
     for (const [k, v] of DOCS) if (Date.now() - v.ts > 3600e3) DOCS.delete(k); if (DOCS.size > 40) return send(chat, '⏳ አሁን ብዙ ሰው እየተረጎመ ነው — ከጥቂት ደቂቃ በኋላ ይሞክሩ።');
     typing(chat); let buf; try { buf = await tgDownload(d.file_id); } catch (e) { return send(chat, '⚠️ ፋይሉን ማውረድ አልተቻለም — እንደገና ይላኩ።'); }
     const job = { kind: isPdf ? 'pdf' : 'pptx', name, ts: Date.now(), next: 1, total: 0, busy: false };
-    if (isPdf) { job.buf = buf; job.total = AIM.countPdfPages(buf); if (job.total > 100) return send(chat, `⚠️ ፋይሉ ${job.total} ገጽ ነው — AI በአንድ ጊዜ እስከ 100 ገጽ ብቻ ያነባል። በ100 ገጽ ክፍል አድርገው ይላኩ።`); }
+    if (isPdf) { job.buf = buf; job.split = await pdfSplit(buf); job.total = job.split ? job.split.n : AIM.countPdfPages(buf); if (job.total > 100) return send(chat, `⚠️ ፋይሉ ${job.total} ገጽ ነው — AI በአንድ ጊዜ እስከ 100 ገጽ ብቻ ያነባል። በ100 ገጽ ክፍል አድርገው ይላኩ።`); }
     else { try { const { parsePptx } = require('../src/lib/pptx'); const r = await parsePptx(buf); job.slides = r.slides.map(s => ({ title: s.title, blocks: s.blocks })); job.total = job.slides.length; } catch (e) { return send(chat, '⚠️ PPTX መነበብ አልቻለም — (PowerPoint 2007+ .pptx መሆኑን ያረጋግጡ)'); } if (!job.total) return send(chat, '⚠️ ስላይድ አልተገኘም።'); }
     job.title = name.replace(/\.(pdf|pptx)$/i, ''); DOCS.set(chat, job);
     await send(chat, `📄 <b>${H(clip(name, 60))}</b>${job.total ? ' — ' + job.total + ' ' + (isPdf ? 'ገጾች' : 'ስላይዶች') : ''}\n🌐 ወደ አማርኛ ገጽ በገጽ በአውድ እተረጉማለሁ…\n🔤 ፎንት መምረጥ ይችላሉ (ትርጉሙ አይቆምም)`, ik([[b('🔤 ፎንት/መጠን ምረጥ', 'adfo')]]));
@@ -962,11 +962,15 @@ module.exports = function bot(c) {
       const r = await fetch(`${process.env.TELEGRAM_API_BASE || 'https://api.telegram.org'}/bot${token}/sendDocument`, { method: 'POST', body: fd }); if (!r.ok) throw new Error('send ' + r.status);
     } catch (e) { console.warn('docFile', e.message); return send(chat, '⚠️ ፋይሉን ማዘጋጀት/መላክ አልተሳካም — ትርጉሙ ከላይ በመልእክት ተልኳል።'); }
   }
+  /* PDF ገጽ በገጽ መቁረጥ (pdf-lib ካለ)፦ እያንዳንዱ ጥያቄ የአንድ ገጽ ፋይል ብቻ ይልካል — በጣም ፈጣን (10MB ፋይል በ 31 ጊዜ መላክ ይቀራል) */
+  async function pdfSplit(buf) {
+    try { const { PDFDocument } = require('pdf-lib'), src = await PDFDocument.load(buf, { ignoreEncryption: true }), n = src.getPageCount(); if (!n) return null; return { n, page: async i => { const o = await PDFDocument.create(), [pg] = await o.copyPages(src, [i]); o.addPage(pg); return Buffer.from(await o.save()); } }; } catch (e) { return null; }
+  }
   const GLOSS_RE = /([ሀ-፿][ሀ-፿ ፡]{1,36}[ሀ-፿]) \(([A-Za-z][A-Za-z \-]{1,36}[A-Za-z])\)/g;
   const fontMenu = (chat, d) => { const o = DO.optOf((d && d.opt) || ses(chat).docopt); return send(chat, `🔤 <b>የፋይሉ ፎንት እና መጠን</b>\nአሁን፦ ${H(DO.PRESETS[o.preset].label)} · ${DO.SIZES[o.size][0]}\n\n<i>PPTX፦ ፎንቱ በእርስዎ ኮምፒውተር/ስልክ ላይ ከተጫነ ይታያል (ከሌለ ተመሳሳይ ይተካል)። PDF፦ የአማርኛ ፎንት በፋይሉ ውስጥ ተካቷል፤ ቀለም እና መጠን ይለወጣሉ።</i>`, ik([...Object.entries(DO.PRESETS).map(([k, v]) => [b((k === o.preset ? '✅ ' : '') + v.label, 'adfp:' + k)]), Object.entries(DO.SIZES).map(([k, v]) => b((k === o.size ? '✅ ' : '') + v[0], 'adfs:' + k))])); };
   async function docRun(chat, uid) {
     const d = DOCS.get(chat); if (!d) return send(chat, '⌛ ፋይሉ ጊዜው አልፏል — እንደገና ይላኩ።'); if (d.busy) return; d.busy = true; d.ts = Date.now();
-    const tm = setInterval(() => typing(chat), 4500); let done = 0, stop = false; d.cache = d.cache || {}; d.gloss = d.gloss || new Map();
+    let ticks = 0; const tm = setInterval(() => { typing(chat); if (++ticks === 6 && !done) send(chat, `⏳ ገጽ ${d.next} እየተተረጎመ ነው — ትልቅ ፋይል ስለሆነ ትንሽ ይወስዳል፤ አይቆምም…`).catch(() => { }); }, 4500); let done = 0, stop = false; d.cache = d.cache || {}; d.gloss = d.gloss || new Map();
     try {
       const last = d.total ? Math.min(d.total, d.next + ai.lim.batch - 1) : d.next + ai.lim.batch - 1, ns = [], tasks = new Map(); let limitHit = null, active = 0; const waiters = [];
       const gate = async fn => { while (active >= (d.par || ai.lim.par)) await new Promise(r => waiters.push(r)); active++; try { return await fn(); } finally { active--; const w = waiters.shift(); if (w) w(); } };
@@ -976,9 +980,10 @@ module.exports = function bot(c) {
         const cx = { gloss: [...d.gloss.values()].slice(-40), outline, ...(d.kind === 'pptx' ? { prev: slideTx(n - 2), next: slideTx(n) } : {}) };
         let both = true;
         for (let tr = 0; ; tr++) {
-          try { const v = d.kind === 'pdf' ? await ai.pdfPage(d.buf, n, d.total, both, { title: d.title, gloss: cx.gloss }) : await ai.slideTr(d.title, d.slides[n - 1], n - 1, d.total, cx); d.cache[n] = v; return { ok: true, v }; }
+          try { const v = d.kind === 'pdf' ? (d.split ? await ai.pdfPage(await d.split.page(n - 1), 1, d.total, both, { title: d.title, gloss: cx.gloss }, n) : await ai.pdfPage(d.buf, n, d.total, both, { title: d.title, gloss: cx.gloss })) : await ai.slideTr(d.title, d.slides[n - 1], n - 1, d.total, cx); d.cache[n] = v; return { ok: true, v }; }
           catch (e) {
             const busy = /^ai_(busy|timeout|network)$/.test(e.message);
+            if (busy && !d.warned) { d.warned = true; send(chat, '⏳ AI ሥራ በዝቶበታል/ዘግይቷል — በራሴ እንደገና እየሞከርኩ ነው፤ ትንሽ ይታገሱ…').catch(() => { }); }
             if (busy) d.par = 1;          // ሞዴሉ ሲሞላ/ሲዘገይ ትይዩነት ወደ 1 ይወርዳል (ኮታ ይጠበቃል)
             else if (d.kind === 'pdf' && both && tr < 3) { both = false; continue; }          // ባለሁለት ቋንቋ ቅርጸት ካልተሳካ ትርጉም ብቻ ይሞክራል
             if (tr >= (busy ? 4 : 2) || (!busy && !(d.kind === 'pdf' && !both && tr < 3))) { ai.refund(String(uid || 'admin'), 'pages', 1); return { ok: false, e }; }
