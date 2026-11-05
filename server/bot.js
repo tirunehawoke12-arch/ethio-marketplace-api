@@ -913,7 +913,7 @@ module.exports = function bot(c) {
     tx: 'በፋይሉ/ፎቶው ውስጥ ያለውን ጽሑፍ ሁሉ እንዳለ በትክክል አውጣ (ምንም ሳትጨምር)።',
     trx: 'በዚህ ፋይል/ፎቶ ውስጥ ያለውን ጽሑፍ ሁሉ በአውድ ወደ ተፈጥሯዊ አማርኛ ተርጉም (የሥዕል/ሰንጠረዥ ጽሑፍም ጭምር)።'
   };
-  const fileMenu = (chat, name) => send(chat, `📎 <b>${H(clip(name || 'ፋይል', 60))}</b> ተቀብያለሁ።\nምን እንዳደርግልዎ ይፈልጋሉ?`, ik([[b(FK.qa, 'fk:qa'), b(FK.tr, 'fk:tr')], [b(FK.qs, 'fk:qs'), b(FK.ex, 'fk:ex')], [b(FK.nt, 'fk:nt'), b(FK.sm, 'fk:sm')], [b(FK.tx, 'fk:tx'), b(FK.tc, 'fk:tc')]]));
+  const fileMenu = (chat, name) => send(chat, `📎 <b>${H(clip(name || 'ፋይል', 60))}</b> ተቀብያለሁ።\nምን እንዳደርግልዎ ይፈልጋሉ?`, ik([[b(FK.qa, 'fk:qa'), b(FK.tr, 'fk:tr')], [b(FK.qs, 'fk:qs'), b(FK.ex, 'fk:ex')], [b(FK.nt, 'fk:nt'), b(FK.sm, 'fk:sm')], [b(FK.tx, 'fk:tx'), b(FK.tc, 'fk:tc')], [b('🧑‍🏫 በሰሌዳ (live) አስረዳኝ', 'tc:bd')]]));
   async function fkRun(chat, uid, act) {
     const lm = MEDIA.get(chat); if (!lm || Date.now() - lm.ts > 20 * 60e3) return send(chat, '⌛ ፋይሉ ጊዜው አልፏል — እንደገና ይላኩ።');
     if (act === 'tc') return teachStart(chat, uid);
@@ -941,7 +941,7 @@ module.exports = function bot(c) {
       if (r.paywall) { await paywall(chat, uid, r.paywall, r.text); return null; } return r.text || '';
     } catch (e) { await send(chat, aiErr(e, chat)); return null; }
   }
-  const tcKb = (chat, lm) => { const vo = ses(chat).vo !== 'off', last = lm.tc && lm.tc.i >= lm.tc.topics.length - 1; return ik([[b(last ? '🏁 ማጠቃለያ' : '▶️ ቀጣይ ትምህርት', 'tc:nx'), b('🔁 በሌላ መንገድ', 'tc:rp')], [b('❓ ጥያቄ አለኝ', 'tc:q'), b('📝 ፈትነኝ', 'tc:qz')], [b('📋 ርዕሶች', 'tc:ls'), b(vo ? '🔊 ድምፅ በርቷል' : '🔇 ድምፅ ጠፍቷል', 'tc:vo')]]); };
+  const tcKb = (chat, lm) => { const vo = ses(chat).vo !== 'off', last = lm.tc && lm.tc.i >= lm.tc.topics.length - 1; return ik([[b(last ? '🏁 ማጠቃለያ' : '▶️ ቀጣይ ትምህርት', 'tc:nx'), b('🔁 በሌላ መንገድ', 'tc:rp')], [b('❓ ጥያቄ አለኝ', 'tc:q'), b('📝 ፈትነኝ', 'tc:qz')], [b('🧑‍🏫 በሰሌዳ (live)', 'tc:bd')], [b('📋 ርዕሶች', 'tc:ls'), b(vo ? '🔊 ድምፅ በርቷል' : '🔇 ድምፅ ጠፍቷል', 'tc:vo')]]); };
   async function teachStart(chat, uid) {
     const lm = MEDIA.get(chat); if (!lm) return send(chat, '⌛ ፋይሉ ጊዜው አልፏል — እንደገና ይላኩ።'); if (!aiReady()) return send(chat, aiOff);
     typing(chat); const tm = setInterval(() => typing(chat), 4500);
@@ -971,6 +971,7 @@ module.exports = function bot(c) {
     return send(chat, 'ሌላ ምን ላድርግ?', ik([[b(FK.qs, 'fk:qs'), b('📋 ርዕሶች', 'tc:ls')], [b('🔁 ከመጀመሪያ', 'tc:go:0')]]));
   }
   async function tcRoute(chat, uid, a, x) {
+    if (a === 'bd' || a === 'bdn') { const l0 = MEDIA.get(chat); if (!l0) return send(chat, '⌛ ፋይሉ ጊዜው አልፏል — እንደገና ይላኩ።'); if (l0.tc && a === 'bdn') l0.tc.i = Math.min(l0.tc.topics.length - 1, l0.tc.i + 1); if (l0.tc) l0.ts = Date.now(); return boardMake(chat, uid); }
     const lm = MEDIA.get(chat); if (!lm || !lm.tc) return send(chat, '⌛ ትምህርቱ ጊዜው አልፏል — ፋይሉን እንደገና ይላኩ ወይም 🎓 ትምህርት ውስጥ መጽሐፍ ይምረጡ።'); const T = lm.tc;
     if (a === 'nx') return teachTopic(chat, uid, T.i + 1); if (a === 'rp') return teachTopic(chat, uid, T.i, true); if (a === 'go') return teachTopic(chat, uid, Number(x) || 0);
     if (a === 'ls') return send(chat, '📋 <b>ርዕሶች</b>', ik(T.topics.map((t, i) => [b(`${i === T.i ? '▶️ ' : ''}${i + 1}. ${clip(t, 40)}`, 'tc:go:' + i)])));
@@ -980,6 +981,20 @@ module.exports = function bot(c) {
       typing(chat); const out = await askAI(chat, uid, lmBody(lm, `${TEACHER}\n\nስለ ርዕስ «${T.topics[T.i]}» 3 አጫጭር የፈተና ጥያቄዎች ጠይቀኝ (መልሱን አትንገር)። እኔ ስመልስ አርመህ ትክክለኛውን መልስ አብራራ፤ ከዚያ ነጥብ ስጠኝ።`), lm.m); if (out == null) return;
       await sendLong(chat, '📝 <b>ፈተና</b>', out); if (ses(chat).vo !== 'off') await speakTo(chat, out); return send(chat, '✍️ መልሶችዎን በአንድ መልእክት ይጻፉ ወይም በድምፅ ይመልሱ።', tcKb(chat, lm));
     }
+  }
+
+  /* ===== 🧑‍🏫 የቀጥታ ሰሌዳ፦ መምህሩ በጠቆረ ሰሌዳ ላይ እየጻፈ/እየሳለ በድምፅ ያስረዳል (Mini App ገጽ /board/<id>) ===== */
+  async function boardMake(chat, uid, topicIdx) {
+    const lm = MEDIA.get(chat); if (!lm) return send(chat, '⌛ ፋይሉ ጊዜው አልፏል — እንደገና ይላኩ።'); if (!aiReady()) return send(chat, aiOff); if (!svc.boardPut) return send(chat, '⚠️ ሰሌዳ አልተዘጋጀም።');
+    const T = lm.tc, topic = T ? T.topics[topicIdx == null ? T.i : topicIdx] : '';
+    typing(chat); const tm = setInterval(() => typing(chat), 4500); let out;
+    try {
+      const q = `${TEACHER}\n\nአሁን በክፍል ውስጥ በጥቁር ሰሌዳ ላይ እየጻፍክ እና እየሳልክ እንደምታስተምር አስተምር። ርዕስ፦ ${topic ? '«' + topic + '»' : 'የፋይሉ ዋና ርዕስ (በጣም አስፈላጊው ክፍል)'}።\nውጤቱን በትክክል በዚህ JSON ቅርጸት ብቻ ስጥ (ከJSON ውጪ ምንም ጽሑፍ፣ ምልክት ወይም \`\`\` አትጨምር)፦\n{"title":"የትምህርቱ ርዕስ","steps":[{"say":"መምህሩ በድምፅ የሚናገረው (1-3 አጭር የተፈጥሮ አረፍተ ነገሮች)","clear":false,"write":[{"k":"title","t":"..."},{"k":"bullet","t":"..."},{"k":"formula","t":"..."},{"k":"note","t":"..."},{"k":"draw","shapes":[{"k":"rect","x":10,"y":8,"w":30,"h":14},{"k":"circle","x":70,"y":15,"r":8},{"k":"arrow","x1":40,"y1":15,"x2":62,"y2":15},{"k":"line","x1":0,"y1":30,"x2":100,"y2":30},{"k":"label","x":12,"y":18,"t":"ጽሑፍ"}]}]}]}\nህጎች፦ 7 እስከ 12 እርምጃዎች፤ እያንዳንዱ እርምጃ በሰሌዳ ላይ አጭር ጽሑፍ (k=title/text/bullet/formula/note — ቃላት እንጂ ረጅም አንቀጽ አይደለም) እና አስፈላጊ ሲሆን ሥዕላዊ መግለጫ (draw፤ ሸራው ስፋት 100 × ቁመት 56፤ ቅርጾች rect/circle/line/arrow/label) ይኑረው። say ከሚጻፈው ጋር ይመሳሰል ግን ሙሉ ማብራሪያ ይስጥ። ምሳሌ ጨምር። የመጨረሻው እርምጃ ማጠቃለያ እና አንድ የመረዳት ጥያቄ። ርዕሱ ሲቀየር clear:true።`;
+      out = await askAI(chat, uid, lmBody(lm, q), lm.m);
+    } finally { clearInterval(tm); }
+    if (out == null) return; let j = null; try { const a = out.indexOf('{'), z = out.lastIndexOf('}'); j = JSON.parse(out.slice(a, z + 1)); } catch (e) { }
+    const id = j && svc.boardPut(uid || 'admin', j.title || topic || lm.name, j.steps); if (!id) return send(chat, '⚠️ ሰሌዳውን ማዘጋጀት አልተቻለም — እንደገና ይሞክሩ።', ik([[b('🔁 እንደገና', 'tc:bd')]]));
+    const url = web('/board/' + id); return tg('sendMessage', { chat_id: chat, text: `🧑‍🏫 <b>የቀጥታ ሰሌዳ ዝግጁ ነው</b>${topic ? '\n📘 ' + H(topic) : ''}\n\nመምህሩ በሰሌዳ ላይ እየጻፈና እየሳለ በድምፅ ያስረዳል። ⏯ ማቆም/መቀጠል፣ ⏮⏭ እርምጃ መለወጥ ይችላሉ።\n(ሊንኩ ለ48 ሰዓት ይሠራል)`, parse_mode: 'HTML', reply_markup: /^https:/.test(baseUrl) ? { inline_keyboard: [[{ text: '🧑‍🏫 ሰሌዳውን ክፈት', web_app: { url } }], [b('➡️ ቀጣይ ርዕስ በሰሌዳ', 'tc:bdn')]] } : undefined }).catch(e => console.warn('board send', e.message));
   }
   /* ===== 🎓 ትምህርት ዋና ክፍል + 📚 የመማሪያ መጻሕፍት ቤተ-መጻሕፍት ===== */
   async function eduHome(chat, uid) {
@@ -997,7 +1012,7 @@ module.exports = function bot(c) {
     typing(chat); let buf; try { buf = await tgDownload(k.fileId); } catch (e) { return send(chat, '⚠️ መጽሐፉን ማውጣት አልተቻለም — አድሚን እንደገና ይጫነው።'); }
     const rf = await readFile(buf, k.name, k.mime); if (rf.err) return send(chat, rf.err);
     MEDIA.set(chat, { m: rf.media, t: rf.body, name: k.title, isPdf: !!(rf.media && /pdf/.test(rf.media.mime)), isPpt: /\.pptx$/i.test(k.name), buf, img: false, ts: Date.now() });
-    return send(chat, `📘 <b>${H(k.title)}</b>${k.sub ? ' · ' + H(k.sub) : ''}\nምን ላድርግ?`, ik([[b('🎓 አስተምረኝ (ርዕስ በርዕስ)', 'fk:tc')], [b(FK.qa, 'fk:qa'), b(FK.qs, 'fk:qs')], [b(FK.nt, 'fk:nt'), b(FK.sm, 'fk:sm')], [b(FK.tr, 'fk:tr'), b(FK.ex, 'fk:ex')]]));
+    return send(chat, `📘 <b>${H(k.title)}</b>${k.sub ? ' · ' + H(k.sub) : ''}\nምን ላድርግ?`, ik([[b('🎓 አስተምረኝ (ርዕስ በርዕስ)', 'fk:tc')], [b('🧑‍🏫 በሰሌዳ (live) አስረዳኝ', 'tc:bd')], [b(FK.qa, 'fk:qa'), b(FK.qs, 'fk:qs')], [b(FK.nt, 'fk:nt'), b(FK.sm, 'fk:sm')], [b(FK.tr, 'fk:tr'), b(FK.ex, 'fk:ex')]]));
   }
   async function bookAdd(chat, m) {          // አድሚን፦ መጽሐፍ ያክላል (ፋይሉ በ Telegram file_id ይያዛል፤ ርዕስ | ትምህርት ከ caption)
     const st = ses(chat); st.axbk = false; save(); const d = m.document, name = d.file_name || 'book';

@@ -3,7 +3,7 @@ test('መምህር ሁነታ፦ ርዕሶች፣ ትምህርት፣ ጥያቄ፣ 
   process.env.ANTHROPIC_API_KEY = 'k'; delete process.env.GEMINI_API_KEY; const seen = [];
   const srv = http.createServer((q, r) => { r.setHeader('content-type', 'application/json'); r.end(JSON.stringify({ ok: true, items: [] })); }); await new Promise(r => srv.listen(0, r)); const port = srv.address().port;
   const realFetch = global.fetch; global.fetch = async (url, o) => {
-    if (/anthropic/.test(url)) { const body = JSON.parse(o.body), last = body.messages[body.messages.length - 1].content, txt = Array.isArray(last) ? last.map(x => x.text || '').join('\n') : last; seen.push(txt); return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: /ዘርዝር/.test(txt) ? '1. መግቢያ\n2. ዋና ነጥቦች\n3. ማጠቃለያ' : 'የመምህር መልስ' }] }) }; }
+    if (/anthropic/.test(url)) { const body = JSON.parse(o.body), last = body.messages[body.messages.length - 1].content, txt = Array.isArray(last) ? last.map(x => x.text || '').join('\n') : last; seen.push(txt); return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: /JSON ቅርጸት/.test(txt) ? JSON.stringify({ title: 'ሴል', steps: [{ say: 'ሴል መሠረት ነው', write: [{ k: 'title', t: 'ሴል' }, { k: 'bad', t: 'x' }, { k: 'draw', shapes: [{ k: 'rect', x: 1, y: 2, w: 9999, h: 5 }, { k: 'evil', x: 1 }] }] }, { say: '', write: [] }] }) : /ዘርዝር/.test(txt) ? '1. መግቢያ\n2. ዋና ነጥቦች\n3. ማጠቃለያ' : 'የመምህር መልስ' }] }) }; }
     if (/api\.telegram\.org\/file/.test(url)) return { ok: true, arrayBuffer: async () => Buffer.from('%PDF /Type /Page') };
     return realFetch(url, o); };
   const sent = [], tg = async (m, p) => { sent.push([m, p]); return { ok: true, file_path: 'x.pdf' }; };
@@ -26,6 +26,9 @@ test('መምህር ሁነታ፦ ርዕሶች፣ ትምህርት፣ ጥያቄ፣ 
     sent.length = 0; await cb(1, 'tc:nx'); assert.ok(msgs().some(m => /ትምህርት 2\/3/.test(m.text))); assert.match(seen[seen.length - 1], /ዋና ነጥቦች/);
     sent.length = 0; await cb(1, 'tc:qz'); assert.ok(msgs().some(m => /ፈተና/.test(m.text))); await cb(1, 'tc:vo'); assert.ok(msgs().some(m => /ድምፅ ጠፍቷል/.test(m.text)));
     await cb(1, 'tc:nx'); sent.length = 0; await cb(1, 'tc:nx'); assert.ok(msgs().some(m => /ተጠናቀቀ/.test(m.text)));
+    // የቀጥታ ሰሌዳ
+    sent.length = 0; await cb(1, 'tc:bd'); const bm = msgs().find(m => /ሰሌዳ ዝግጁ/.test(m.text)); assert.ok(bm, 'ሰሌዳ ተዘጋጅቷል'); assert.match(JSON.stringify(bm.reply_markup), /web_app[\s\S]*https:\/\/x\.et\/board\/[\w-]{8,}/);
+    assert.equal(svc.boardPut('u', 'x', [{ write: [{ k: 'zzz', t: 'a' }] }]), null); const bid = svc.boardPut('u', 't', [{ say: 'a', write: [{ k: 'draw', shapes: [{ k: 'rect', w: 9999, h: 1 }, { k: 'evil' }] }] }]); assert.ok(bid);
     // አጠቃቀም ክትትል (አድሚን)
     sent.length = 0; await cb(999, 'axus:s:d'); const us = msgs().find(m => /የቦት አጠቃቀም/.test(m.text)); assert.ok(us); assert.match(us.text, /ጠቅላላ ተጠቃሚ፦ <b>[2-9]/); assert.match(JSON.stringify(us.reply_markup), /axus:u:1/);
     sent.length = 0; await cb(999, 'axus:u:1'); assert.ok(msgs().some(m => /መልእክት\/ጠቅታ/.test(m.text) && /axus:bk:1/.test(JSON.stringify(m.reply_markup))));

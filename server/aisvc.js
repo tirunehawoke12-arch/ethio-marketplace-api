@@ -141,6 +141,32 @@ module.exports = function aisvc(ctx) {
     r.status = 'rejected'; r.reason = S(reason, 200); r.done = now(); await saveMany([[REQ, r.id]]); try { notifyUser(r.uid, `❌ የ AI ክፍያዎ አልተረጋገጠም${r.reason ? '፦ ' + r.reason : ''}። ትክክለኛ ማጣቀሻ ቁጥር ጋር እንደገና ይሞክሩ።`); } catch (e) { } return { ok: true };
   }
 
+
+  /* ---------- 🧑‍🏫 የቀጥታ ሰሌዳ (ካፒቴብል ሊንክ፤ በ RAM ለ48 ሰዓት) ---------- */
+  const BOARDS = new Map(), BTTS = new Map(), BK = ['title', 'text', 'bullet', 'formula', 'note', 'draw'], SH = ['line', 'arrow', 'rect', 'circle', 'label'];
+  const cl = (v, a, b) => Math.min(b, Math.max(a, Number(v) || 0));
+  function cleanSteps(raw) {
+    const out = []; for (const st of (Array.isArray(raw) ? raw : []).slice(0, 16)) {
+      if (!st || typeof st !== 'object') continue; const w = [];
+      for (const it of (Array.isArray(st.write) ? st.write : []).slice(0, 8)) {
+        if (!it || !BK.includes(it.k)) continue;
+        if (it.k === 'draw') { const sh = (Array.isArray(it.shapes) ? it.shapes : []).filter(x => x && SH.includes(x.k)).slice(0, 24).map(x => ({ k: x.k, x1: cl(x.x1, 0, 100), y1: cl(x.y1, 0, 56), x2: cl(x.x2, 0, 100), y2: cl(x.y2, 0, 56), x: cl(x.x, 0, 100), y: cl(x.y, 0, 56), w: cl(x.w, 1, 100), h: cl(x.h, 1, 56), r: cl(x.r, 1, 40), t: S(x.t, 40) })); if (sh.length) w.push({ k: 'draw', shapes: sh }); }
+        else { const t = S(it.t, 400); if (t) w.push({ k: it.k, t }); }
+      }
+      const say = S(st.say, 700); if (say || w.length) out.push({ say, write: w, clear: !!st.clear });
+    } return out;
+  }
+  function boardPut(uid, title, raw) {
+    const steps = cleanSteps(raw); if (!steps.length) return null; const t = now(); for (const [k, v] of BOARDS) if (t - v.ts > 48 * 3600e3) { BOARDS.delete(k); for (const x of BTTS.keys()) if (x.startsWith(k + ':')) BTTS.delete(x); }
+    if (BOARDS.size > 300) { const k0 = BOARDS.keys().next().value; BOARDS.delete(k0); } const id = require('crypto').randomBytes(9).toString('base64url'); BOARDS.set(id, { id, uid, title: S(title, 80), steps, ts: t }); return id;
+  }
+  const wavOf = (pcm, rate) => { const h = Buffer.alloc(44); h.write('RIFF', 0); h.writeUInt32LE(36 + pcm.length, 4); h.write('WAVEfmt ', 8); h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20); h.writeUInt16LE(1, 22); h.writeUInt32LE(rate, 24); h.writeUInt32LE(rate * 2, 28); h.writeUInt16LE(2, 32); h.writeUInt16LE(16, 34); h.write('data', 36); h.writeUInt32LE(pcm.length, 40); return Buffer.concat([h, pcm]); };
+  app.get('/api/ai/board/:id', (req, res) => { const bd = BOARDS.get(String(req.params.id)); if (!bd) return bad(res, 404, 'not_found'); res.set('cache-control', 'no-store'); res.json({ ok: true, title: bd.title, steps: bd.steps, tts: ai.provider === 'gemini' }); });
+  app.get('/api/ai/board/:id/tts/:i', async (req, res) => {
+    const bd = BOARDS.get(String(req.params.id)), i = Number(req.params.i), st = bd && bd.steps[i]; if (!st || !st.say) return res.status(204).end(); if (!limit('btts' + req.ip, 60, 60e3)) return res.status(429).end();
+    const key = bd.id + ':' + i; try { let w = BTTS.get(key); if (!w) { const a = await ai.speak(st.say); if (!a) return res.status(204).end(); w = wavOf(a.pcm, a.rate); if (BTTS.size > 120) BTTS.delete(BTTS.keys().next().value); BTTS.set(key, w); } res.set({ 'content-type': 'audio/wav', 'cache-control': 'private, max-age=3600' }); res.send(w); } catch (e) { res.status(204).end(); }
+  });
+
   /* ---------- HTTP ---------- */
   const user = (req, res) => who(req, res);
   app.get('/api/ai/info', (req, res) => { const u = user(req, res); if (!u) return; res.set('cache-control', 'no-store'); res.json({ ok: true, ready: ai.enabled, admin: !!u.admin, ...(u.admin ? { enabled: true, paid: true, plans: cfg().plans, free: {}, usage: { chat: 0, pages: 0 } } : info(u.uid)) }); });
@@ -180,6 +206,6 @@ module.exports = function aisvc(ctx) {
     if (ch.length) await saveMany(ch).catch(() => { }); return ch.length;
   }
   const timer = setInterval(() => { tick().catch(() => { }); }, 3600e3); timer.unref && timer.unref(); setTimeout(() => tick().catch(() => { }), 60e3).unref();
-  return { newsDiag, clockInfo, ethDate, newsInfo, tbOnly, autoVerify, cfg, acc, info, converse, takePages, buy, decide, tick, stats, ai, isOwner };
+  return { boardPut, newsDiag, clockInfo, ethDate, newsInfo, tbOnly, autoVerify, cfg, acc, info, converse, takePages, buy, decide, tick, stats, ai, isOwner };
 };
 module.exports.DEFAULTS = DEFAULTS;
