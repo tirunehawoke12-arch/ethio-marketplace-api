@@ -4,7 +4,7 @@
    escrow፣ ማሳወቂያዎች ሁሉ ከድረ-ገጹ ጋር አንድ ናቸው (ምንም አይደገምም)። ንግግሮች (ቅጾች) «flow» ናቸው፦ ጥያቄ በጥያቄ። */
 const { errText } = require('./errors');
 const AIM = require('./ai');
-const DO = require('./docout');
+const DO = require('./docout'), PDFM = require('./pdfmerge'), PPM = require('./pptxmerge');
 const { TEMPLATES } = require('./templates.generated');
 const REGIONS = ['አዲስ አበባ', 'ድሬዳዋ', 'አማራ', 'ኦሮሚያ', 'ትግራይ', 'ሲዳማ', 'ሶማሌ', 'አፋር', 'ቤንሻንጉል ጉሙዝ', 'ጋምቤላ', 'ሐረሪ', 'ማዕከላዊ ኢትዮጵያ', 'ደቡብ ምዕራብ ኢትዮጵያ', 'ደቡብ ኢትዮጵያ'];
 const PAY = ['telebirr', 'CBE Birr', 'ንግድ ባንክ', 'አዋሽ ባንክ', 'ዳሽን ባንክ', 'አቢሲኒያ ባንክ', 'ሌላ'];
@@ -946,7 +946,7 @@ module.exports = function bot(c) {
     if ((d.file_size || 0) > 19.5 * 1048576) return send(chat, '⚠️ ፋይሉ ከ20MB በላይ ነው — ትንሽ ክፍል አድርገው ይላኩ።');
     for (const [k, v] of DOCS) if (Date.now() - v.ts > 3600e3) DOCS.delete(k); if (DOCS.size > 40) return send(chat, '⏳ አሁን ብዙ ሰው እየተረጎመ ነው — ከጥቂት ደቂቃ በኋላ ይሞክሩ።');
     typing(chat); let buf; try { buf = await tgDownload(d.file_id); } catch (e) { return send(chat, '⚠️ ፋይሉን ማውረድ አልተቻለም — እንደገና ይላኩ።'); }
-    const job = { kind: isPdf ? 'pdf' : 'pptx', name, ts: Date.now(), next: 1, total: 0, busy: false };
+    const job = { kind: isPdf ? 'pdf' : 'pptx', name, ts: Date.now(), next: 1, total: 0, busy: false, orig: buf };
     if (isPdf) { job.buf = buf; job.split = await pdfSplit(buf); job.total = job.split ? job.split.n : AIM.countPdfPages(buf); if (job.total > 100) return send(chat, `⚠️ ፋይሉ ${job.total} ገጽ ነው — AI በአንድ ጊዜ እስከ 100 ገጽ ብቻ ያነባል። በ100 ገጽ ክፍል አድርገው ይላኩ።`); }
     else { try { const { parsePptx } = require('../src/lib/pptx'); const r = await parsePptx(buf); job.slides = r.slides.map(s => ({ title: s.title, blocks: s.blocks })); job.total = job.slides.length; } catch (e) { return send(chat, '⚠️ PPTX መነበብ አልቻለም — (PowerPoint 2007+ .pptx መሆኑን ያረጋግጡ)'); } if (!job.total) return send(chat, '⚠️ ስላይድ አልተገኘም።'); }
     job.title = name.replace(/\.(pdf|pptx)$/i, ''); DOCS.set(chat, job);
@@ -957,8 +957,12 @@ module.exports = function bot(c) {
   async function docFile(chat, d) {
     if (!d.out || !d.out.length) return send(chat, '⚠️ እስካሁን የተተረጎመ ገጽ የለም።');
     try {
-      const pdf = d.kind === 'pdf', opt = d.opt || ses(chat).docopt, buf = pdf ? DO.buildPdf(d.title, d.out, opt) : DO.buildPptx(d.title, d.out, opt), nm = `${String(d.title || 'translation').replace(/[^\w\u1200-\u137F.-]+/g, '_').slice(0, 60)}_am.${pdf ? 'pdf' : 'pptx'}`;
-      const fd = new FormData(); fd.append('chat_id', String(chat)); fd.append('caption', `📥 ${d.out.length} ${pdf ? 'ገጽ' : 'ስላይድ'} — በእያንዳንዱ ላይ ዋናው እንግሊዝኛ እና የአማርኛ ትርጉሙ`); fd.append('document', new Blob([buf], { type: pdf ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }), nm);
+      const pdf = d.kind === 'pdf', opt = d.opt || ses(chat).docopt; let buf = null, merged = false;
+      try { buf = pdf ? await PDFM.interleavePdf(d.buf, d.out, opt) : (await PPM.interleavePptx(d.orig, d.out, opt)).buf; merged = !!buf; } catch (e) { console.warn('merge', e.message); }
+      if (!buf) buf = pdf ? DO.buildPdf(d.title, d.out, opt) : DO.buildPptx(d.title, d.out, opt);          // ማዋሃድ ካልተቻለ (pdf-lib የለም/ፋይሉ ያልተለመደ) አማራጭ ባለሁለት ቋንቋ ፋይል
+      const nm = `${String(d.title || 'translation').replace(/[^\w\u1200-\u137F.-]+/g, '_').slice(0, 60)}_am.${pdf ? 'pdf' : 'pptx'}`;
+      const cap = merged ? `📥 ዋናው ፋይል እንዳለ (አቀማመጥ እና ምስል ሳይነካ) — ከእያንዳንዱ ${pdf ? 'ገጽ' : 'ስላይድ'} በኋላ የአማርኛ ትርጉሙ (${d.out.length})` : `📥 ${d.out.length} ${pdf ? 'ገጽ' : 'ስላይድ'} — ዋናው እና የአማርኛ ትርጉሙ በአንድ ላይ (ዋናውን ፋይል ማዋሃድ አልተቻለም)`;
+      const fd = new FormData(); fd.append('chat_id', String(chat)); fd.append('caption', cap); fd.append('document', new Blob([buf], { type: pdf ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }), nm);
       const r = await fetch(`${process.env.TELEGRAM_API_BASE || 'https://api.telegram.org'}/bot${token}/sendDocument`, { method: 'POST', body: fd }); if (!r.ok) throw new Error('send ' + r.status);
     } catch (e) { console.warn('docFile', e.message); return send(chat, '⚠️ ፋይሉን ማዘጋጀት/መላክ አልተሳካም — ትርጉሙ ከላይ በመልእክት ተልኳል።'); }
   }
@@ -978,7 +982,7 @@ module.exports = function bot(c) {
       const outline = d.kind === 'pptx' ? d.slides.map((s2, i) => `${i + 1}. ${s2.title || ''}`).join('; ').slice(0, 700) : '';
       const work = n => gate(async () => {
         const cx = { gloss: [...d.gloss.values()].slice(-40), outline, ...(d.kind === 'pptx' ? { prev: slideTx(n - 2), next: slideTx(n) } : {}) };
-        let both = true;
+        let both = false;          // ዋናው ፋይል ሳይነካ ስለሚቀመጥ እንግሊዝኛውን መድገም አያስፈልግም (ፈጣን)
         for (let tr = 0; ; tr++) {
           try { const v = d.kind === 'pdf' ? (d.split ? await ai.pdfPage(await d.split.page(n - 1), 1, d.total, both, { title: d.title, gloss: cx.gloss }, n) : await ai.pdfPage(d.buf, n, d.total, both, { title: d.title, gloss: cx.gloss })) : await ai.slideTr(d.title, d.slides[n - 1], n - 1, d.total, cx); d.cache[n] = v; return { ok: true, v }; }
           catch (e) {

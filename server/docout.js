@@ -56,7 +56,7 @@ function buildPdf(title, items, opts) {
   const cm = [], hex = ch => { const g = glyph(ch.codePointAt(0))[0]; return g.toString(16).padStart(4, '0'); };
   const txt = (s, x, y, sz, rgb) => { let h = ''; for (const ch of s) h += hex(ch); return `BT ${rgb} rg /F1 ${sz} Tf ${x.toFixed(1)} ${y.toFixed(1)} Td <${h}> Tj ET\n`; };
   let pg = null, y = 0;
-  const newPage = it => { pg = { c: '' }; pages.push(pg); pg.c += `0.96 0.97 0.95 rg 0 ${H - 34} ${W} 34 re f\n` + txt(ttl, M, H - 22, 10, '0.2 0.35 0.25') + txt(`${it.n} / ${total}`, W - M - tw(`${it.n} / ${total}`, 10), H - 22, 10, '0.2 0.35 0.25'); y = H - 62; };
+  const newPage = it => { pg = { c: '', w: W, h: H }; pages.push(pg); pg.c += `0.96 0.97 0.95 rg 0 ${H - 34} ${W} 34 re f\n` + txt(ttl, M, H - 22, 10, '0.2 0.35 0.25') + txt(`${it.n} / ${total}`, W - M - tw(`${it.n} / ${total}`, 10), H - 22, 10, '0.2 0.35 0.25'); y = H - 62; };
   const put = (line, sz, rgb) => { if (y < M + LEAD) newPage(cur); pg.c += txt(line, M, y, sz, rgb); y -= LEAD * sz / SZ; };
   let cur = null;
   for (const it of items) {
@@ -69,6 +69,10 @@ function buildPdf(title, items, opts) {
     }
   }
   if (!pages.length) newPage({ n: 0 });
+  return assemblePdf(pages);
+}
+
+function assemblePdf(pages) {
   // ዕቃዎች
   const objs = [], add = s => (objs.push(s), objs.length);       // 1-based
   const catalog = add(null), pagesObj = add(null), type0 = add(null), cid = add(null), desc = add(null), file = add(null), tou = add(null);
@@ -85,13 +89,32 @@ function buildPdf(title, items, opts) {
   objs[desc - 1] = `<< /Type /FontDescriptor /FontName /AmhSerif /Flags 6 /FontBBox [${FM.bbox.join(' ')}] /ItalicAngle 0 /Ascent ${FM.asc} /Descent ${FM.desc} /CapHeight 700 /StemV 80 /FontFile2 ${file} 0 R >>`;
   objs[file - 1] = stream(`/Filter /FlateDecode /Length1 ${FONT.length}`, zlib.deflateSync(FONT));
   objs[tou - 1] = stream('', Buffer.from(cmap, 'latin1'));
-  const kids = []; for (const p of pages) { const c = add(stream('/Filter /FlateDecode', zlib.deflateSync(Buffer.from(p.c, 'latin1')))), pgo = add(`<< /Type /Page /Parent ${pagesObj} 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 ${type0} 0 R >> >> /Contents ${c} 0 R >>`); kids.push(pgo + ' 0 R'); }
+  const kids = []; for (const p of pages) { const c = add(stream('/Filter /FlateDecode', zlib.deflateSync(Buffer.from(p.c, 'latin1')))), pgo = add(`<< /Type /Page /Parent ${pagesObj} 0 R /MediaBox [0 0 ${p.w} ${p.h}] /Resources << /Font << /F1 ${type0} 0 R >> >> /Contents ${c} 0 R >>`); kids.push(pgo + ' 0 R'); }
   objs[pagesObj - 1] = `<< /Type /Pages /Count ${kids.length} /Kids [${kids.join(' ')}] >>`;
   const parts = [Buffer.from('%PDF-1.5\n%\xE2\xE3\xCF\xD3\n', 'latin1')], offs = []; let pos = parts[0].length;
   objs.forEach((o, i) => { const b = Buffer.concat([Buffer.from(`${i + 1} 0 obj\n`, 'latin1'), Buffer.isBuffer(o) ? o : Buffer.from(o, 'latin1'), Buffer.from('\nendobj\n', 'latin1')]); offs.push(pos); pos += b.length; parts.push(b); });
   let x = `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n`; for (const o of offs) x += String(o).padStart(10, '0') + ' 00000 n \n';
   parts.push(Buffer.from(x + `trailer\n<< /Size ${objs.length + 1} /Root ${catalog} 0 R >>\nstartxref\n${pos}\n%%EOF`, 'latin1'));
   return Buffer.concat(parts);
+}
+
+/* ---------- የትርጉም ገጾች ብቻ (ዋናው PDF ሳይነካ ከእያንዳንዱ ገጽ በኋላ ይገባሉ) ----------
+   items = [{ n, am, w, h, imgs:[{ar}] }]  → { buf, map: { n: { page0, count, rects:[{x,y,w,h}] } } }  (rects በ PDF ነጥብ፣ ከታች-ግራ መነሻ)
+   ምስል ሲኖር በቀኝ አምድ ይደረደራል፤ ጽሑፉ በግራ። ረዥም ጽሑፍ ወደ ቀጣይ ገጽ ይቀጥላል። */
+function buildTrPages(items, opts) {
+  const OP = optOf(opts), PS = PRESETS[OP.preset], K = SIZES[OP.size][1], pages = [], map = {}, hx = ch => glyph(ch.codePointAt(0))[0].toString(16).padStart(4, '0');
+  const op = (s, x, y, sz, rgb) => { let h = ''; for (const ch of s) h += hx(ch); return `BT ${rgb} rg /F1 ${sz.toFixed(2)} Tf ${x.toFixed(1)} ${y.toFixed(1)} Td <${h}> Tj ET\n`; };
+  for (const it of items) {
+    const W = it.w || 595, H = it.h || 842, M = Math.max(28, Math.min(W, H) * 0.07), imgs = (it.imgs || []).filter(i => i && i.ar > 0).slice(0, 4), colW = imgs.length ? (W - 2 * M) * 0.36 : 0, gap = imgs.length ? 14 : 0, textW = W - 2 * M - colW - gap;
+    const SZ = Math.max(9, Math.min(16, Math.min(W, H) / 48)) * K, LEAD = SZ * 1.38, top = H - M, bot = M, rects = [];
+    const body = clean(it.am); const lines = []; for (const par of body.split('\n')) { if (!par.trim()) { lines.push(null); continue; } for (const ln of wrap(par, SZ, textW)) lines.push(ln); }
+    let pg = null, y = 0, first = true, count = 0; const start = pages.length;
+    const np = () => { pg = { c: '', w: W, h: H }; pages.push(pg); count++; y = top; pg.c += `0.96 0.97 0.95 rg 0 ${(H - M * 0.62).toFixed(1)} ${W} ${(M * 0.62).toFixed(1)} re f\n` + op(`ትርጉም · ገጽ ${it.n}${count > 1 ? ' (' + count + ')' : ''}`, M, H - M * 0.42, 8.5, '0.2 0.35 0.25'); y = top - M * 0.4; };
+    np(); if (imgs.length) { let iy = top - M * 0.4; for (const im of imgs) { const w = colW, h = Math.min(w / im.ar, (top - bot) * 0.46); const ww = Math.min(w, h * im.ar); rects.push({ x: W - M - colW + (colW - ww) / 2, y: iy - h, w: ww, h }); iy -= h + 12; if (iy < bot + 40) break; } }
+    for (const ln of lines) { if (y < bot + LEAD) np(); if (ln === null) { y -= LEAD * 0.45; continue; } pg.c += op(ln, M, y - SZ, SZ, PS.pdf.join(' ')); y -= LEAD; }
+    map[it.n] = { page0: start, count, rects };
+  }
+  return { buf: assemblePdf(pages.length ? pages : [{ c: '', w: 595, h: 842 }]), map };
 }
 
 /* ---------- PPTX ---------- */
@@ -135,4 +158,4 @@ function splitBoth(out) {
   const m = /\[\[EN\]\]([\s\S]*?)\[\[AM\]\]([\s\S]*)/.exec(String(out || '')); if (!m) return { en: '', am: String(out || '').replace(/\[\[(EN|AM)\]\]/g, '').trim() };
   return { en: m[1].trim(), am: m[2].trim() };
 }
-module.exports = { PRESETS, SIZES, optOf, buildPdf, buildPptx, zip, splitBoth, clean };
+module.exports = { buildTrPages, PRESETS, SIZES, optOf, buildPdf, buildPptx, zip, splitBoth, clean };
