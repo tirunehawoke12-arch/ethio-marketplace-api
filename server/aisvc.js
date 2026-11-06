@@ -92,6 +92,17 @@ module.exports = function aisvc(ctx) {
     if (wants && !paid && !urgent && c.paywall) { stats.paywalls++; return { ok: true, text: clean, paywall: 'premium' }; }
     return { ok: true, text: clean, paywall: '', urgent };
   }
+  /* ከባዶ ፋይል ማዘጋጀት (pdf/pptx/docx/xlsx)፦ 1 የውይይት መልእክት ይቆጠራል → { ok, file:{buf,name,mime,ext}, title } */
+  async function genDoc({ uid, key, text, fmt, admin, media, source, prev, opts }) {
+    const c = cfg(); if (!ai.enabled) return { ok: false, error: 'ai_off' }; const owner = admin || isOwner(uid); if (!c.enabled && !owner) return { ok: false, error: 'ai_disabled' };
+    const a = acc(uid); if (a.blocked && !owner) return { ok: false, error: 'ai_blocked' }; const paid = owner || a.paid, q = ai.take(String(uid), 'chat', 1, owner, paid ? c.paidChatDay : c.freeChatDay);
+    if (!q.ok) return !paid && c.paywall ? { ok: true, paywall: 'limit' } : { ok: false, error: 'ai_limit' };
+    try {
+      const ctx = ai.snap(String(key || uid)).map(m => (m.role === 'user' ? 'ተጠቃሚ' : 'አንተ') + '፦ ' + m.content).join('\n').slice(-3500), spec = await ai.genDocSpec({ fmt, request: text, ctx, source, media, prev }), f = require('./gendoc').build(fmt, spec, opts);
+      ai.note(String(key || uid), `[${String(fmt).toUpperCase()} ፋይል «${f.name}» አዘጋጅቼ ሰጠሁ። ክፍሎች፦ ${(spec.sections || []).map(x => x && x.h).filter(Boolean).slice(0, 12).join(' | ')}]`);
+      return { ok: true, file: f, spec };
+    } catch (e) { ai.refund(String(uid), 'chat', 1); throw e; }
+  }
   /* የሰነድ ትርጉም ገጾች ገደብ */
   function takePages(uid, admin) {
     const c = cfg(), owner = admin || isOwner(uid); if (!c.enabled && !owner) return { ok: false, error: 'ai_disabled' }; const a = acc(uid); if (a.blocked && !owner) return { ok: false, error: 'ai_blocked' }; const paid = owner || a.paid;
@@ -173,20 +184,23 @@ module.exports = function aisvc(ctx) {
     const pcm = []; let rate = 24000; for (const part of splitSay(text)) { let a = null; for (let tr = 0; tr < 3 && !a; tr++) { a = await ai.speak(part); if (!a) await new Promise(r => setTimeout(r, 1200 * (tr + 1))); } if (!a) return null; pcm.push(a.pcm); rate = a.rate; }
     return pcm.length ? wavOf(Buffer.concat(pcm), rate) : null;
   }
+  const groupsOf = pg => { const G = []; let cur = [], len = 0; (pg.lines || []).forEach((l, i) => { const n = (l.say || '').length; if (cur.length && (G.length === 0 || cur.length >= 3 || len + n > 700)) { G.push(cur); cur = []; len = 0; } cur.push(i); len += n; }); if (cur.length) G.push(cur); return G; };          // የመጀመሪያው ቡድን 1 መስመር (ፈጣን ጅምር)፤ ቀጥሎ እስከ 3 መስመር በአንድ ድምፅ — ጥያቄ ያነሰ፣ በመስመሮች መካከል ክፍተት የለም
+  const groupSay = (pg, g) => g.map(i => pg.lines[i].say || '').filter(Boolean).join(' ');
   function ttsGet(key, text) {          // በአንድ ጊዜ የሚመጡ ጥያቄዎች አንድ ሥራ ይጋራሉ፤ ስኬት ብቻ ይሸጎጣል
     let p = BTTS.get(key); if (p) return p; p = synth(text).catch(() => null); BTTS.set(key, p); p.then(w => { if (!w) BTTS.delete(key); }); if (BTTS.size > 80) BTTS.delete(BTTS.keys().next().value); return p;
   }
-  function warm(bd, n) {          // ገጹ እንደተዘጋጀ ሁሉንም መስመሮች ድምፅ ከበስተጀርባ (2 በአንድ ጊዜ) ያዘጋጃል — ተማሪው ሲደርስ ዝግጁ ነው
-    if (!ai.speak || ai.provider !== 'gemini') return; const pg = bd.pages[n]; if (!pg) return; const L = pg.lines.map((l, i) => [i, l.say]).filter(x => x[1]);
-    (async () => { let k = 0; const worker = async () => { while (k < L.length) { const [i, t] = L[k++]; await ttsGet(bd.id + ':' + n + ':' + i, t); } }; await Promise.all([worker(), worker()]); })().catch(() => { });
+  function warm(bd, n) {          // ገጹ እንደተዘጋጀ የቡድን ድምፆች ከበስተጀርባ (2 በአንድ ጊዜ) ይዘጋጃሉ
+    if (!ai.speak || ai.provider !== 'gemini') return; const pg = bd.pages[n]; if (!pg) return; const G = groupsOf(pg).map((g, gi) => [gi, groupSay(pg, g)]).filter(x => x[1]);
+    (async () => { let k = 0; const worker = async () => { while (k < G.length) { const [gi, t] = G[k++]; await ttsGet(bd.id + ':' + n + ':g' + gi, t); } }; await Promise.all([worker(), worker()]); })().catch(() => { });
   }
   const sendWav = async (res, key, text) => { try { const w = await ttsGet(key, text); if (!w) return res.status(204).end(); res.set({ 'content-type': 'audio/wav', 'cache-control': 'private, max-age=3600' }); res.send(w); } catch (e) { res.status(204).end(); } };
   const bdOf = req => BOARDS.get(String(req.params.id));
   app.get('/api/ai/board/:id', (req, res) => { const bd = bdOf(req); if (!bd) return bad(res, 404, 'not_found'); res.set('cache-control', 'no-store'); res.json({ ok: true, title: bd.title, total: bd.total, start: bd.start, tts: ai.provider === 'gemini' }); });
   app.get('/api/ai/board/:id/page/:n', async (req, res) => {
     const bd = bdOf(req), n = Number(req.params.n); if (!bd || !(n >= 1 && n <= bd.total)) return bad(res, 404, 'not_found'); if (!limit('bpg' + bd.id, 150, 3600e3)) return bad(res, 429, 'slow_down');
-    try { const pg = await boardGet(bd, n); res.set('cache-control', 'no-store'); res.json({ ok: true, n, total: bd.total, page: pg }); } catch (e) { bad(res, e.message === 'ai_limit' ? 429 : 503, e.message === 'ai_limit' ? 'ai_limit' : /^ai_/.test(e.message) ? e.message : 'board_failed'); }
+    try { const pg = await boardGet(bd, n); res.set('cache-control', 'no-store'); res.json({ ok: true, n, total: bd.total, page: pg, groups: groupsOf(pg) }); } catch (e) { bad(res, e.message === 'ai_limit' ? 429 : 503, e.message === 'ai_limit' ? 'ai_limit' : /^ai_/.test(e.message) ? e.message : 'board_failed'); }
   });
+  app.get('/api/ai/board/:id/tts/:n/g/:g', async (req, res) => { const bd = bdOf(req), pg = bd && bd.pages[Number(req.params.n)], gr = pg && groupsOf(pg)[Number(req.params.g)], t = gr && groupSay(pg, gr); if (!t) return res.status(204).end(); if (!limit('btts' + req.ip, 90, 60e3)) return res.status(429).end(); return sendWav(res, bd.id + ':' + req.params.n + ':g' + req.params.g, t); });
   app.get('/api/ai/board/:id/tts/:n/:i', async (req, res) => { const bd = bdOf(req), pg = bd && bd.pages[Number(req.params.n)], l = pg && pg.lines[Number(req.params.i)]; if (!l || !l.say) return res.status(204).end(); if (!limit('btts' + req.ip, 90, 60e3)) return res.status(429).end(); return sendWav(res, bd.id + ':' + req.params.n + ':' + req.params.i, l.say); });
   app.post('/api/ai/board/:id/ask', async (req, res) => {
     const bd = bdOf(req); if (!bd) return bad(res, 404, 'not_found'); if (!limit('bak' + bd.id, 30, 3600e3)) return bad(res, 429, 'slow_down'); const q = S((req.body || {}).q, 600); if (q.length < 2) return bad(res, 400, 'missing_text');
@@ -233,6 +247,6 @@ module.exports = function aisvc(ctx) {
     if (ch.length) await saveMany(ch).catch(() => { }); return ch.length;
   }
   const timer = setInterval(() => { tick().catch(() => { }); }, 3600e3); timer.unref && timer.unref(); setTimeout(() => tick().catch(() => { }), 60e3).unref();
-  return { boardPut, newsDiag, clockInfo, ethDate, newsInfo, tbOnly, autoVerify, cfg, acc, info, converse, takePages, buy, decide, tick, stats, ai, isOwner };
+  return { genDoc, resetChat: key => ai.reset(String(key)), boardPut, newsDiag, clockInfo, ethDate, newsInfo, tbOnly, autoVerify, cfg, acc, info, converse, takePages, buy, decide, tick, stats, ai, isOwner };
 };
 module.exports.DEFAULTS = DEFAULTS;

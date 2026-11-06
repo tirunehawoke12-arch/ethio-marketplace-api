@@ -71,7 +71,7 @@ export default function Room() {
 
   const fetchPage = useCallback(async k => {          // ገጽ k (በቅድሚያ ይታወሳል)
     const C = R.current.cache; if (C[k]) return C[k];
-    C[k] = fetch('/api/ai/board/' + id + '/page/' + k).then(r => r.json()).then(d => { if (!d.ok) { delete C[k]; throw new Error(d.error || 'failed'); } return d.page; }).catch(e => { delete C[k]; throw e; }); return C[k];
+    C[k] = fetch('/api/ai/board/' + id + '/page/' + k).then(r => r.json()).then(d => { if (!d.ok) { delete C[k]; throw new Error(d.error || 'failed'); } return Object.assign({}, d.page, { groups: d.groups }); }).catch(e => { delete C[k]; throw e; }); return C[k];
   }, [id]);
   const audioFor = useCallback((k, i, fresh) => {          // የመስመር ድምፅ ቀድሞ ይጫናል (ሰርቨሩ ከበስተጀርባ ያዘጋጃል)
     if (!meta || !meta.tts) return null; const key = k + ':' + i; if (fresh) delete R.current.aud[key];
@@ -93,8 +93,8 @@ export default function Room() {
     }, 120);
   }), [audioFor]);
 
-  const runLines = useCallback(async (k, page, from, tok) => {
-    const L = page.lines; for (let i = from; i < L.length; i++) {
+  const runLineSet = useCallback(async (k, page, idxs, tok) => {          // የመስመር-በመስመር ድምፅ (መጠባበቂያ)
+    const L = page.lines; for (const i of idxs) {
       if (R.current.tok !== tok) return false; const l = L[i]; setLi(i); setWi(-1); for (let j = 1; j <= 4; j++) audioFor(k, i + j);          // 4 መስመር ቀድሞ ይጫናል
       const W = wc(l.t) + wc(l.am), est = Math.max(1600, (l.say || '').length * 62); setMs(Math.max(220, est / Math.max(1, W)));
       let startRes; const stP = new Promise(r => { startRes = r; }); const sp = speakLine(k, i, l.say, tok, startRes); let spoken = false; sp.then(() => { spoken = true; });
@@ -104,14 +104,48 @@ export default function Room() {
     } return true;
   }, [audioFor, speakLine, wait]);
 
+  const gAudio = useCallback((k, g, fresh) => {          // የቡድን ድምፅ (1–3 መስመር በአንድ ፋይል) — ቀድሞ ይጫናል
+    if (!meta || !meta.tts) return null; const key = 'g' + k + ':' + g; if (fresh) delete R.current.aud[key];
+    if (!R.current.aud[key]) { const a = new Audio(); a.preload = 'auto'; a.dataset.state = 'load'; a.addEventListener('error', () => { a.dataset.state = 'err'; }); a.addEventListener('canplaythrough', () => { a.dataset.state = 'ok'; }); a.src = '/api/ai/board/' + id + '/tts/' + k + '/g/' + g + (fresh ? '?r=' + Date.now() : ''); R.current.aud[key] = a; } return R.current.aud[key];
+  }, [meta, id]);
+  const playGroup = useCallback(async (k, page, gi, tok) => {          // → true | false (ተቋርጧል) | 'fail'
+    const L = page.lines, G = page.groups[gi]; let a = gAudio(k, gi), tries = 0; const t0 = Date.now();
+    for (; ;) {
+      if (R.current.tok !== tok) return false; if (R.current.paused) { await sleep(120); continue; }
+      if (a.dataset.state === 'err') { if (tries < 3) { tries++; await sleep(1200 * tries); a = gAudio(k, gi, true); continue; } return 'fail'; }
+      if (a.readyState >= 3) break; const w = Date.now() - t0; if (w > 1500) setBusy(b => b || 'voice'); if (w > 70000) return 'fail'; await sleep(100);
+    }
+    setBusy(b => (b === 'voice' ? '' : b)); R.current.audio = a; a.playbackRate = R.current.spd; a.currentTime = 0; setTalking(true);
+    try { await a.play(); } catch (e) { return 'fail'; }
+    const wt = G.map(i => Math.max(1, (L[i].say || '').length)), tot = wt.reduce((x, y) => x + y, 0); const cum = [0]; wt.forEach(x => cum.push(cum[cum.length - 1] + x / tot));
+    let cur = -1, W = 1; while (!a.ended) {
+      if (R.current.tok !== tok) { try { a.pause(); } catch (e) { } return false; }
+      if (R.current.paused) { if (!a.paused) a.pause(); await sleep(120); continue; } if (a.paused && R.current.voice) a.play().catch(() => { });
+      const d = a.duration && isFinite(a.duration) ? a.duration : 0, f = d ? Math.min(0.9999, a.currentTime / d) : 0; let j = 0; while (j < G.length - 1 && f >= cum[j + 1]) j++;
+      const l = L[G[j]]; if (cur !== j) { cur = j; W = wc(l.t) + wc(l.am); setLi(G[j]); setMs(Math.max(120, d ? (d * (cum[j + 1] - cum[j]) * 1000 / R.current.spd) / Math.max(1, W) : 300)); }
+      setWi(Math.min(W - 1, Math.floor(((f - cum[j]) / Math.max(0.001, cum[j + 1] - cum[j])) * W))); await sleep(60);
+    }
+    setWi(W); setTalking(false); return true;
+  }, [gAudio, wait]);
+  const runLines = useCallback(async (k, page, from, tok) => {
+    const L = page.lines; if (!(meta && meta.tts && R.current.voice && page.groups && page.groups.length)) return runLineSet(k, page, L.map((_, i) => i).filter(i => i >= from), tok);
+    let g0 = page.groups.findIndex(g => g.includes(from)); if (g0 < 0) g0 = 0;
+    for (let gi = g0; gi < page.groups.length; gi++) {
+      if (R.current.tok !== tok) return false; gAudio(k, gi + 1); gAudio(k, gi + 2); setWi(-1);
+      const r = await playGroup(k, page, gi, tok); if (r === false) return false;
+      if (r === 'fail') { if (!(await runLineSet(k, page, page.groups[gi], tok))) return false; }
+      if (!(await wait(120, tok))) return false;
+    } return true;
+  }, [meta, gAudio, playGroup, runLineSet, wait]);
+
   const teach = useCallback(async (k, from = 0) => {
     const tok = ++R.current.tok; R.current.paused = false; setPaused(false); setAns(''); setShowQ(false); setHand(false); try { window.speechSynthesis.cancel(); if (R.current.audio) R.current.audio.pause(); } catch (e) { }
     setN(k); setPhase('loading'); setBusy(''); setLi(-1); setWi(-1); setTalking(false); setGaze('board');
     let page; try { page = await fetchPage(k); } catch (e) { if (R.current.tok === tok) { setPhase('error'); setBusy(ERR[e.message] || 'ገጹን ማዘጋጀት አልተቻለም — እንደገና ይሞክሩ።'); } return; }
-    if (R.current.tok !== tok) return; setPg(page); setPhase('teach'); if (meta && k < meta.total) fetchPage(k + 1).catch(() => { }); for (let j = 0; j < 4; j++) audioFor(k, j);
+    if (R.current.tok !== tok) return; setPg(page); setPhase('teach'); if (meta && k < meta.total) fetchPage(k + 1).catch(() => { }); gAudio(k, 0); gAudio(k, 1);
     if (!page.lines.length) { setPhase('wait'); return; }
     await sleep(900); R.current.resume = { k, i: from }; const ok = await runLines(k, page, from, tok); if (!ok || R.current.tok !== tok) return; setLi(-1); setPhase(k >= (meta ? meta.total : k) ? 'end' : 'wait'); setGaze('class'); setTalking(false);
-  }, [fetchPage, runLines, audioFor, meta]);
+  }, [fetchPage, runLines, gAudio, meta]);
 
   const stop = () => { R.current.tok++; setTalking(false); try { window.speechSynthesis.cancel(); if (R.current.audio) R.current.audio.pause(); } catch (e) { } };
   const pause = () => { R.current.paused = !R.current.paused; setPaused(R.current.paused); try { R.current.paused ? window.speechSynthesis.pause() : window.speechSynthesis.resume(); } catch (e) { } };

@@ -8,6 +8,8 @@
      AI_DOC_PAGES_DAY    — በቀን ለአንድ ተጠቃሚ የሚተረጎም ገጽ (ነባሪ 60)
      AI_DOC_BATCH        — «ቀጥል» ሳይጫኑ በአንድ ጊዜ የሚተረጎም ገጽ (ነባሪ 5)
    ወጪ በ API ቁልፍ ባለቤት (እርስዎ) ይከፈላል፤ ገደቦቹ ለዚያ ነው። */
+/* ሠንጠረዥ፣ ቁጥሮች እና ምልክቶች በትክክል ለማንበብ (ለፋይል/ፎቶ ጥያቄዎች እና ለትርጉም) */
+const ACC = `\n\n[ትክክለኛ የንባብ ህግ] ሠንጠረዥ ካለ ረድፍ በረድፍ ሁሉንም ሕዋስ (የተዋሃዱ ሕዋሳትን ጭምር) በትክክል አንብብ፤ የአምድ ርዕሶችን ከእሴቶቹ ጋር አዛምድ። ቁጥሮችን፣ አስርዮሽ ነጥብ/ኮማ፣ አሃዶችን (kg, mm, %, °C, ETB…)፣ ምልክቶችን (± ≤ ≥ ≠ ≈ × ÷ √ ∑ ∫ π α β Δ µ ‰ → ←)፣ ንዑስ/ላዕላይ ጽሑፍ (H₂O, x², 10⁶) እና የኬሚካል/የሂሳብ ቀመሮችን ፊደል በፊደል እንዳሉ ጠብቅ። ፈጽሞ አትገምት፣ አታጠጋጋ፣ አታስተካክል፤ የማይነበብ ወይም የማይታይ ከሆነ «[የማይነበብ]» ብለህ ጻፍ።`;
 const SYS = `አንተ «ኢትዮ ዲጂታል ማርኬት» የተባለው የኢትዮጵያ የመስመር ላይ ገበያ እና የተማሪዎች መማሪያ ቦት ውስጥ ያለህ ወዳጃዊ AI ረዳት ነህ።
 - ተጠቃሚው በጻፈበት ቋንቋ መልስ ይስጡ፤ ቋንቋው ካልተለየ በአማርኛ።
 - አጭር፣ ግልጽ እና ትክክለኛ ሁን፤ ትምህርት፣ ትርጉም፣ ጽሑፍ፣ ሒሳብ፣ ንግድ፣ ሥራ ማመልከቻ እና አጠቃላይ ጥያቄዎችን መርዳት ትችላለህ።
@@ -15,8 +17,8 @@ const SYS = `አንተ «ኢትዮ ዲጂታል ማርኬት» የተባለው �
 - ለእውነታዊ መልሶች (ሳይንስ፣ ሕክምና፣ ሕግ፣ ታሪክ፣ ቁጥሮች፣ ዜና) መጨረሻ ላይ «📚 ምንጭ፦» ብለህ እውነተኛ ምንጮችን ጥቀስ (የመማሪያ መጽሐፍ፣ መመሪያ፣ ድርጅት ወይም ድረ-ገጽ ስም/አገናኝ)። የማታውቀውን ምንጭ ወይም አገናኝ በጭራሽ አትፍጠር፤ እርግጠኛ ካልሆንክ «ምንጭ፦ አጠቃላይ እውቀት — በታማኝ ምንጭ ያረጋግጡ» ብለህ ጻፍ። ከድረ-ገጹ ዕቃ/ሱቅ መረጃ ከሆነ የድረ-ገጹን አገናኝ ጥቀስ።
 - Telegram ውስጥ ነው የምትመልሰው፤ markdown ሰንጠረዥ ወይም ከባድ ቅርጸት አትጠቀም፤ አጫጭር አንቀጾች እና ቀላል ዝርዝር ብቻ።`;
 const TR = `አንተ ባለሙያ የእንግሊዝኛ→አማርኛ ተርጓሚ ነህ። ሰነዱን ትርጉም በትርጉም (አውዳዊ) ወደ ተፈጥሯዊ፣ ግልጽ አማርኛ ተርጉም፤ ቃል በቃል አይደለም።
-ህጎች፦ (1) ትርጉሙን ብቻ ስጥ፤ መግቢያ ወይም ማብራሪያ አትጨምር። (2) የርዕስ፣ የነጥብ እና የአንቀጽ አወቃቀርን ጠብቅ። (3) ቁጥሮች፣ ቀመሮች፣ የሰዎች/ድርጅት ስሞች እና አህጽሮተ ቃላት እንዳሉ ይቀሩ፤ የቴክኒክ ቃል ሲተረጎም ለመጀመሪያ ጊዜ እንግሊዝኛውን በቅንፍ አብረህ ጻፍ፣ ለምሳሌ «የሕዋስ ሽፋን (cell membrane)»። (4) ሠንጠረዥ ከሆነ ረድፍ በረድፍ በቀላል መስመሮች (ዓምዶች በ « | »)። (5) ምስል/ሥዕላዊ መግለጫ ካለ በአጭሩ «[ምስል፦ …]» ብለህ ግለጽ፤ በውስጡ ጽሑፍ ካለ ተርጉመው። (6) ገጹ ቀድሞውኑ በአማርኛ ከሆነ እንዳለ ጻፈው። (7) ገጹ ባዶ ከሆነ «[ባዶ ገጽ]» ብቻ ጻፍ።`;
-const HIST_TURNS = 8, HIST_TTL = 30 * 60e3, API_VER = '2023-06-01';
+ህጎች፦ (1) ትርጉሙን ብቻ ስጥ፤ መግቢያ ወይም ማብራሪያ አትጨምር። (2) የርዕስ፣ የነጥብ እና የአንቀጽ አወቃቀርን ጠብቅ። (3) ቁጥሮች፣ ቀመሮች፣ የሰዎች/ድርጅት ስሞች እና አህጽሮተ ቃላት እንዳሉ ይቀሩ፤ የቴክኒክ ቃል ሲተረጎም ለመጀመሪያ ጊዜ እንግሊዝኛውን በቅንፍ አብረህ ጻፍ፣ ለምሳሌ «የሕዋስ ሽፋን (cell membrane)»። (4) ሠንጠረዥ ከሆነ ረድፍ በረድፍ በቀላል መስመሮች (ዓምዶች በ « | »)። (5) ምስል/ሥዕላዊ መግለጫ ካለ በአጭሩ «[ምስል፦ …]» ብለህ ግለጽ፤ በውስጡ ጽሑፍ ካለ ተርጉመው። (6) ገጹ ቀድሞውኑ በአማርኛ ከሆነ እንዳለ ጻፈው። (7) ሠንጠረዦችን ረድፍ በረድፍ ሁሉንም ሕዋስ በትክክል ተርጉም፤ ቁጥሮች፣ አሃዶች፣ ምልክቶች (± ≤ ≥ × ÷ √ ∑ π α β Δ °)፣ ቀመሮች እና ንዑስ/ላዕላይ ጽሑፍ ፈጽሞ አይለወጡ። (8) ገጹ ባዶ ከሆነ «[ባዶ ገጽ]» ብቻ ጻፍ።`;
+const HIST_TURNS = Number(process.env.AI_HIST_TURNS) || 40, HIST_TTL = (Number(process.env.AI_HIST_DAYS) || 7) * 86400e3, API_VER = '2023-06-01';
 const dayKey = (t) => new Date(t + 3 * 3600e3).toISOString().slice(0, 10);
 
 function countPdfPages(buf) {          // ያልተጨመቀ የገጽ ዕቃዎችን ይቆጥራል፤ 0 = አልታወቀም
@@ -91,10 +93,11 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
 
   async function chat(id, text, system, media) {
     const h = hist.get(id) || { ts: now(), m: [] }; if (now() - h.ts > HIST_TTL) h.m = [];
-    h.m.push({ role: 'user', content: String(text).slice(0, 6000) }); const msgs = h.m.slice(-HIST_TURNS * 2);
+    h.m.push({ role: 'user', content: String(text).slice(0, 6000) }); const msgs = h.m.slice(-HIST_TURNS * 2).map((x, i, a) => (i < a.length - 12 && x.content.length > 900 ? { ...x, content: x.content.slice(0, 900) + ' …' } : x));          // የቆዩ መልእክቶች ይጠረዛሉ (ወጪ)፤ የቅርብ 12 ሙሉ
     while (msgs.length && msgs[0].role !== 'user') msgs.shift();
-    const out = await ask({ system: system || SYS, msgs, max: media ? 3000 : 1500, media, ground: !media && env.AI_GROUNDING === '1' }); if (media) h.m[h.m.length - 1].content = '[📎 ' + (media.mime === 'application/pdf' ? 'PDF' : 'ፎቶ') + '] ' + h.m[h.m.length - 1].content; h.m.push({ role: 'assistant', content: out || '…' }); h.m = h.m.slice(-HIST_TURNS * 2); h.ts = now(); hist.set(id, h); return out;
+    const out = await ask({ system: (system || SYS) + (media ? ACC : ''), msgs, max: media ? 4000 : 1500, media, ground: !media && env.AI_GROUNDING === '1' }); if (media) h.m[h.m.length - 1].content = '[📎 ' + (media.mime === 'application/pdf' ? 'PDF' : 'ፎቶ') + '] ' + h.m[h.m.length - 1].content; h.m.push({ role: 'assistant', content: out || '…' }); h.m = h.m.slice(-HIST_TURNS * 2); h.ts = now(); hist.set(id, h); return out;
   }
+  const snap = id => { const h = hist.get(id); return h ? h.m.slice(-12).map(x => ({ role: x.role, content: String(x.content).slice(0, 500) })) : []; }, has = id => !!(hist.get(id) && hist.get(id).m.length), restore = (id, arr) => { if (!has(id) && Array.isArray(arr) && arr.length) hist.set(id, { ts: now(), m: arr.filter(x => x && (x.role === 'user' || x.role === 'assistant') && x.content).map(x => ({ role: x.role, content: String(x.content).slice(0, 700) })) }); }, note = (id, content) => { const h = hist.get(id) || { ts: now(), m: [] }; h.m.push({ role: 'assistant', content: String(content).slice(0, 700) }); h.ts = now(); hist.set(id, h); };
   const reset = id => hist.delete(id), usage = uid => { const u = used.get(uid); return u && u.d === dayKey(now()) ? { chat: u.chat, pages: u.pages } : { chat: 0, pages: 0 }; };
 
   /* PDF — የገጽ N ብቻ ትርጉም (ሰነዱ cache ስለሚደረግ ተከታታይ ገጾች ርካሽ ናቸው) */
@@ -112,6 +115,15 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
     const msg = `የሰነዱ ርዕስ፦ «${title}»` + (src && src.text ? `\n\n[የሰነዱ ናሙና]\n${String(src.text).slice(0, 6000)}` : '\n\nሰነዱን ተመልከት።');
     const out = await ask({ system: sys, max: 900, ...(src && src.pdf ? { pdf: src.pdf } : {}), msgs: [{ role: 'user', content: msg }] }); return String(out || '').trim();
   }
+  /* ከባዶ ሰነድ (pdf/pptx/docx/xlsx) የሚሆን የይዘት JSON */
+  const GEN_SYS = `አንተ ባለሙያ ሰነድ አዘጋጅ ነህ። ተጠቃሚው የጠየቀውን ሰነድ ከባዶ ሙሉ በሙሉ አዘጋጅ።
+ውጤቱን በዚህ JSON ቅርጸት ብቻ ስጥ (ከJSON ውጪ ምንም ጽሑፍ ወይም \`\`\` አትጨምር)፦
+{"title":"ርዕስ","subtitle":"ንዑስ ርዕስ (አማራጭ)","sections":[{"h":"የክፍል ርዕስ","blocks":[{"k":"p","t":"አንቀጽ"},{"k":"ul","items":["ነጥብ"]},{"k":"ol","items":["ደረጃ"]},{"k":"table","caption":"አማራጭ","head":["ዓምድ1","ዓምድ2"],"rows":[["ሀ","1"],["ለ","2"]]},{"k":"note","t":"ማስታወሻ"}]}]}
+ህጎች፦ (1) ቋንቋው ተጠቃሚው እንደጠየቀው (ካልተገለጸ አማርኛ፤ የቴክኒክ ቃል እንግሊዝኛው በቅንፍ)። (2) ይዘቱ ሙሉ፣ ትክክለኛ እና ጠቃሚ ይሁን — ማሳጠር የለም፤ የማታውቀውን እውነታ/ቁጥር አትፍጠር። (3) pptx፦ እያንዳንዱ section = አንድ ስላይድ፣ ነጥቦች አጫጭር (እስከ 14 ቃላት)፣ ካልተባለ 8–14 ስላይዶች፤ ሠንጠረዥ ሲጠቅም ተጠቀም። docx/pdf፦ ዝርዝር አንቀጾች፣ ርዕሶች እና አስፈላጊ ሠንጠረዦች። xlsx፦ ብዙ ጊዜ table ብሎኮች፤ ቁጥሮች ያለ ኮማ/ምልክት እንደ ቁጥር ("1250.5")፤ ቀመር ሲፈለግ «=SUM(B2:B9)» ይጻፍ። (4) ሠንጠረዥ፦ እያንዳንዱ ረድፍ የ head ዓምዶች ብዛት ይኑረው። (5) ምልክቶችን በ Unicode ጻፍ (≥ ≤ ± × ÷ √ π α β Δ ° ² ₂ →)፤ ሥዕል/ኮድ አትጨምር።`;
+  async function genDocSpec({ fmt, request, ctx, source, media, prev }) {
+    const msg = `የሚፈለገው ፋይል አይነት፦ ${String(fmt).toUpperCase()}\n\n` + (ctx ? `[የቅርብ ውይይት — አስፈላጊ ከሆነ ተጠቀም]\n${ctx}\n\n` : '') + (prev ? `[ቀድሞ ያዘጋጀኸው ሰነድ JSON — ተጠቃሚው ለውጥ ይጠይቃል፤ ሙሉውን የተሻሻለ JSON ስጥ]\n${String(prev).slice(0, 30000)}\n\n` : '') + (source ? `[ምንጭ ፋይል ጽሑፍ]\n${String(source).slice(0, 30000)}\n\n` : '') + `የተጠቃሚው ጥያቄ፦ ${String(request).slice(0, 2500)}`;
+    let last; for (let tr = 0; tr < 2; tr++) { try { const out = await ask({ system: GEN_SYS + ACC, max: 8000, ...(media ? { media } : {}), msgs: [{ role: 'user', content: msg }] }), a = out.indexOf('{'), z = out.lastIndexOf('}'); if (a < 0 || z < a) throw new Error('gen_parse'); return JSON.parse(out.slice(a, z + 1)); } catch (e) { last = e; if (/^ai_(busy|timeout|network)$/.test(e.message)) await sleep(3000); } } throw last;
+  }
   /* 🧑‍🏫 ሰሌዳ፦ የአንድ ገጽ/ስላይድ ሙሉ ይዘት (ምንም ሳይዘለል) መስመር በመስመር + የእያንዳንዱ መስመር የመምህር ማብራሪያ — JSON */
   const BOARD_SYS = `አንተ ትዕግሥተኛ፣ ብቁ የኢትዮጵያ መምህር ነህ። ለተማሪዎች አንድን የፋይል ገጽ/ስላይድ በሰሌዳ ላይ ልትለጥፍና መስመር በመስመር ልታስረዳ ነው።
 ከገጹ ሙሉ ይዘት (ርዕስ፣ እያንዳንዱ ነጥብ/መስመር፣ ሠንጠረዥ ረድፍ፣ ቀመር፣ የሥዕል ጽሑፍ) ምንም ሳትዘልና ሳታሳጥር ሁሉንም አካትት።
@@ -124,7 +136,7 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
     if (src.pdfBuf) o = { pdf: src.pdfBuf, msgs: [{ role: 'user', content: head + (src.real ? ' ይህ PDF የዚህ አንድ ገጽ ብቻ ነው፤ ሙሉውን አስተምር።' : ` የዚህን PDF ገጽ ${n} ብቻ አስተምር።`) }] };
     else if (src.media) o = { media: src.media, msgs: [{ role: 'user', content: head + ' ይህን ፎቶ/ምስል አስተምር።' }] };
     else o = { msgs: [{ role: 'user', content: head + '\n\n[የገጹ ጽሑፍ]\n' + String(src.text || '').slice(0, 12000) }] };
-    const out = await ask({ system: sys, max: 8000, ...o }); const a = out.indexOf('{'), z = out.lastIndexOf('}'); if (a < 0 || z < a) throw new Error('board_parse'); return JSON.parse(out.slice(a, z + 1));
+    const out = await ask({ system: sys + ACC, max: 8000, ...o }); const a = out.indexOf('{'), z = out.lastIndexOf('}'); if (a < 0 || z < a) throw new Error('board_parse'); return JSON.parse(out.slice(a, z + 1));
   }
   async function boardAsk(title, page, q) {
     const ctx = page ? [page.title, ...(page.lines || []).map(l => l.t + (l.am ? ' — ' + l.am : ''))].join('\n').slice(0, 5000) : '';
@@ -154,7 +166,7 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
     }
     return null;
   }
-  return { enabled: !!prov, provider: prov, model, lim, chat, reset, take, refund, usage, pdfPage, slideTr, domainBrief, boardPage, boardAsk, transcribe, speak };
+  return { enabled: !!prov, provider: prov, model, lim, chat, reset, take, refund, usage, pdfPage, slideTr, domainBrief, boardPage, boardAsk, genDocSpec, snap, has, restore, note, transcribe, speak };
 }
 let inst = null; const shared = () => inst || (inst = create());
 module.exports = { create, shared, countPdfPages, chunkText, slideText, SYS, TR };

@@ -731,6 +731,7 @@ module.exports = function bot(c) {
   }
   async function onText(chat, text, msg) {
     const t = text.trim(), s = ses(chat), uid = uidOf(chat);
+    if (/^\/new\b/.test(t)) { try { svc && svc.resetChat && svc.resetChat(chat); } catch (e) { } MEDIA.delete(chat); GENS.delete(chat); delete s.hx; delete s.gen; s.flow = null; save(); return send(chat, '🆕 <b>አዲስ ውይይት ጀምረናል</b> — ቀድሞ የተነጋገርነውን እና የተላከውን ፋይል ረስቻለሁ። አዲስ ጥያቄ ይጻፉ ወይም ፋይል ይላኩ።', menuKb(chat)); }
     if (/^\/cancel\b/.test(t)) { s.flow = null; s.auth = null; s.aiproof = null; save(); return home(chat, '✖️ ተሰርዟል።'); }
     if (/^\/myid\b/.test(t)) return send(chat, `🆔 Chat ID፦ <code>${chat}</code>`);
     const ld = /^\/start\s+d_([\w-]{4,40})$/.exec(t); if (ld) return learnStart(chat, ld[1]);
@@ -766,6 +767,7 @@ module.exports = function bot(c) {
     if (k === 'aih') return send(chat, { m: '🛍 ለምሳሌ ይጻፉ፦\n• «ሶፋ ምን ዋጋ አለ?»\n• «በአዲስ አበባ ክፍት ሥራዎች አሉ?»\n• «ሱቅ እንዴት እከፍታለሁ?»\n• «ክፍያው እንዴት ይሠራል?»', d: '📄 PDF ወይም PowerPoint (.pptx) ፋይል ይላኩ — እንግሊዝኛውን ገጽ በገጽ በአውድ ወደ አማርኛ እተረጉማለሁ።', u: '🩺 አጣዳፊ ጥያቄ ሁልጊዜ ነጻ ነው፤ ለምሳሌ «አሞኛል፣ ትኩሳት እና ራስ ምታት አለኝ ምን ላድርግ?» ብለው ይጻፉ። (ከባድ አደጋ ከሆነ ወዲያው ሆስፒታል/አምቡላንስ 907)', s: '🎓 ለምሳሌ «የ cell membrane ተግባር ምንድን ነው?» ወይም «ይህን ርዕስ አጭር ማስታወሻ አድርግልኝ» ብለው ይጻፉ።' }[a] || '🤖'); if (k === 'aipay') return aiPayStart(chat, uid, a); if (k === 'aiap') { const r = await svc.decide(a, x === '1'); return send(chat, r.ok ? (x === '1' ? '✅ ጸድቋል' : '❌ ውድቅ ተደርጓል') : bad(r)); }
     if (k === 'fk') return fkRun(chat, uid, a);
     if (k === 'tc') return tcRoute(chat, uid, a, x);
+    if (k === 'gd') { if (a === 'x') return genRun(chat, uid, x, '', { direct: true }); const g0 = s.gen; if (!g0 || !g0.text) return send(chat, '⌛ ጥያቄው ጊዜው አልፏል — እንደገና ይጻፉ።'); const fm = a === 'a' ? x : g0.fmt; return genRun(chat, uid, fm, g0.text, { edit: !!g0.edit }); }
     if (k === 'bk') return a === 'l' ? bookList(chat, Number(x) || 0) : a === 'o' ? bookOpen(chat, uid, x) : eduHome(chat, uid);
     if (k === 'axbk') { if (!isAdmin(chat)) return send(chat, '⛔ አድሚን ብቻ'); if (a === 'new') { ses(chat).axbk = true; save(); return send(chat, '📎 መጽሐፉን (PDF/PPTX/DOCX/TXT) ይላኩ — caption፦ «ርዕስ | ክፍል» (አማራጭ)።'); } if (a === 'd') { const bs = TB().books, i = bs.findIndex(y => y.id === x); if (i >= 0) bs.splice(i, 1); save(); } return axBooks(chat); }
     if (k === 'adn') return docRun(chat, uid); if (k === 'adfo') return fontMenu(chat, DOCS.get(chat)); if (k === 'adfp' || k === 'adfs') { const dd = DOCS.get(chat), o = { ...DO.optOf((dd && dd.opt) || ses(chat).docopt) }; if (k === 'adfp' && DO.PRESETS[a]) o.preset = a; if (k === 'adfs' && DO.SIZES[a]) o.size = a; ses(chat).docopt = o; if (dd) dd.opt = o; save(); return fontMenu(chat, dd); }
@@ -878,7 +880,7 @@ module.exports = function bot(c) {
 • ማንኛውንም ጥያቄ እዚሁ ይጻፉ — እመልሳለሁ።
 • 📎 <b>PDF ወይም PowerPoint (.pptx)</b> ይላኩ — እንግሊዝኛውን ገጽ በገጽ በአውድ ወደ አማርኛ እተረጉማለሁ።\n• 📷 <b>ፎቶ ወይም ፋይል</b> (PDF፣ DOCX፣ PPTX፣ TXT፣ CSV) ከጥያቄዎ (caption) ጋር ይላኩ — አንብቤ እመልሳለሁ፤ ተከታይ ጥያቄም ይችላሉ። ለትርጉም ያለ caption ወይም «ተርጉም» ብለው ይላኩ።
 • ስለ ገበያው ወይም ስለ ፈጣሪዬ ይጠይቁኝ።
-• 🎙 <b>በድምፅ ይጠይቁ</b> (voice message) — እሰማለሁ፤ በድምፅም እመልሳለሁ። /voice — የድምፅ መልስ ማብራት/ማጥፋት\n• /new — አዲስ ውይይት`, ik([[b('🛍 ስለ ገበያው', 'aih:m'), b('📄 ሰነድ አስተርጉም', 'aih:d')], [b('🩺 አጣዳፊ ጥያቄ', 'aih:u'), b('🎓 ትምህርት', 'aih:s')], ]));
+• 🎙 <b>በድምፅ ይጠይቁ</b> (voice message) — እሰማለሁ፤ በድምፅም እመልሳለሁ። /voice — የድምፅ መልስ ማብራት/ማጥፋት\n• 📄 <b>ከባዶ ፋይል</b>፦ «ስለ ፎቶሲንተሲስ ፒፒቲ አዘጋጅልኝ» · «የወር ወጪ ኤክሴል ሥራልኝ» · «ደብዳቤ በ PDF ጻፍልኝ» (PDF · PPTX · Word · Excel — ሠንጠረዥና ምልክቶች ጭምር)\n• 🧠 እስከ /new ድረስ ቀድሞ የተነጋገርነውን አስታውሳለሁ\n• /new — አዲስ ውይይት`, ik([[b('🛍 ስለ ገበያው', 'aih:m'), b('📄 ሰነድ አስተርጉም', 'aih:d')], [b('🩺 አጣዳፊ ጥያቄ', 'aih:u'), b('🎓 ትምህርት', 'aih:s')], ]));
   }
   async function aiPayStart(chat, uid, planId) {
     const inf = svc.info(uid), p = inf.plans.find(x => x.id === planId); if (!p) return; if (inf.pending) return send(chat, '⏳ ያለፈው ክፍያዎ እየተረጋገጠ ነው።');
@@ -902,12 +904,12 @@ module.exports = function bot(c) {
   }
   const typing = chat => tg('sendChatAction', { chat_id: chat, action: 'typing' }).catch(() => { });
   const sendLong = async (chat, head, text) => { const parts = AIM.chunkText(text); for (let i = 0; i < parts.length; i++) await send(chat, (i === 0 && head ? head + '\n\n' : '') + H(parts[i])); };
-  const MEDIA = new Map(), TXT_RE = /\.(txt|md|csv|json|docx)$/i, QA_DEF = 'ይህን ፋይል/ፎቶ በጥንቃቄ አንብበህ በአጭሩ ግለጽ፤ በውስጡ ጽሑፍ ካለ አንብብ፤ ከዚያ ምን ልርዳህ ብለህ ጠይቅ።';
+  const MEDIA_TTL = 6 * 3600e3, MEDIA = new Map(), GENS = new Map(), TXT_RE = /\.(txt|md|csv|json|docx)$/i, QA_DEF = 'ይህን ፋይል/ፎቶ በጥንቃቄ አንብበህ በአጭሩ ግለጽ፤ በውስጡ ጽሑፍ ካለ አንብብ፤ ከዚያ ምን ልርዳህ ብለህ ጠይቅ።';
   async function readFile(buf, name, mime) {          // ፋይል → { media } (ፎቶ/PDF ለ AI በቀጥታ) ወይም { body } (የተወጣ ጽሑፍ)
     if (/^image\/(jpeg|png|webp|gif)$/.test(mime)) return { media: { mime, buf }, body: '' };
     if (/pdf/i.test(mime) || /\.pdf$/i.test(name)) return { media: { mime: 'application/pdf', buf }, body: '' };
     if (/\.pptx$/i.test(name)) { try { const { parsePptx } = require('../src/lib/pptx'); const r = await parsePptx(buf); return { media: null, body: r.slides.map((x, i) => AIM.slideText({ title: x.title, blocks: x.blocks }, i)).join('\n\n').slice(0, 40000) }; } catch (e) { return { err: '⚠️ PPTX መነበብ አልቻለም።' }; } }
-    if (TXT_RE.test(name)) { let body = ''; try { if (/\.docx$/i.test(name)) { const { readZip } = require('../src/lib/pptx'), z = readZip(buf), x = await z.text('word/document.xml'); body = x.replace(/<\/w:p>/g, '\n').replace(/<w:tab\/>/g, ' ').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'); } else body = buf.toString('utf8'); } catch (e) { return { err: '⚠️ ፋይሉ መነበብ አልቻለም።' }; } return { media: null, body: body.slice(0, 40000) }; }
+    if (TXT_RE.test(name)) { let body = ''; try { if (/\.docx$/i.test(name)) { const { readZip } = require('../src/lib/pptx'), z = readZip(buf), x = await z.text('word/document.xml'); body = x.replace(/<\/w:tc>/g, ' | ').replace(/<\/w:tr>/g, '\n').replace(/<\/w:p>/g, '\n').replace(/<w:tab\/>/g, ' ').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'); } else body = buf.toString('utf8'); } catch (e) { return { err: '⚠️ ፋይሉ መነበብ አልቻለም።' }; } return { media: null, body: body.slice(0, 40000) }; }
     return { err: '📎 ፎቶ (JPG/PNG)፣ PDF፣ PPTX፣ DOCX ወይም TXT/CSV ይላኩ።' };
   }
   /* ፎቶ ወይም ፋይል + (caption = ጥያቄ) → AI መልስ፤ ፋይሉ ለተከታይ ጥያቄዎች ለ20 ደቂቃ ይታወሳል */
@@ -934,9 +936,9 @@ module.exports = function bot(c) {
   };
   const fileMenu = (chat, name) => send(chat, `📎 <b>${H(clip(name || 'ፋይል', 60))}</b> ተቀብያለሁ።\nምን እንዳደርግልዎ ይፈልጋሉ?`, ik([[b(FK.qa, 'fk:qa'), b(FK.tr, 'fk:tr')], [b(FK.qs, 'fk:qs'), b(FK.ex, 'fk:ex')], [b(FK.nt, 'fk:nt'), b(FK.sm, 'fk:sm')], [b(FK.tx, 'fk:tx'), b(FK.tc, 'fk:tc')], [b('🧑‍🏫 በሰሌዳ (live) አስረዳኝ', 'tc:bd')]]));
   async function fkRun(chat, uid, act) {
-    const lm = MEDIA.get(chat); if (!lm || Date.now() - lm.ts > 20 * 60e3) return send(chat, '⌛ ፋይሉ ጊዜው አልፏል — እንደገና ይላኩ።');
+    const lm = MEDIA.get(chat); if (!lm || Date.now() - lm.ts > MEDIA_TTL) return send(chat, '⌛ ፋይሉ ጊዜው አልፏል — እንደገና ይላኩ።');
     if (act === 'tc') return teachStart(chat, uid);
-    if (act === 'qa') return send(chat, '❓ ስለ ፋይሉ ጥያቄዎን ይጻፉ (ወይም በድምፅ ይጠይቁ) — ለ20 ደቂቃ ፋይሉን አስታውሳለሁ።');
+    if (act === 'qa') return send(chat, '❓ ስለ ፋይሉ ጥያቄዎን ይጻፉ (ወይም በድምፅ ይጠይቁ) — /new እስኪሉ ፋይሉን አስታውሳለሁ።');
     if (act === 'tr' && (lm.isPdf || lm.isPpt)) { if (!aiReady()) return send(chat, aiOff); return startDoc(chat, uid, lm.buf, lm.name, lm.isPdf); }
     const q = act === 'tr' ? FKP.trx : FKP[act]; if (!q) return;
     await runMedia(chat, uid, lm.m, lm.t ? q + '\n\n[የፋይሉ ጽሑፍ — ' + lm.name + ']\n' + lm.t : q, true);
@@ -947,7 +949,7 @@ module.exports = function bot(c) {
       const r = await svc.converse({ uid: uid || 'admin', key: String(chat), text, admin: isAdmin(chat), media });
       if (!r.ok && r.error === 'ai_limit') return paywall(chat, uid, 'limit');
       if (!r.ok) return send(chat, r.error === 'ai_disabled' ? '⏸ AI ለጊዜው በአድሚን ተዘግቷል።' : r.error === 'ai_blocked' ? '⛔ የ AI አገልግሎት ለእርስዎ ተዘግቷል።' : r.error === 'ai_limit' ? '⛔ የዛሬው የ AI መልእክት ገደብ አልቋል።' : aiOff, menuKb(chat));
-      if (r.paywall) return await paywall(chat, uid, r.paywall, r.text); await sendLong(chat, '', r.text || '…'); const lm2 = MEDIA.get(chat); await send(chat, '💬 ስለዚህ ፋይል ተጨማሪ ጥያቄ ይጻፉ (ለ20 ደቂቃ ይታወሳል) ወይም ሌላ ይምረጡ፦', ik([[b(FK.qs, 'fk:qs'), b(FK.ex, 'fk:ex')], [b(FK.nt, 'fk:nt'), b(FK.tr, 'fk:tr')]]));
+      if (r.paywall) return await paywall(chat, uid, r.paywall, r.text); await sendLong(chat, '', r.text || '…'); memSave(chat); const lm2 = MEDIA.get(chat); await send(chat, '💬 ስለዚህ ፋይል ተጨማሪ ጥያቄ ይጻፉ (/new እስኪሉ ድረስ ይታወሳል) ወይም ሌላ ይምረጡ፦', ik([[b(FK.qs, 'fk:qs'), b(FK.ex, 'fk:ex')], [b(FK.nt, 'fk:nt'), b(FK.tr, 'fk:tr')]]));
     } catch (e) { await send(chat, aiErr(e, chat)); } finally { clearInterval(tm); }
   }
 
@@ -967,8 +969,14 @@ module.exports = function bot(c) {
     const lm = MEDIA.get(chat); if (!lm) return send(chat, '⌛ ፋይሉ ጊዜው አልፏል — እንደገና ይላኩ።'); if (!aiReady()) return send(chat, aiOff);
     typing(chat); const tm = setInterval(() => typing(chat), 4500);
     try {
-      const out = await askAI(chat, uid, lmBody(lm, TEACHER + '\n\nይህን ፋይል መርምረህ ለማስተማር ከ4 እስከ 12 ርዕሶች (ትምህርቶች) በቅደም ተከተል ዘርዝር። ቅርጸት፦ እያንዳንዱ በአንድ መስመር «ቁጥር. ርዕስ» ብቻ፤ ሌላ ጽሑፍ አትጨምር።'), lm.m); if (out == null) return;
-      const topics = out.split('\n').map(l => /^\s*(?:\d+|[፩-፱])\s*[.)፦\-]\s*(.{2,100})$/.exec(l)).filter(Boolean).map(m => m[1].replace(/[*_`#]/g, '').trim()).slice(0, 14);
+      let units = null, topics0 = null;          // ስላይድ/ገጽ ላለው ፋይል፦ እያንዳንዱ ስላይድ/ገጽ አንድ ትምህርት — ምንም አይዘለልም
+      try {
+        if (lm.isPpt && lm.buf) { const { parsePptx } = require('../src/lib/pptx'), r = await parsePptx(lm.buf); if (r.slides.length) { units = r.slides.slice(0, 60).map((x, i) => AIM.slideText({ title: x.title, blocks: x.blocks }, i)); topics0 = r.slides.slice(0, 60).map((x, i) => `ስላይድ ${i + 1}` + (x.title ? ' — ' + String(x.title).replace(/\s+/g, ' ').slice(0, 60) : '')); } }
+        else if (lm.isPdf && lm.buf) { const n = AIM.countPdfPages(lm.buf); if (n > 1) { topics0 = Array.from({ length: Math.min(n, 60) }, (_, i) => `ገጽ ${i + 1}`); units = topics0.map(() => ''); } }
+      } catch (e) { console.warn('units', e.message); }
+      if (topics0) { lm.tc = { topics: topics0, units, i: 0 }; lm.ts = Date.now(); await send(chat, `🎓 <b>${H(clip(lm.name, 50))}</b> — ${topics0.length} ${lm.isPdf ? 'ገጾች' : 'ስላይዶች'}፤ እያንዳንዱን አንድ በአንድ፣ ምንም ሳልዘል አስተምራለሁ፦\n\n` + topics0.map(t => H(t)).join('\n') + '\n\n🔊 በድምፅና በጽሑፍ አስተምራለሁ፤ በማንኛውም ጊዜ ጥያቄ ይጻፉ ወይም በድምፅ ይጠይቁ።'); clearInterval(tm); return teachTopic(chat, uid, 0); }
+      const out = await askAI(chat, uid, lmBody(lm, TEACHER + '\n\nይህን ፋይል መርምረህ ለማስተማር ከ4 እስከ 20 ርዕሶች (ትምህርቶች) በቅደም ተከተል ዘርዝር፤ የፋይሉን ሁሉንም ክፍሎች ሸፍን፣ ምንም ምዕራፍ/ክፍል አትዝለል። ቅርጸት፦ እያንዳንዱ በአንድ መስመር «ቁጥር. ርዕስ» ብቻ፤ ሌላ ጽሑፍ አትጨምር።'), lm.m); if (out == null) return;
+      const topics = out.split('\n').map(l => /^\s*(?:\d+|[፩-፱])\s*[.)፦\-]\s*(.{2,100})$/.exec(l)).filter(Boolean).map(m => m[1].replace(/[*_`#]/g, '').trim()).slice(0, 24);
       if (!topics.length) return send(chat, '⚠️ የትምህርት ዝርዝር ማውጣት አልተቻለም — እንደገና ይሞክሩ ወይም ጥያቄ ይጻፉ።', menuKb(chat));
       lm.tc = { topics, i: 0 }; lm.ts = Date.now(); await send(chat, `🎓 <b>${H(clip(lm.name, 50))}</b> — ${topics.length} ትምህርቶች፦\n\n` + topics.map((t, i) => `${i + 1}. ${H(t)}`).join('\n') + '\n\n🔊 በድምፅና በጽሑፍ አስተምራለሁ፤ በማንኛውም ጊዜ ጥያቄ ይጻፉ ወይም በድምፅ ይጠይቁ።');
     } finally { clearInterval(tm); }
@@ -979,7 +987,8 @@ module.exports = function bot(c) {
     const T = lm.tc; if (i >= T.topics.length) { T.i = T.topics.length - 1; return teachFinish(chat, uid, lm); } T.i = Math.max(0, i); lm.ts = Date.now();
     typing(chat); const tm = setInterval(() => typing(chat), 4500);
     try {
-      const q = `${TEACHER}\n\nአሁን የምናስተምረው ርዕስ ${T.i + 1}/${T.topics.length}፦ «${T.topics[T.i]}»።${again ? ' ቀደም ብዬ አብራርተህልኝ ነበር፤ አሁን በሌላ መንገድ፣ በሌላ ምሳሌ አስረዳኝ።' : ''}\nአስተምር፦ 1) መግቢያ (ለምን አስፈላጊ ነው) 2) ዋና ነጥቦች በቀላል ማብራሪያና ምሳሌ 3) አጭር ማጠቃለያ 4) በመጨረሻ አንድ ትንሽ የመረዳት ጥያቄ ጠይቀኝ (መልሱን አትንገር)። ከ300 ቃላት አይበልጥ፤ ለድምፅ ምቹ ሙሉ አረፍተ ነገሮች ተጠቀም፤ ሰንጠረዥ/ምልክት አትጠቀም።`;
+      const un = T.units && T.units[T.i], unit = un ? `የዚህ ስላይድ ይዘት (ሁሉንም አስተምር)፦\n"""\n${un.slice(0, 3500)}\n"""\n` : lm.isPdf && T.units ? `ከተያያዘው ፋይል ገጽ ${T.i + 1} ብቻ አስተምር (የገጹን እያንዳንዱን ርዕስና አንቀጽ)።\n` : '';
+      const q = `${TEACHER}\n\nአሁን የምናስተምረው ርዕስ ${T.i + 1}/${T.topics.length}፦ «${T.topics[T.i]}»።${again ? ' ቀደም ብዬ አብራርተህልኝ ነበር፤ አሁን በሌላ መንገድ፣ በሌላ ምሳሌ አስረዳኝ።' : ''}\n${unit}አስተምር፦ 1) መግቢያ (ለምን አስፈላጊ ነው) 2) ዋና ነጥቦች በቀላል ማብራሪያና ምሳሌ — የርዕሱን ወይም የስላይዱን እያንዳንዱን መስመር/ነጥብ/ሰንጠረዥ ረድፍ በቅደም ተከተል አስረዳ፤ አንዳቸውንም አትዝለል አታጣምር 3) አጭር ማጠቃለያ 4) በመጨረሻ አንድ ትንሽ የመረዳት ጥያቄ ጠይቀኝ (መልሱን አትንገር)። ከ450 ቃላት አይበልጥ፤ ለድምፅ ምቹ ሙሉ አረፍተ ነገሮች ተጠቀም፤ ሰንጠረዥ/ምልክት አትጠቀም።`;
       const out = await askAI(chat, uid, lmBody(lm, q), lm.m); if (out == null) return;
       await sendLong(chat, `🎓 <b>ትምህርት ${T.i + 1}/${T.topics.length} — ${H(T.topics[T.i])}</b>`, out);
       if (ses(chat).vo !== 'off') await speakTo(chat, out, true);
@@ -1114,14 +1123,47 @@ module.exports = function bot(c) {
     if (!text) return send(chat, '🎙 ድምፁ አልተሰማኝም — እንደገና ቀርበው ይናገሩ።');
     await send(chat, '🎙 <i>' + H(clip(text, 500)) + '</i>'); return aiText(chat, uid, text, true);
   }
+
+  /* ===== 🧠 ትውስታ (/new እስኪባል) — ከ RAM ከጠፋ (ዳግም ማስነሳት) ከተቀመጠው ቅጂ ይመለሳል ===== */
+  const memSync = chat => { try { if (!ai.has(String(chat)) && ses(chat).hx) ai.restore(String(chat), ses(chat).hx); } catch (e) { } };
+  const memSave = chat => { try { ses(chat).hx = ai.snap(String(chat)); save(); } catch (e) { } };
+  /* ===== 📄 ከባዶ ፋይል ማዘጋጀት (PDF · PPTX · DOCX · XLSX) ===== */
+  const GF = { pdf: '📕 PDF', pptx: '📊 PPTX', docx: '📝 Word', xlsx: '📈 Excel' };
+  const VERB = /(አዘጋጅ|ሥራልኝ|ስራልኝ|ሥራ ?ልኝ|ፍጠር|ጻፍልኝ|ፃፍልኝ|አውጣልኝ|ስጠኝ|አድርግልኝ|አድርገህ|ይሥራ|\bmake\b|\bcreate\b|\bgenerate\b|\bprepare\b|\bbuild\b|\bdraft\b|\bwrite\b)/i, HOWQ = /(እንዴት|ምንድን ነው|ምንድነው|how (do|to|can|should)|what is)/i;
+  const FMT = [['pdf', /pdf|ፒዲኤፍ/i], ['pptx', /pptx?\b|ፒፒቲ|ፓወር ?ፖይንት|power ?point|ስላይድ|slides?\b|presentation|አቀራረብ/i], ['docx', /docx|\bword\b|ወርድ|ዶክመንት ፋይል/i], ['xlsx', /xlsx|excel|ኤክሴል|spreadsheet|ስፕሬድ ?ሺት/i]];
+  const GENERIC = /(ሰነድ|ፋይል|ሪፖርት|ደብዳቤ|ማስታወሻ|ሲቪ|ፕሮፖዛል|ዕቅድ|ዝርዝር|document|report|letter|resume|\bcv\b|proposal|plan|notes?\b)/i, EDITV = /(ጨምር|አስተካክል|ቀይር|አሻሽል|ሰርዝ|አስወግድ|አሳጥር|አራዝም|ተርጉም|add|change|edit|remove|update|fix|shorten|translate|convert)/i, EDITN = /(ስላይድ|ሰነዱ|ሰነድ|ክፍል|ሠንጠረዥ|ርዕስ|ገጽ|ፋይሉ|ዓምድ|ረድፍ|slide|table|section|title|file|document|column|row)/i;
+  function genIntent(chat, t) {
+    const x = String(t || ''); if (x.length > 2500) return null; const fm = (FMT.find(f => f[1].test(x)) || [])[0], g = GENS.get(chat), recent = g && Date.now() - g.ts < MEDIA_TTL;
+    if (recent && fm && /(ወደ|ቀይር|convert|\bto\b|as a)/i.test(x) && !VERB.test(x)) return { fmt: fm, direct: true };          // «ይህን ወደ pdf ቀይር»
+    if (recent && EDITV.test(x) && EDITN.test(x) && !HOWQ.test(x) && x.length < 400) return { fmt: fm || g.fmt, edit: true };
+    if (!VERB.test(x) || (HOWQ.test(x) && !/(አዘጋጅልኝ|ሥራልኝ|ስራልኝ|ስጠኝ)/.test(x))) return null;
+    if (fm) return { fmt: fm }; if (GENERIC.test(x) && x.length < 600) return { ask: true }; return null;
+  }
+  async function genRun(chat, uid, fmt, text, o = {}) {
+    if (!aiReady()) return send(chat, aiOff); const g = GENS.get(chat); const opts = ses(chat).docopt;
+    if (o.direct) { if (!g) return send(chat, '⌛ የቀድሞው ሰነድ አልተገኘም — እንደገና ይጠይቁ።'); try { const f = require('./gendoc').build(fmt, g.spec, opts); await tgUpload('sendDocument', 'document', chat, f.buf, f.name, f.mime, { caption: `✅ ${GF[fmt]} — ከቀድሞው ሰነድ ተለውጧል` }); GENS.set(chat, { ...g, fmt, ts: Date.now() }); } catch (e) { await send(chat, '⚠️ መቀየር አልተቻለም።'); } return; }
+    const lm = MEDIA.get(chat), useFile = lm && Date.now() - lm.ts < MEDIA_TTL && /(ከፋይሉ|ከዚህ ፋይል|ይህን ፋይል|ከዚህ ፎቶ|ስለዚህ ፋይል|ፋይሉን|from the file|from this|this file|ከተላከው)/i.test(text);
+    memSync(chat); await send(chat, `⏳ <b>${GF[fmt]}</b> ${o.edit ? 'እያሻሻልኩ ነው' : 'እያዘጋጀሁ ነው'}… (ትልቅ ሰነድ እስከ 1–2 ደቂቃ ይወስዳል)`); typing(chat); const tm = setInterval(() => { tg('sendChatAction', { chat_id: chat, action: 'upload_document' }).catch(() => { }); }, 4500);
+    try {
+      const r = await svc.genDoc({ uid: uid || 'admin', key: String(chat), text, fmt, admin: isAdmin(chat), opts, source: useFile ? lm.t : '', media: useFile ? lm.m : null, prev: o.edit && g ? JSON.stringify(g.spec) : '' });
+      if (!r.ok && r.error === 'ai_limit') return paywall(chat, uid, 'limit');
+      if (!r.ok) return send(chat, r.error === 'ai_disabled' ? '⏸ AI ለጊዜው በአድሚን ተዘግቷል።' : r.error === 'ai_blocked' ? '⛔ የ AI አገልግሎት ለእርስዎ ተዘግቷል።' : aiOff, menuKb(chat));
+      if (r.paywall) return paywall(chat, uid, r.paywall);
+      await tgUpload('sendDocument', 'document', chat, r.file.buf, r.file.name, r.file.mime, { caption: `✅ ${GF[fmt]} ዝግጁ ነው — ${(r.spec.sections || []).length} ክፍሎች` }); GENS.set(chat, { fmt, spec: r.spec, ts: Date.now() }); memSave(chat);
+      await send(chat, '✏️ ለውጥ ከፈለጉ ይንገሩኝ (ለምሳሌ «አንድ ስላይድ ጨምር»፣ «ሠንጠረዡን አሳጥር»)፤ ወይም ወደ ሌላ ፎርማት ይቀይሩ፦', ik([Object.keys(GF).filter(k => k !== fmt).map(k => b(GF[k], 'gd:x:' + k))]));
+    } catch (e) { await send(chat, /^ai_/.test(e.message) ? aiErr(e, chat) : '⚠️ ሰነዱን ማዘጋጀት አልተቻለም — እንደገና ይሞክሩ ወይም ጥያቄዎን በዝርዝር ይጻፉ።', ik([[b('🔁 እንደገና', 'gd:r')]])); ses(chat).gen = { fmt, text, edit: !!o.edit }; save(); } finally { clearInterval(tm); }
+  }
+  const genAsk = (chat, t) => { ses(chat).gen = { text: String(t).slice(0, 2000) }; save(); return send(chat, '📄 ምን ዓይነት ፋይል ልስራልዎ?', ik([[b(GF.pdf, 'gd:a:pdf'), b(GF.pptx, 'gd:a:pptx')], [b(GF.docx, 'gd:a:docx'), b(GF.xlsx, 'gd:a:xlsx')]])); };
   async function aiText(chat, uid, t, voice) {          // t ይቀየራል
+    { const gi = genIntent(chat, t); if (gi) return gi.ask ? genAsk(chat, t) : genRun(chat, uid, gi.fmt, t, gi); }
+    memSync(chat);
     typing(chat); const tm = setInterval(() => typing(chat), 4500);
     try {
-      const lm = MEDIA.get(chat), media = lm && Date.now() - lm.ts < 20 * 60e3 ? lm.m : null, tcOn = !!(lm && lm.tc && Date.now() - lm.ts < 20 * 60e3); if (tcOn) { lm.ts = Date.now(); t = TEACHER + `\nአሁን ርዕስ «${lm.tc.topics[lm.tc.i]}» እያስተማርክ ነው። ተማሪው በትምህርቱ መሃል የሚከተለውን ጻፈ/ጠየቀ (መልስ ከሆነ አርመው)፤ እንደ መምህር በትዕግሥት መልስ፣ አስፈላጊ ከሆነ ምሳሌ ስጥ፤ መጨረሻ ላይ «ገባዎት?» በል፦\n` + t; }          // የቅርብ ጊዜ ፎቶ/PDF ለተከታይ ጥያቄዎች ይታወሳል (20 ደቂቃ)
-      const r = await svc.converse({ uid: uid || 'admin', key: String(chat), text: lm && lm.t && media === null && Date.now() - lm.ts < 20 * 60e3 ? t + '\n\n[የፋይሉ ጽሑፍ — ' + lm.name + ']\n' + lm.t : t, admin: isAdmin(chat), media });
+      const lm = MEDIA.get(chat), media = lm && Date.now() - lm.ts < MEDIA_TTL ? lm.m : null, tcOn = !!(lm && lm.tc && Date.now() - lm.ts < MEDIA_TTL); if (lm && Date.now() - lm.ts < MEDIA_TTL) lm.ts = Date.now(); if (tcOn) { t = TEACHER + `\nአሁን ርዕስ «${lm.tc.topics[lm.tc.i]}» እያስተማርክ ነው። ተማሪው በትምህርቱ መሃል የሚከተለውን ጻፈ/ጠየቀ (መልስ ከሆነ አርመው)፤ እንደ መምህር በትዕግሥት መልስ፣ አስፈላጊ ከሆነ ምሳሌ ስጥ፤ መጨረሻ ላይ «ገባዎት?» በል፦\n` + t; }          // የቅርብ ጊዜ ፎቶ/PDF ለተከታይ ጥያቄዎች ይታወሳል (20 ደቂቃ)
+      const r = await svc.converse({ uid: uid || 'admin', key: String(chat), text: lm && lm.t && media === null && Date.now() - lm.ts < MEDIA_TTL ? t + '\n\n[የፋይሉ ጽሑፍ — ' + lm.name + ']\n' + lm.t : t, admin: isAdmin(chat), media });
       if (!r.ok && r.error === 'ai_limit') return paywall(chat, uid, 'limit');
       if (!r.ok) return send(chat, r.error === 'ai_disabled' ? '⏸ AI ለጊዜው በአድሚን ተዘግቷል።' : r.error === 'ai_blocked' ? '⛔ የ AI አገልግሎት ለእርስዎ ተዘግቷል።' : r.error === 'ai_limit' ? '⛔ የዛሬው የ AI መልእክት ገደብ አልቋል — ነገ ይሞክሩ።' : aiOff, menuKb(chat));
-      if (r.paywall) return await paywall(chat, uid, r.paywall, r.text); await sendLong(chat, '', r.text || '…'); const vo = ses(chat).vo; if (vo === 'on' || (vo !== 'off' && (voice || tcOn))) await speakTo(chat, r.text, tcOn); if (tcOn) await send(chat, '👆', tcKb(chat, lm));
+      if (r.paywall) return await paywall(chat, uid, r.paywall, r.text); await sendLong(chat, '', r.text || '…'); memSave(chat); const vo = ses(chat).vo; if (vo === 'on' || (vo !== 'off' && (voice || tcOn))) await speakTo(chat, r.text, tcOn); if (tcOn) await send(chat, '👆', tcKb(chat, lm));
     } catch (e) { await send(chat, aiErr(e, chat)); } finally { clearInterval(tm); }
   }
   async function tgDownload(fileId) { const f = await tg('getFile', { file_id: fileId }); const r = await fetch(`${process.env.TELEGRAM_API_BASE || 'https://api.telegram.org'}/file/bot${token}/${f.file_path}`); if (!r.ok) throw new Error('download'); return Buffer.from(await r.arrayBuffer()); }

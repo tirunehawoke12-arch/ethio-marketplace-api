@@ -1,0 +1,35 @@
+const test = require('node:test'), assert = require('node:assert'), http = require('node:http');
+const G = require('../server/gendoc');
+const SPEC = { title: 'ሴል', subtitle: 'ባዮ', sections: [{ h: 'መግቢያ', blocks: [{ k: 'p', t: 'H₂O ≥ 3 ± 0.5 √x π α' }, { k: 'ul', items: ['ሀ', 'ለ'] }, { k: 'bad', t: 'x' }] }, { h: 'ሠንጠረዥ', blocks: [{ k: 'table', head: ['ስም', 'ዋጋ'], rows: Array.from({ length: 60 }, (_, i) => ['ንጥል ' + i, String(i * 1.5)]) }] }] };
+test('ከባዶ ፋይል፦ 4 ፎርማቶች ትክክለኛ ፋይል ይሆናሉ፤ ግብዓት ይጸዳል', async () => {
+  const n = G.norm({ title: 5, sections: [{ h: 'x', blocks: [{ k: 'evil', t: 'a' }, { k: 'table', head: ['a'], rows: [['1', '2', '3']] }, null] }, 7] }); assert.equal(n.sections.length, 1); assert.equal(n.sections[0].blocks[0].n, 3, 'ሠንጠረዥ ዓምዶች ይስተካከላሉ'); assert.equal(n.sections[0].blocks[0].head.length, 3);
+  const pdf = G.build('pdf', SPEC); assert.equal(pdf.buf.slice(0, 5).toString(), '%PDF-'); assert.ok(pdf.name.endsWith('.pdf')); assert.ok((pdf.buf.toString('latin1').match(/\/Type \/Page\b/g) || []).length >= 2, 'ረጅም ሠንጠረዥ ብዙ ገጽ');
+  for (const f of ['docx', 'pptx', 'xlsx']) { const r = G.build(f, SPEC); assert.equal(r.buf.slice(0, 2).toString(), 'PK', f); const { readZip } = require('../src/lib/pptx'), z = readZip(r.buf); assert.ok(z.names.length >= 4, f); }
+  const { readZip } = require('../src/lib/pptx'); const px = readZip(G.build('pptx', SPEC).buf); assert.ok(px.names.filter(x => /^ppt\/slides\/slide\d+\.xml$/.test(x)).length >= 4, 'ሠንጠረዡ በስላይዶች ይከፈላል');
+  const xl = readZip(G.build('xlsx', SPEC).buf), sh = await xl.text('xl/worksheets/sheet2.xml'); assert.match(sh, /<c r="B5"><v>1\.5<\/v><\/c>/, 'ቁጥር እንደ ቁጥር'); assert.throws(() => G.build('exe', SPEC), /bad_format/);
+  const dx = await readZip(G.build('docx', SPEC).buf).text('word/document.xml'); assert.match(dx, /H₂O ≥ 3 ± 0\.5 √x π α/, 'ምልክቶች ይጠበቃሉ'); assert.match(dx, /<w:tbl>/);
+});
+test('ቦት፦ ፋይል ማዘጋጀት፣ ማሻሻል፣ መቀየር፣ /new እና ትውስታ', async () => {
+  process.env.ANTHROPIC_API_KEY = 'k'; const seen = [], docs = [];
+  const srv = http.createServer((q, r) => { r.setHeader('content-type', 'application/json'); r.end(JSON.stringify({ ok: true, items: [] })); }); await new Promise(r => srv.listen(0, r)); const port = srv.address().port;
+  const realFetch = global.fetch; global.fetch = async (url, o) => {
+    if (/anthropic/.test(url)) { const body = JSON.parse(o.body), last = body.messages[body.messages.length - 1].content, txt = Array.isArray(last) ? last.map(x => x.text || '').join('\n') : last; seen.push({ sys: body.system, txt, n: body.messages.length }); return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: /ባለሙያ ሰነድ አዘጋጅ/.test(body.system) ? JSON.stringify(SPEC) : 'መልስ' }] }) }; }
+    if (/api\.telegram\.org\/bot.*sendDocument/.test(url)) { docs.push(o.body.get('document').name); return { ok: true, status: 200 }; }
+    return realFetch(url, o); };
+  const sent = [], tg = async (m, p) => { sent.push([m, p]); return { ok: true }; };
+  const svc = require('../server/aisvc')({ app: { get() { }, post() { } }, col: (() => { const d = {}; return p => d[p] || (d[p] = {}); })(), who: () => null, adminOnly: () => false, saveMany: async () => { }, bad() { }, S: (x, n) => String(x == null ? '' : x).slice(0, n || 1e9), N: Number, nid: () => 'x' + Math.random(), limit: () => true, ai: require('../server/ai').shared() });
+  const bot = require('../server/bot')({ aisvc: svc, tg, tokFor: () => 't', port, baseUrl: 'https://x.et', adminChat: '999', bindAdmin() { }, adminPhone: '', token: 'T', getDb: () => ({ accounts: { k: { chatId: 7 } } }), getStore: () => ({ docs: { 'data/users/U1': { acct: { name: 'ተ' } } } }), accKey: () => 'k', findUid: () => 'U1', normPhoneET: x => x, authApi: {}, pool: null, pgUpsert: async () => { }, isSusp: () => false });
+  const msgs = () => sent.filter(x => x[0] === 'sendMessage').map(x => x[1]), say = t => bot.handle({ message: { chat: { id: 7, type: 'private' }, text: t } }), cb = d => bot.handle({ callback_query: { id: 'q' + Math.random(), data: d, message: { chat: { id: 7, type: 'private' } } } });
+  try {
+    await say('ስለ ሴል ፒፒቲ አዘጋጅልኝ'); assert.equal(docs.length, 1); assert.match(docs[0], /\.pptx$/); assert.ok(seen.at(-1).sys.includes('ባለሙያ ሰነድ አዘጋጅ')); assert.match(seen.at(-1).txt, /PPTX/);
+    sent.length = 0; await say('አንድ ስላይድ ጨምር'); assert.equal(docs.length, 2); assert.match(seen.at(-1).txt, /ቀድሞ ያዘጋጀኸው ሰነድ JSON/, 'ቀድሞ የነበረው ሰነድ ይላካል');
+    const ai0 = seen.length; await say('ይህን ወደ pdf ቀይር'); assert.equal(docs.length, 3); assert.match(docs[2], /\.pdf$/); assert.equal(seen.length, ai0, 'መቀየር AI አይጠራም');
+    sent.length = 0; await say('ሰነድ አዘጋጅልኝ ስለ ጤና'); const ask = msgs().find(m => /gd:a:pdf/.test(JSON.stringify(m.reply_markup))); assert.ok(ask, 'ፎርማት ይጠየቃል'); await cb('gd:a:docx'); assert.match(docs[3], /\.docx$/);
+    await say('እንዴት pdf አዘጋጃለሁ?'); assert.equal(docs.length, 4, 'የማብራሪያ ጥያቄ ፋይል አይሠራም');
+    // ትውስታ
+    await say('ስሜ አበበ ነው'); const n1 = seen.at(-1).n; await say('ስሜ ማን ነው?'); assert.ok(seen.at(-1).n >= n1 + 2, 'ቀድሞ የተነገረው ይታወሳል');
+    svc.resetChat(7); await say('እና ስሜ?'); assert.ok(seen.at(-1).n >= 3, 'ከ RAM ቢጠፋም ከተቀመጠው ይመለሳል');
+    sent.length = 0; await say('/new'); assert.ok(msgs().some(m => /አዲስ ውይይት/.test(m.text))); await say('ሰላም'); assert.equal(seen.at(-1).n, 1, '/new በኋላ ታሪክ ባዶ ነው');
+    await say('ይህን ወደ xlsx ቀይር'); assert.equal(docs.length, 4, '/new የቀድሞውን ሰነድ ይረሳል');
+  } finally { global.fetch = realFetch; srv.close(); delete process.env.ANTHROPIC_API_KEY; }
+});
