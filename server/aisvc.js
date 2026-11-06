@@ -77,7 +77,7 @@ module.exports = function aisvc(ctx) {
   const newsDiag = async () => { const r = await newsInfo('latest news today Ethiopia', true); return { ...nd, ok: !/አልተቻለም/.test(r), items: (r.match(/^• /gm) || []).length }; };
 
   /* የጽሑፍ ውይይት፦ → { ok, text, paywall: ''|'premium'|'limit' } */
-  async function converse({ uid, key, text, admin, media }) {
+  async function converse({ uid, key, text, admin, media, ground }) {
     const c = cfg(); if (!ai.enabled) return { ok: false, error: 'ai_off' }; const owner = admin || isOwner(uid); if (!c.enabled && !owner) return { ok: false, error: 'ai_disabled' };
     const a = acc(uid); if (a.blocked && !owner) return { ok: false, error: 'ai_blocked' };
     const t = now(), day = Math.floor((t + 3 * 3600e3) / 86400e3), ug = urgentUse.get(uid) || { d: day, n: 0 }; if (ug.d !== day) { ug.d = day; ug.n = 0; }
@@ -87,7 +87,7 @@ module.exports = function aisvc(ctx) {
     else { const q = ai.take(String(uid), 'chat', 1, owner, paid ? c.paidChatDay : c.freeChatDay); if (!q.ok) { if (!paid && c.paywall) { stats.paywalls++; return { ok: true, text: '', paywall: 'limit' }; } return { ok: false, error: 'ai_limit' }; } sys = sysFor(c, paid); }
     sys += '\n\n' + clockInfo() + await newsInfo(text);
     sys += SYS_GUARD + '\n\n[ከድረ-ገጹ የተገኘ ወቅታዊ መረጃ — ስለ ገበያው ሲጠየቅ ከዚህ ብቻ ተመርኩዘህ ንገር፤ የሌለውን አትፍጠር፤ ዕቃ ሲጠቅስ ዋጋ እና አገናኝ ስጥ]\n' + await siteInfo(text);
-    let out; try { out = await ai.chat(String(key || uid), text, sys, media); } catch (e) { if (!urgent) ai.refund(String(uid), 'chat', 1); throw e; }
+    let out; try { out = await ai.chat(String(key || uid), text, sys, media, ground ? { ground: true } : undefined); } catch (e) { if (!urgent) ai.refund(String(uid), 'chat', 1); throw e; }
     stats.chats++; const wants = /\[\[PAID\]\]/.test(out), clean = out.replace(MARK, ' ').trim();
     if (wants && !paid && !urgent && c.paywall) { stats.paywalls++; return { ok: true, text: clean, paywall: 'premium' }; }
     return { ok: true, text: clean, paywall: '', urgent };

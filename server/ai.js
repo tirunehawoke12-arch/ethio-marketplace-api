@@ -15,10 +15,17 @@ const SYS = `አንተ «ኢትዮ ዲጂታል ማርኬት» የተባለው �
 - አጭር፣ ግልጽ እና ትክክለኛ ሁን፤ ትምህርት፣ ትርጉም፣ ጽሑፍ፣ ሒሳብ፣ ንግድ፣ ሥራ ማመልከቻ እና አጠቃላይ ጥያቄዎችን መርዳት ትችላለህ።
 - ስለ ገበያው ልዩ መረጃ (ዋጋ፣ ትዕዛዝ፣ ሱቅ) ከሌለህ አትፍጠር፤ ተጠቃሚውን ከታች ካለው ማውጫ እንዲጠቀም አመልክት።
 - ለእውነታዊ መልሶች (ሳይንስ፣ ሕክምና፣ ሕግ፣ ታሪክ፣ ቁጥሮች፣ ዜና) መጨረሻ ላይ «📚 ምንጭ፦» ብለህ እውነተኛ ምንጮችን ጥቀስ (የመማሪያ መጽሐፍ፣ መመሪያ፣ ድርጅት ወይም ድረ-ገጽ ስም/አገናኝ)። የማታውቀውን ምንጭ ወይም አገናኝ በጭራሽ አትፍጠር፤ እርግጠኛ ካልሆንክ «ምንጭ፦ አጠቃላይ እውቀት — በታማኝ ምንጭ ያረጋግጡ» ብለህ ጻፍ። ከድረ-ገጹ ዕቃ/ሱቅ መረጃ ከሆነ የድረ-ገጹን አገናኝ ጥቀስ።
+- ማንኛውንም ጥያቄ (አጠቃላይ እውቀት፣ ወቅታዊ/የዛሬ ጉዳይ ጨምሮ) ለመመለስ ሞክር። የዛሬ ወይም ወቅታዊ ጉዳይ (ዜና፣ ዋጋ፣ የአየር ሁኔታ፣ ውጤት፣ ሹመት) ከሆነ በፍለጋ ውጤት ብቻ መልስ፤ ፍለጋ ካልቻልክ በእርግጠኝነት እንደማታውቅ ተናገር እንጂ አትገምት፤ የቀን/ሰዓት ጥያቄ ከታች ካለው «አሁን» መረጃ መልስ።
 - Telegram ውስጥ ነው የምትመልሰው፤ markdown ሰንጠረዥ ወይም ከባድ ቅርጸት አትጠቀም፤ አጫጭር አንቀጾች እና ቀላል ዝርዝር ብቻ።`;
 const TR = `አንተ ባለሙያ የእንግሊዝኛ→አማርኛ ተርጓሚ ነህ። ሰነዱን ትርጉም በትርጉም (አውዳዊ) ወደ ተፈጥሯዊ፣ ግልጽ አማርኛ ተርጉም፤ ቃል በቃል አይደለም።
 ህጎች፦ (1) ትርጉሙን ብቻ ስጥ፤ መግቢያ ወይም ማብራሪያ አትጨምር። (2) የርዕስ፣ የነጥብ እና የአንቀጽ አወቃቀርን ጠብቅ። (3) ቁጥሮች፣ ቀመሮች፣ የሰዎች/ድርጅት ስሞች እና አህጽሮተ ቃላት እንዳሉ ይቀሩ፤ የቴክኒክ ቃል ሲተረጎም ለመጀመሪያ ጊዜ እንግሊዝኛውን በቅንፍ አብረህ ጻፍ፣ ለምሳሌ «የሕዋስ ሽፋን (cell membrane)»። (4) ሠንጠረዥ ከሆነ ረድፍ በረድፍ በቀላል መስመሮች (ዓምዶች በ « | »)። (5) ምስል/ሥዕላዊ መግለጫ ካለ በአጭሩ «[ምስል፦ …]» ብለህ ግለጽ፤ በውስጡ ጽሑፍ ካለ ተርጉመው። (6) ገጹ ቀድሞውኑ በአማርኛ ከሆነ እንዳለ ጻፈው። (7) ሠንጠረዦችን ረድፍ በረድፍ ሁሉንም ሕዋስ በትክክል ተርጉም፤ ቁጥሮች፣ አሃዶች፣ ምልክቶች (± ≤ ≥ × ÷ √ ∑ π α β Δ °)፣ ቀመሮች እና ንዑስ/ላዕላይ ጽሑፍ ፈጽሞ አይለወጡ። (8) ገጹ ባዶ ከሆነ «[ባዶ ገጽ]» ብቻ ጻፍ።`;
 const HIST_TURNS = Number(process.env.AI_HIST_TURNS) || 40, HIST_TTL = (Number(process.env.AI_HIST_DAYS) || 7) * 86400e3, API_VER = '2023-06-01';
+const WD = ['እሑድ', 'ሰኞ', 'ማክሰኞ', 'ረቡዕ', 'ሐሙስ', 'ዓርብ', 'ቅዳሜ'], EM = ['መስከረም', 'ጥቅምት', 'ኅዳር', 'ታኅሣሥ', 'ጥር', 'የካቲት', 'መጋቢት', 'ሚያዝያ', 'ግንቦት', 'ሰኔ', 'ሐምሌ', 'ነሐሴ', 'ጳጉሜ'];
+function nowInfo(t) {          // አሁን፦ ዓ.ም (ኢትዮጵያ) + ግሪጎሪያን + ሰዓት (ኢትዮጵያ ሰዓት፣ UTC+3)
+  const d = new Date(t + 3 * 3600e3), jdn = Math.floor((t + 3 * 3600e3) / 86400e3) + 2440588, r = (jdn - 1723856) % 1461, n = r % 365 + 365 * Math.floor(r / 1460), yr = 4 * Math.floor((jdn - 1723856) / 1461) + Math.floor(r / 365) - Math.floor(r / 1460), mo = Math.floor(n / 30), dy = n % 30 + 1;
+  return `${WD[d.getUTCDay()]} ${EM[mo]} ${dy} ቀን ${yr} ዓ.ም (ግሪጎሪያን ${d.toISOString().slice(0, 10)}) ሰዓት ${d.toISOString().slice(11, 16)} (የኢትዮጵያ ሰዓት)`;
+}
+const TIMELY = /ዛሬ|አሁን|ዘንድሮ|ትናንት|ነገ|ወቅታዊ|ዜና|የአየር|ዋጋ|ምንዛሬ|ዶላር|ውጤት|ጨዋታ|አዲስ|ማን ነው|\b(today|tonight|now|current|currently|latest|recent|news|price|weather|score|rate|exchange|who is|202\d)\b/i;
 const dayKey = (t) => new Date(t + 3 * 3600e3).toISOString().slice(0, 10);
 
 function countPdfPages(buf) {          // ያልተጨመቀ የገጽ ዕቃዎችን ይቆጥራል፤ 0 = አልታወቀም
@@ -60,18 +67,19 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
         r = await fetchImpl(`${base}/v1beta/models/${mdl}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': gkey }, signal: ctl && ctl.signal, body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents, generationConfig: { maxOutputTokens: max }, ...(ground && prov === 'gemini' ? { tools: [{ google_search: {} }] } : {}) }) });
       } else {
         const messages = msgs.map((m, i) => (media && media.mime !== 'application/pdf' && i === msgs.length - 1 ? { role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: media.mime, data: Buffer.from(media.buf).toString('base64') } }, { type: 'text', text: m.content }] } : pdf && i === msgs.length - 1 ? { role: 'user', content: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: Buffer.from(pdf).toString('base64') }, cache_control: { type: 'ephemeral' } }, { type: 'text', text: m.content }] } : m));
-        r = await fetchImpl(base + '/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': akey, 'anthropic-version': API_VER }, signal: ctl && ctl.signal, body: JSON.stringify({ model: mdl, max_tokens: max, system, messages }) });
+        r = await fetchImpl(base + '/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': akey, 'anthropic-version': API_VER }, signal: ctl && ctl.signal, body: JSON.stringify({ model: mdl, max_tokens: max, system, messages, ...(ground ? { tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }] } : {}) }) });
       }
       try { j = await r.json(); } catch (e) { }
     } catch (e) { const n = new Error(e && e.name === 'AbortError' ? 'ai_timeout' : 'ai_network'); n.detail = String(e && e.message || e).slice(0, 200); console.warn('AI ' + prov + ' ' + mdl + ' ' + n.message + ': ' + n.detail); throw n; } finally { clearTimeout(tm); }
     if (!r.ok && ground && [400, 403, 429].includes(r.status)) return once(mdl, { system, msgs, max, pdf }, tmo);          // «ፍለጋ» መሣሪያው ካልተፈቀደ ያለሱ ይሞክራል
     if (r.ok && ground && prov === 'gemini') { const gm = j && j.candidates && j.candidates[0] && j.candidates[0].groundingMetadata, seen = new Set(), src = ((gm && gm.groundingChunks) || []).map(c => c.web).filter(w => w && w.uri && !seen.has(w.uri) && seen.add(w.uri)).slice(0, 4); const body = ((j.candidates[0].content && j.candidates[0].content.parts) || []).map(p => p.text || '').join('').trim(); if (src.length && body) return body + '\n\n📚 ምንጮች፦\n' + src.map(w => `• ${w.title || w.uri} — ${w.uri}`).join('\n'); }
+    if (r.ok && ground && prov !== 'gemini' && j && Array.isArray(j.content)) { const body = j.content.filter(c => c.type === 'text').map(c => c.text).join('').trim(), seen = new Set(), src = []; j.content.forEach(c => (c.citations || []).forEach(x => { if (x.url && !seen.has(x.url)) { seen.add(x.url); src.push(x); } })); if (body) return src.length ? body + '\n\n📚 ምንጮች፦\n' + src.slice(0, 4).map(w => `• ${w.title || w.url} — ${w.url}`).join('\n') : body; }
     if (r.ok) return ((prov === 'gemini' ? (j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts || []).map(p => p.text || '').join('') : (j && Array.isArray(j.content) ? j.content.filter(c => c.type === 'text').map(c => c.text).join('') : '')) || '').trim();
     const e = fail(r, j); e.model = mdl; console.warn('AI ' + prov + ' ' + mdl + ' ' + r.status + ': ' + e.detail); throw e;
   }
   /* ሞዴል ሲሞላ (503/429)፣ ሲዘገይ ወይም ሲጠፋ (404) ወደሚቀጥለው ሞዴል ይሸጋገራል፤ የሰራው ለ10 ደቂቃ ይታወሳል */
   const good = {}, dead = new Map();          // dead = 404 (ሞዴሉ የለም/ለአዲስ ተጠቃሚ ተዘግቷል) → ለ6 ሰዓት አይሞከርም
-  async function ask(o) {
+  async function askMain(o) {
     const kind = o.pdf || o.media ? 'doc' : 'chat', all = prov === 'gemini' ? models[kind] : [model], alive = all.filter(m => !(dead.get(m) > now())), list = alive.length ? alive : all; let last = null, lastGood = null;
     const start = good[kind] && now() - good[kind].t < 10 * 60e3 ? Math.max(0, list.indexOf(good[kind].m)) : 0;
     let tmo = 0;
@@ -81,8 +89,28 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
       catch (e) { last = e; if (e.message === 'ai_timeout' && kind === 'doc' && ++tmo >= 2) throw e; if (e.status === 404) dead.set(m, now() + 6 * 3600e3); else lastGood = e; if (!(e.message === 'ai_busy' || e.message === 'ai_timeout' || e.message === 'ai_network' || e.status === 404 || (e.status === 400 && /model/i.test(e.detail || '')))) throw e; }
     }
     const fin = lastGood || last;          // ከ404 ይልቅ ትክክለኛውን (ሥራ በዝቶ/ጊዜ) ስህተት ያሳያል
-    if (fin && fin.message === 'ai_busy' && prov === 'gemini' && retryMs > 0 && o._r !== 1) { await sleep(retryMs); return ask({ ...o, _r: 1 }); }          // ሁሉም ሞዴል ሲሞላ አንድ ጊዜ ተጠብቆ እንደገና
+    if (fin && fin.message === 'ai_busy' && prov === 'gemini' && retryMs > 0 && o._r !== 1) { await sleep(retryMs); return askMain({ ...o, _r: 1 }); }          // ሁሉም ሞዴል ሲሞላ አንድ ጊዜ ተጠብቆ እንደገና
     throw fin;
+  }
+  /* ተጨማሪ ነፃ AI (አማራጭ፣ ያለውን አይለውጥም)፦ ዋናው AI ሲሞላ/ኮታ ሲያልቅ/ሲወድቅ የጽሑፍ ጥያቄ ወደዚህ ይሸጋገራል (OpenAI-ተኳሃኝ፦ Groq፣ OpenRouter፣ ወዘተ) */
+  const extras = [];
+  if (env.EXTRA_AI_KEY && env.EXTRA_AI_BASE && env.EXTRA_AI_MODEL) extras.push({ n: 'extra', key: env.EXTRA_AI_KEY, base: env.EXTRA_AI_BASE.replace(/\/+$/, ''), model: env.EXTRA_AI_MODEL });
+  if (env.GROQ_API_KEY) extras.push({ n: 'groq', key: env.GROQ_API_KEY, base: 'https://api.groq.com/openai/v1', model: env.GROQ_MODEL || 'llama-3.3-70b-versatile' });
+  if (env.OPENROUTER_API_KEY) extras.push({ n: 'openrouter', key: env.OPENROUTER_API_KEY, base: 'https://openrouter.ai/api/v1', model: env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free' });
+  async function askExtra(x, o) {
+    const ctl = typeof AbortController === 'function' ? new AbortController() : null, tm = ctl && setTimeout(() => ctl.abort(), Math.min(timeoutMs, 40000));
+    try {
+      const r = await fetchImpl(x.base + '/chat/completions', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + x.key }, signal: ctl && ctl.signal, body: JSON.stringify({ model: x.model, max_tokens: o.max || 1500, messages: [{ role: 'system', content: o.system + '\n\n(ማስታወሻ፦ የድር ፍለጋ የለህም፤ ወቅታዊ/የዛሬ ጉዳይ ከሆነ እርግጠኛ እንዳልሆንክ ተናገር እንጂ አትገምት።)' }, ...o.msgs.map(m => ({ role: m.role, content: m.content }))] }) });
+      let j = null; try { j = await r.json(); } catch (e) { } const out = r.ok && j && j.choices && j.choices[0] && j.choices[0].message && String(j.choices[0].message.content || '').trim();
+      if (!out) { console.warn('AI extra ' + x.n + ' ' + r.status + ': ' + String(j && j.error && (j.error.message || j.error) || '').slice(0, 200)); return null; } return out;
+    } catch (e) { console.warn('AI extra ' + x.n + ': ' + String(e && e.message || e).slice(0, 150)); return null; } finally { clearTimeout(tm); }
+  }
+  async function ask(o) {
+    try { return await askMain(o); }
+    catch (e) {
+      if (!extras.length || o.pdf || o.media || o.noExtra || !['ai_busy', 'ai_timeout', 'ai_network', 'ai_failed'].includes(e.message)) throw e;
+      for (const x of extras) { const out = await askExtra(x, o); if (out) return out; } throw e;
+    }
   }
   /* ገደብ፦ kind = 'chat' | 'pages'፤ ok=false ከሆነ left=0 */
   function take(uid, kind, n = 1, admin = false, capOverride) {
@@ -91,11 +119,11 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
   }
   const refund = (uid, kind, n = 1) => { const u = used.get(uid); if (u) u[kind] = Math.max(0, u[kind] - n); };
 
-  async function chat(id, text, system, media) {
+  async function chat(id, text, system, media, opt) {
     const h = hist.get(id) || { ts: now(), m: [] }; if (now() - h.ts > HIST_TTL) h.m = [];
     h.m.push({ role: 'user', content: String(text).slice(0, 6000) }); const msgs = h.m.slice(-HIST_TURNS * 2).map((x, i, a) => (i < a.length - 12 && x.content.length > 900 ? { ...x, content: x.content.slice(0, 900) + ' …' } : x));          // የቆዩ መልእክቶች ይጠረዛሉ (ወጪ)፤ የቅርብ 12 ሙሉ
     while (msgs.length && msgs[0].role !== 'user') msgs.shift();
-    const out = await ask({ system: (system || SYS) + (media ? ACC : ''), msgs, max: media ? 4000 : 1500, media, ground: !media && env.AI_GROUNDING === '1' }); if (media) h.m[h.m.length - 1].content = '[📎 ' + (media.mime === 'application/pdf' ? 'PDF' : 'ፎቶ') + '] ' + h.m[h.m.length - 1].content; h.m.push({ role: 'assistant', content: out || '…' }); h.m = h.m.slice(-HIST_TURNS * 2); h.ts = now(); hist.set(id, h); return out;
+    const out = await ask({ system: (system || SYS) + (media ? ACC : '') + '\n\nአሁን፦ ' + nowInfo(now()), msgs, max: media ? 4000 : 1500, media, ground: !media && env.AI_GROUNDING !== '0' && (env.AI_GROUNDING === '1' || (opt && opt.ground) || TIMELY.test(String(text)))}); if (media) h.m[h.m.length - 1].content = '[📎 ' + (media.mime === 'application/pdf' ? 'PDF' : 'ፎቶ') + '] ' + h.m[h.m.length - 1].content; h.m.push({ role: 'assistant', content: out || '…' }); h.m = h.m.slice(-HIST_TURNS * 2); h.ts = now(); hist.set(id, h); return out;
   }
   const snap = id => { const h = hist.get(id); return h ? h.m.slice(-12).map(x => ({ role: x.role, content: String(x.content).slice(0, 500) })) : []; }, has = id => !!(hist.get(id) && hist.get(id).m.length), restore = (id, arr) => { if (!has(id) && Array.isArray(arr) && arr.length) hist.set(id, { ts: now(), m: arr.filter(x => x && (x.role === 'user' || x.role === 'assistant') && x.content).map(x => ({ role: x.role, content: String(x.content).slice(0, 700) })) }); }, note = (id, content) => { const h = hist.get(id) || { ts: now(), m: [] }; h.m.push({ role: 'assistant', content: String(content).slice(0, 700) }); h.ts = now(); hist.set(id, h); };
   const reset = id => hist.delete(id), usage = uid => { const u = used.get(uid); return u && u.d === dayKey(now()) ? { chat: u.chat, pages: u.pages } : { chat: 0, pages: 0 }; };
@@ -166,7 +194,7 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
     }
     return null;
   }
-  return { enabled: !!prov, provider: prov, model, lim, chat, reset, take, refund, usage, pdfPage, slideTr, domainBrief, boardPage, boardAsk, genDocSpec, snap, has, restore, note, transcribe, speak };
+  return { extras: extras.map(x => x.n), enabled: !!prov, provider: prov, model, lim, chat, reset, take, refund, usage, pdfPage, slideTr, domainBrief, boardPage, boardAsk, genDocSpec, snap, has, restore, note, transcribe, speak };
 }
 let inst = null; const shared = () => inst || (inst = create());
-module.exports = { create, shared, countPdfPages, chunkText, slideText, SYS, TR };
+module.exports = { nowInfo, create, shared, countPdfPages, chunkText, slideText, SYS, TR };

@@ -33,3 +33,26 @@ test('ቦት፦ ፋይል ማዘጋጀት፣ ማሻሻል፣ መቀየር፣ /ne
     await say('ይህን ወደ xlsx ቀይር'); assert.equal(docs.length, 4, '/new የቀድሞውን ሰነድ ይረሳል');
   } finally { global.fetch = realFetch; srv.close(); delete process.env.ANTHROPIC_API_KEY; }
 });
+
+test('AI፦ የዛሬ ጥያቄ → የድር ፍለጋ + የአሁን ቀን/ሰዓት፤ ተራ ሰላምታ → ፍለጋ የለም', async () => {
+  const ai = require('../server/ai'), bodies = [];
+  const f = async (u, o) => { bodies.push(JSON.parse(o.body)); return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'መልስ' }] }, groundingMetadata: { groundingChunks: [{ web: { uri: 'https://a.et', title: 'A' } }] } }] }) }; };
+  const a = ai.create({ GEMINI_API_KEY: 'k' }, f); const r = await a.chat('t1', 'የዛሬ ዜና ምንድን ነው?');
+  assert.ok(bodies[0].tools && /google_search/.test(JSON.stringify(bodies[0].tools))); assert.match(bodies[0].systemInstruction.parts[0].text, /አሁን፦.*ዓ\.ም/); assert.match(r, /ምንጮች/);
+  await a.chat('t1', 'ሰላም'); assert.ok(!bodies[1].tools);
+});
+
+test('AI፦ ዋናው ሲሞላ (429) ወደ ተጨማሪ ነፃ AI ይሸጋገራል፤ ፋይል ሲሆን አይሸጋገርም፤ ያለ ተጨማሪ ቁልፍ ባህሪ አልተቀየረም', async () => {
+  const ai = require('../server/ai'), urls = [];
+  const f = async (u, o) => { urls.push(u); if (/googleapis/.test(u)) return { ok: false, status: 429, json: async () => ({ error: { message: 'quota' } }) }; return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: 'ከነፃው AI' } }] }) }; };
+  const a = ai.create({ GEMINI_API_KEY: 'k', GROQ_API_KEY: 'g', AI_RETRY_MS: '0' }, f); assert.deepEqual(a.extras, ['groq']);
+  assert.equal(await a.chat('x1', 'ሰላም'), 'ከነፃው AI'); assert.ok(urls.some(u => /groq\.com\/openai\/v1\/chat\/completions/.test(u)));
+  await assert.rejects(() => a.chat('x3', 'ይህን አንብብ', null, { mime: 'image/png', buf: Buffer.from('a') }), /ai_busy/);
+  const b = ai.create({ GEMINI_API_KEY: 'k', AI_RETRY_MS: '0' }, f); assert.deepEqual(b.extras, []); await assert.rejects(() => b.chat('x2', 'ሰላም'), /ai_busy/);
+});
+
+test('AI፦ ground አማራጭ ተራ ጥያቄም ላይ ፍለጋ ያስነሳል (/search)', async () => {
+  const ai = require('../server/ai'), bodies = [];
+  const f = async (u, o) => { bodies.push(JSON.parse(o.body)); return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'መልስ' }] } }] }) }; };
+  const a = ai.create({ GEMINI_API_KEY: 'k' }, f); await a.chat('s1', 'ሰላም'); assert.ok(!bodies[0].tools); await a.chat('s1', 'ሰላም', null, null, { ground: true }); assert.ok(bodies[1].tools);
+});

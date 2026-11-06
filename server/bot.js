@@ -737,6 +737,7 @@ module.exports = function bot(c) {
     const ld = /^\/start\s+d_([\w-]{4,40})$/.exec(t); if (ld) return learnStart(chat, ld[1]);
     const dl = /^\/start\s+([sgpwej])_([\w-]{4,40})$/.exec(t); if (dl) s.deep = { t: dl[1], id: dl[2] };       // deep link — ከመግባት በኋላም ይከፈታል
     if (t === '✖️ ተው') { s.await = null; s.flow = null; s.aiproof = null; save(); return home(chat); }
+    if (/^\/(search|ፈልግ)\b/i.test(t)) { const q = t.replace(/^\/\S+\s*/, '').trim(); if (!uid && !isAdmin(chat)) return authStart(chat); if (!aiReady()) return send(chat, aiOff); if (!q) return send(chat, '🔎 <b>የድር ፍለጋ (AI Mode)</b>\n\nከድር ፍለጋ ጋር የተሳሰረ መልስ ከምንጭ ጋር ለማግኘት፦\n<code>/search የዛሬ የዶላር ምንዛሬ</code>'); return aiText(chat, uid, q, false, { ground: true }); }
     if (uid && /^\/ai\b/.test(t)) return aiIntro(chat, uid); if (isAdmin(chat) && /^\/newstest\b/.test(t)) return axNews(chat); if (uid && /^\/voice\b/.test(t)) { const s2 = ses(chat), nx = { undefined: 'on', auto: 'on', on: 'off', off: 'auto' }[s2.vo || 'auto']; s2.vo = nx; save(); return send(chat, nx === 'on' ? '🔊 ሁልጊዜ በድምፅም እመልሳለሁ።' : nx === 'off' ? '🔇 የድምፅ መልስ ጠፍቷል (ድምፅ ቢልኩም በጽሑፍ ብቻ)።' : '🎙 በድምፅ ሲጠይቁ በድምፅ እመልሳለሁ (ነባሪ)።'); } if (uid && /^\/(new|reset)\b/.test(t)) { ai.reset(String(chat)); return send(chat, '🧹 አዲስ ውይይት ጀምረናል።', menuKb(chat)); }
     if (uid && /^\/lang\b/.test(t)) return langMenu(chat);
     if (uid && /^\/(search|near|alerts|messages)\b/.test(t)) return action(chat, uid, /^\/(\w+)/.exec(t)[1]);
@@ -880,7 +881,7 @@ module.exports = function bot(c) {
 • ማንኛውንም ጥያቄ እዚሁ ይጻፉ — እመልሳለሁ።
 • 📎 <b>PDF ወይም PowerPoint (.pptx)</b> ይላኩ — እንግሊዝኛውን ገጽ በገጽ በአውድ ወደ አማርኛ እተረጉማለሁ።\n• 📷 <b>ፎቶ ወይም ፋይል</b> (PDF፣ DOCX፣ PPTX፣ TXT፣ CSV) ከጥያቄዎ (caption) ጋር ይላኩ — አንብቤ እመልሳለሁ፤ ተከታይ ጥያቄም ይችላሉ። ለትርጉም ያለ caption ወይም «ተርጉም» ብለው ይላኩ።
 • ስለ ገበያው ወይም ስለ ፈጣሪዬ ይጠይቁኝ።
-• 🎙 <b>በድምፅ ይጠይቁ</b> (voice message) — እሰማለሁ፤ በድምፅም እመልሳለሁ። /voice — የድምፅ መልስ ማብራት/ማጥፋት\n• 📄 <b>ከባዶ ፋይል</b>፦ «ስለ ፎቶሲንተሲስ ፒፒቲ አዘጋጅልኝ» · «የወር ወጪ ኤክሴል ሥራልኝ» · «ደብዳቤ በ PDF ጻፍልኝ» (PDF · PPTX · Word · Excel — ሠንጠረዥና ምልክቶች ጭምር)\n• 🧠 እስከ /new ድረስ ቀድሞ የተነጋገርነውን አስታውሳለሁ\n• /new — አዲስ ውይይት`, ik([[b('🛍 ስለ ገበያው', 'aih:m'), b('📄 ሰነድ አስተርጉም', 'aih:d')], [b('🩺 አጣዳፊ ጥያቄ', 'aih:u'), b('🎓 ትምህርት', 'aih:s')], ]));
+• 🔎 <b>/search ጥያቄ</b> — የድር ፍለጋ (Google AI Mode ዓይነት) መልስ ከምንጭ ጋር፤ የዛሬ ጉዳይም ይገኛል\n• 🎙 <b>በድምፅ ይጠይቁ</b> (voice message) — እሰማለሁ፤ በድምፅም እመልሳለሁ። /voice — የድምፅ መልስ ማብራት/ማጥፋት\n• 📄 <b>ከባዶ ፋይል</b>፦ «ስለ ፎቶሲንተሲስ ፒፒቲ አዘጋጅልኝ» · «የወር ወጪ ኤክሴል ሥራልኝ» · «ደብዳቤ በ PDF ጻፍልኝ» (PDF · PPTX · Word · Excel — ሠንጠረዥና ምልክቶች ጭምር)\n• 🧠 እስከ /new ድረስ ቀድሞ የተነጋገርነውን አስታውሳለሁ\n• /new — አዲስ ውይይት`, ik([[b('🛍 ስለ ገበያው', 'aih:m'), b('📄 ሰነድ አስተርጉም', 'aih:d')], [b('🩺 አጣዳፊ ጥያቄ', 'aih:u'), b('🎓 ትምህርት', 'aih:s')], ]));
   }
   async function aiPayStart(chat, uid, planId) {
     const inf = svc.info(uid), p = inf.plans.find(x => x.id === planId); if (!p) return; if (inf.pending) return send(chat, '⏳ ያለፈው ክፍያዎ እየተረጋገጠ ነው።');
@@ -1154,13 +1155,13 @@ module.exports = function bot(c) {
     } catch (e) { await send(chat, /^ai_/.test(e.message) ? aiErr(e, chat) : '⚠️ ሰነዱን ማዘጋጀት አልተቻለም — እንደገና ይሞክሩ ወይም ጥያቄዎን በዝርዝር ይጻፉ።', ik([[b('🔁 እንደገና', 'gd:r')]])); ses(chat).gen = { fmt, text, edit: !!o.edit }; save(); } finally { clearInterval(tm); }
   }
   const genAsk = (chat, t) => { ses(chat).gen = { text: String(t).slice(0, 2000) }; save(); return send(chat, '📄 ምን ዓይነት ፋይል ልስራልዎ?', ik([[b(GF.pdf, 'gd:a:pdf'), b(GF.pptx, 'gd:a:pptx')], [b(GF.docx, 'gd:a:docx'), b(GF.xlsx, 'gd:a:xlsx')]])); };
-  async function aiText(chat, uid, t, voice) {          // t ይቀየራል
+  async function aiText(chat, uid, t, voice, opt) {          // t ይቀየራል
     { const gi = genIntent(chat, t); if (gi) return gi.ask ? genAsk(chat, t) : genRun(chat, uid, gi.fmt, t, gi); }
     memSync(chat);
     typing(chat); const tm = setInterval(() => typing(chat), 4500);
     try {
       const lm = MEDIA.get(chat), media = lm && Date.now() - lm.ts < MEDIA_TTL ? lm.m : null, tcOn = !!(lm && lm.tc && Date.now() - lm.ts < MEDIA_TTL); if (lm && Date.now() - lm.ts < MEDIA_TTL) lm.ts = Date.now(); if (tcOn) { t = TEACHER + `\nአሁን ርዕስ «${lm.tc.topics[lm.tc.i]}» እያስተማርክ ነው። ተማሪው በትምህርቱ መሃል የሚከተለውን ጻፈ/ጠየቀ (መልስ ከሆነ አርመው)፤ እንደ መምህር በትዕግሥት መልስ፣ አስፈላጊ ከሆነ ምሳሌ ስጥ፤ መጨረሻ ላይ «ገባዎት?» በል፦\n` + t; }          // የቅርብ ጊዜ ፎቶ/PDF ለተከታይ ጥያቄዎች ይታወሳል (20 ደቂቃ)
-      const r = await svc.converse({ uid: uid || 'admin', key: String(chat), text: lm && lm.t && media === null && Date.now() - lm.ts < MEDIA_TTL ? t + '\n\n[የፋይሉ ጽሑፍ — ' + lm.name + ']\n' + lm.t : t, admin: isAdmin(chat), media });
+      const r = await svc.converse({ uid: uid || 'admin', key: String(chat), text: lm && lm.t && media === null && Date.now() - lm.ts < MEDIA_TTL ? t + '\n\n[የፋይሉ ጽሑፍ — ' + lm.name + ']\n' + lm.t : t, admin: isAdmin(chat), media, ground: !!(opt && opt.ground) });
       if (!r.ok && r.error === 'ai_limit') return paywall(chat, uid, 'limit');
       if (!r.ok) return send(chat, r.error === 'ai_disabled' ? '⏸ AI ለጊዜው በአድሚን ተዘግቷል።' : r.error === 'ai_blocked' ? '⛔ የ AI አገልግሎት ለእርስዎ ተዘግቷል።' : r.error === 'ai_limit' ? '⛔ የዛሬው የ AI መልእክት ገደብ አልቋል — ነገ ይሞክሩ።' : aiOff, menuKb(chat));
       if (r.paywall) return await paywall(chat, uid, r.paywall, r.text); await sendLong(chat, '', r.text || '…'); memSave(chat); const vo = ses(chat).vo; if (vo === 'on' || (vo !== 'off' && (voice || tcOn))) await speakTo(chat, r.text, tcOn); if (tcOn) await send(chat, '👆', tcKb(chat, lm));
