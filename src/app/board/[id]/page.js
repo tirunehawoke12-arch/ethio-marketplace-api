@@ -28,17 +28,21 @@ function Words({ text, base, cur, wi, ms, done }) {
 }
 const wc = s => (String(s || '').match(/\S+/g) || []).length;
 
-function Teacher({ talking, gaze, angle, hand }) {
+function Teacher({ talking, gaze, angle, hand, walk }) {
   const eye = gaze === 'board' ? -2.2 : 1.2, ey = gaze === 'board' ? -0.2 : 0.8, head = gaze === 'board' ? -7 : 8;
   return (<svg viewBox="0 0 90 210" style={{ width: 84, height: 196, flexShrink: 0, display: 'block' }} aria-label="መምህር">
     <ellipse cx="45" cy="204" rx="26" ry="4" fill="rgba(0,0,0,.25)" />
-    <g className="breathe">
-      <rect x="31" y="128" width="11" height="68" rx="5" fill="#3a3f5a" /><rect x="46" y="128" width="11" height="68" rx="5" fill="#3a3f5a" />
-      <rect x="27" y="194" width="17" height="8" rx="4" fill="#2a2018" /><rect x="45" y="194" width="17" height="8" rx="4" fill="#2a2018" />
-      <rect x="26" y="64" width="38" height="70" rx="12" fill="#2f7d6b" /><rect x="40" y="64" width="10" height="26" fill="#f1f1ec" /><polygon points="45,68 41,90 49,90" fill="#b3342a" />
-      <rect x="62" y="70" width="9" height="46" rx="4.5" fill="#2f7d6b" transform="rotate(8 66 72)" /><circle cx="70" cy="118" r="5" fill="#d9a074" />
+    <g className={walk ? 'bob' : 'breathe'}>
+      <g style={walk ? { animation: 'walkA .55s ease-in-out infinite alternate', transformOrigin: '36px 130px' } : undefined}><rect x="31" y="128" width="11" height="68" rx="5" fill="#3a3f5a" /><rect x="27" y="194" width="17" height="8" rx="4" fill="#2a2018" /></g>
+      <g style={walk ? { animation: 'walkB .55s ease-in-out infinite alternate', transformOrigin: '51px 130px' } : undefined}><rect x="46" y="128" width="11" height="68" rx="5" fill="#3a3f5a" /><rect x="45" y="194" width="17" height="8" rx="4" fill="#2a2018" /></g>
+      <path d="M25 72 Q25 62 35 62 L55 62 Q65 62 65 72 L68 168 Q45 175 22 168 Z" fill="#fafafa" stroke="#c9d1d8" strokeWidth="1.2" />
+      <polygon points="37,62 53,62 45,96" fill="#8fb8d8" /><polygon points="45,68 42,92 48,92" fill="#b3342a" />
+      <polygon points="37,62 45,96 39,100 30,66" fill="#fff" stroke="#c9d1d8" strokeWidth="1" /><polygon points="53,62 45,96 51,100 60,66" fill="#fff" stroke="#c9d1d8" strokeWidth="1" />
+      <line x1="45" y1="100" x2="45" y2="170" stroke="#c9d1d8" strokeWidth="1" /><circle cx="42" cy="112" r="1.5" fill="#9aa5ae" /><circle cx="42" cy="130" r="1.5" fill="#9aa5ae" /><circle cx="42" cy="148" r="1.5" fill="#9aa5ae" />
+      <rect x="51" y="122" width="11" height="12" rx="2" fill="none" stroke="#c9d1d8" strokeWidth="1" /><rect x="53" y="116" width="2" height="10" rx="1" fill="#2f7d6b" />
+      <rect x="62" y="70" width="9" height="46" rx="4.5" fill="#fafafa" stroke="#c9d1d8" strokeWidth="1" transform="rotate(8 66 72)" /><circle cx="70" cy="118" r="5" fill="#d9a074" />
       <g style={{ transform: `rotate(${angle}deg)`, transformOrigin: '30px 72px', transition: 'transform .9s ease' }}>
-        <rect x="-36" y="68" width="66" height="8" rx="4" fill="#2f7d6b" /><circle cx="-34" cy="72" r="5" fill="#d9a074" /><rect x="-62" y="71" width="40" height="2.4" rx="1.2" fill="#e8c87a" />
+        <rect x="-36" y="68" width="66" height="8" rx="4" fill="#fafafa" stroke="#c9d1d8" strokeWidth="1" /><circle cx="-34" cy="72" r="5" fill="#d9a074" /><rect x="-62" y="71" width="40" height="2.4" rx="1.2" fill="#e8c87a" />
       </g>
       <g style={{ transform: `rotate(${head}deg)`, transformOrigin: '45px 62px', transition: 'transform .7s ease' }}>
         <rect x="40" y="52" width="10" height="12" fill="#d9a074" /><circle cx="45" cy="38" r="17" fill="#e0aa80" /><path d="M28 36 Q30 18 45 18 Q61 18 62 36 Q55 26 45 27 Q34 27 28 36Z" fill="#241a14" />
@@ -62,10 +66,15 @@ function Students({ hand, talkingQ }) {
 }
 
 export default function Room() {
-  const { id } = useParams(), [meta, setMeta] = useState(null), [err, setErr] = useState(''), [pg, setPg] = useState(null), [n, setN] = useState(0), [li, setLi] = useState(-1), [wi, setWi] = useState(-1), [ms, setMs] = useState(300), [phase, setPhase] = useState('idle'), [busy, setBusy] = useState(''), [voice, setVoice] = useState(true), [spd, setSpd] = useState(1), [gaze, setGaze] = useState('board'), [talking, setTalking] = useState(false), [paused, setPaused] = useState(false), [q, setQ] = useState(''), [ans, setAns] = useState(''), [hand, setHand] = useState(false), [showQ, setShowQ] = useState(false);
+  const { id } = useParams(), [meta, setMeta] = useState(null), [err, setErr] = useState(''), [pg, setPg] = useState(null), [n, setN] = useState(0), [li, setLi] = useState(-1), [wi, setWi] = useState(-1), [ms, setMs] = useState(300), [phase, setPhase] = useState('idle'), [busy, setBusy] = useState(''), [voice, setVoice] = useState(true), [spd, setSpd] = useState(1), [gaze, setGaze] = useState('board'), [talking, setTalking] = useState(false), [paused, setPaused] = useState(false), [q, setQ] = useState(''), [ans, setAns] = useState(''), [hand, setHand] = useState(false), [showQ, setShowQ] = useState(false), [tx, setTx] = useState(0.85), [walk, setWalk] = useState(false), walkT = useRef(null);
   const R = useRef({ tok: 0, paused: false, voice: true, spd: 1, audio: null, cache: {}, aud: {}, resume: null }), boardEl = useRef(null);
   useEffect(() => { R.current.voice = voice; if (!voice && R.current.audio) R.current.audio.pause(); }, [voice]); useEffect(() => { R.current.spd = spd; }, [spd]);
   useEffect(() => { fetch('/api/ai/board/' + id).then(r => r.json()).then(d => d.ok ? setMeta(d) : setErr(ERR.not_found)).catch(() => setErr('ግንኙነት ተቋርጧል')); try { const w = window.Telegram && window.Telegram.WebApp; if (w) { w.ready(); w.expand(); } } catch (e) { } }, [id]);
+  useEffect(() => {          // መምህሩ ሲያስተምር ወደዚህ ወደዚያ ይራመዳል፦ መስመር በመስመር ሰሌዳውን ተከትሎ (ገጽ በገጽ አቅጣጫ ይቀያየራል)፤ ሲጨርስ ወደ መሃል ይመለሳል
+    if (!pg) return; const L = pg.lines ? pg.lines.length : 0; let to = tx; if (li >= 0 && L) { const f = L > 1 ? li / (L - 1) : 0.5; to = 0.08 + 0.84 * (n % 2 ? 1 - f : f); } else if (phase === 'wait' || phase === 'end') to = 0.5;
+    if (Math.abs(to - tx) < 0.03) return; setTx(to); setWalk(true); clearTimeout(walkT.current); walkT.current = setTimeout(() => setWalk(false), 2100);
+  }, [li, pg, phase, n]);
+  useEffect(() => () => clearTimeout(walkT.current), []);
   useEffect(() => { if (!talking) return; const t = setInterval(() => setGaze(g => (g === 'board' ? 'class' : 'board')), 3200 + Math.random() * 1500); return () => clearInterval(t); }, [talking]);
   const wait = useCallback(async (ms2, tok) => { let t = 0; while (t < ms2) { if (R.current.tok !== tok) return false; if (R.current.paused) { await sleep(120); continue; } await sleep(40); t += 40 / R.current.spd; } return R.current.tok === tok; }, []);
 
@@ -115,7 +124,7 @@ export default function Room() {
       if (a.dataset.state === 'err') { if (tries < 3) { tries++; await sleep(1200 * tries); a = gAudio(k, gi, true); continue; } return 'fail'; }
       if (a.readyState >= 3) break; const w = Date.now() - t0; if (w > 1500) setBusy(b => b || 'voice'); if (w > 70000) return 'fail'; await sleep(100);
     }
-    setBusy(b => (b === 'voice' ? '' : b)); R.current.audio = a; a.playbackRate = R.current.spd; a.currentTime = 0; setTalking(true);
+    setBusy(b => (b === 'voice' ? '' : b)); R.current.audio = a; a.playbackRate = R.current.spd; try { a.preservesPitch = true; } catch (e) { } a.currentTime = 0; setTalking(true);
     try { await a.play(); } catch (e) { return 'fail'; }
     const wt = G.map(i => Math.max(1, (L[i].say || '').length)), tot = wt.reduce((x, y) => x + y, 0); const cum = [0]; wt.forEach(x => cum.push(cum[cum.length - 1] + x / tot));
     let cur = -1, W = 1; while (!a.ended) {
@@ -125,7 +134,7 @@ export default function Room() {
       const l = L[G[j]]; if (cur !== j) { cur = j; W = wc(l.t) + wc(l.am); setLi(G[j]); setMs(Math.max(120, d ? (d * (cum[j + 1] - cum[j]) * 1000 / R.current.spd) / Math.max(1, W) : 300)); }
       setWi(Math.min(W - 1, Math.floor(((f - cum[j]) / Math.max(0.001, cum[j + 1] - cum[j])) * W))); await sleep(60);
     }
-    setWi(W); setTalking(false); return true;
+    setWi(W); return true;
   }, [gAudio, wait]);
   const runLines = useCallback(async (k, page, from, tok) => {
     const L = page.lines; if (!(meta && meta.tts && R.current.voice && page.groups && page.groups.length)) return runLineSet(k, page, L.map((_, i) => i).filter(i => i >= from), tok);
@@ -134,8 +143,7 @@ export default function Room() {
       if (R.current.tok !== tok) return false; gAudio(k, gi + 1); gAudio(k, gi + 2); setWi(-1);
       const r = await playGroup(k, page, gi, tok); if (r === false) return false;
       if (r === 'fail') { if (!(await runLineSet(k, page, page.groups[gi], tok))) return false; }
-      if (!(await wait(120, tok))) return false;
-    } return true;
+    } setTalking(false); return true;
   }, [meta, gAudio, playGroup, runLineSet, wait]);
 
   const teach = useCallback(async (k, from = 0) => {
@@ -167,7 +175,7 @@ export default function Room() {
 .uw,.ud{background-image:linear-gradient(#ffe9a8,#ffe9a8);background-repeat:no-repeat;background-position:0 100%;border-radius:1px}.ud{background-size:100% 3px}.uw{background-size:0 3px;animation:uwk linear forwards;color:#fff}@keyframes uwk{to{background-size:100% 3px}}
 .paste{animation:pst .5s ease-out}@keyframes pst{from{opacity:0;transform:scale(.92) translateY(-8px)}to{opacity:1;transform:none}}
 .mouth{animation:mth .28s infinite alternate}@keyframes mth{from{ry:1}to{ry:3.4}}.breathe{animation:br 3.4s ease-in-out infinite;transform-origin:45px 200px}@keyframes br{50%{transform:scaleY(1.012)}}
-@keyframes nod{0%,100%{transform:translateY(0)}50%{transform:translateY(2.5px)}}@keyframes hand{to{transform:translateY(-4px)}}`}</style>
+@keyframes walkA{from{transform:rotate(-16deg)}to{transform:rotate(16deg)}}@keyframes walkB{from{transform:rotate(16deg)}to{transform:rotate(-16deg)}}@keyframes bobk{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}.bob{animation:bobk .55s ease-in-out infinite}@keyframes nod{0%,100%{transform:translateY(0)}50%{transform:translateY(2.5px)}}@keyframes hand{to{transform:translateY(-4px)}}`}</style>
     <div className="mx-auto max-w-2xl">
       <div className="mb-1 flex items-center justify-between px-1 text-xs text-[#3b2a17]"><span>🧑‍🏫 {meta.title}</span><span>{n ? `ስላይድ ${n}/${meta.total}` : ''}</span></div>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4 }}>
@@ -188,9 +196,9 @@ export default function Room() {
             {(phase === 'wait' || phase === 'end') && <div className="mt-4 text-center">{phase === 'end' ? <p className="text-lg text-[#ffe9a8]">🏁 ትምህርቱ ተጠናቀቀ! ጥያቄ ካለዎት ይጠይቁ።</p> : <button onClick={nextP} className="rounded-full bg-[#ffe9a8] px-8 py-3 text-lg font-bold text-[#2b1d12]">▶️ ቀጣይ ስላይድ</button>}</div>}
           </div>}
         </div>
-        <div style={{ flexShrink: 0, alignSelf: 'flex-end' }}><Teacher talking={talking} gaze={gaze} angle={angle} hand={busy === 'ask'} /></div>
       </div>
       {ans && <div className="mx-auto mt-2 rounded-2xl border-2 border-[#8b5e34] bg-[#fff8e1] p-3 text-[#2b1d12] shadow"><p className="mb-1 text-xs text-[#8b5e34]">🧑‍🏫 መምህሩ፦</p><p className="whitespace-pre-wrap text-base">{ans}</p>{!busy && R.current.resume && phase !== 'end' && <button onClick={() => { setAns(''); teach(R.current.resume.k, Math.max(0, li < 0 ? R.current.resume.i : li)); }} className="mt-2 rounded-lg bg-[#2f7d6b] px-3 py-1.5 text-sm font-bold text-white">▶️ ትምህርቱን ቀጥል</button>}</div>}
+      <div style={{ position: 'relative', height: 172, marginTop: 4, overflow: 'hidden' }} aria-hidden="true"><div style={{ position: 'absolute', bottom: 0, left: `calc((100% - 70px) * ${tx.toFixed(3)})`, transition: 'left 2s ease-in-out', width: 70 }}><div style={{ transform: 'scale(.82)', transformOrigin: 'bottom left', width: 84 }}><Teacher talking={talking} gaze={gaze} angle={angle} hand={busy === 'ask'} walk={walk} /></div></div></div>
       <div className="mt-1"><Students hand={hand} /></div>
       {started && <div className="sticky bottom-2 mt-2 space-y-2 rounded-2xl bg-black/60 p-2 backdrop-blur">
         {showQ && <form onSubmit={ask} className="flex gap-2"><input value={q} onChange={e => setQ(e.target.value)} autoFocus placeholder="ጥያቄዎን ይጻፉ…" className="min-w-0 flex-1 rounded-lg bg-white/90 px-3 py-2 text-[#2b1d12]" /><button className="rounded-lg bg-[#ffe9a8] px-4 font-bold text-[#2b1d12]">ጠይቅ</button></form>}
