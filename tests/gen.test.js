@@ -56,3 +56,10 @@ test('AI፦ ground አማራጭ ተራ ጥያቄም ላይ ፍለጋ ያስነ�
   const f = async (u, o) => { bodies.push(JSON.parse(o.body)); return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'መልስ' }] } }] }) }; };
   const a = ai.create({ GEMINI_API_KEY: 'k' }, f); await a.chat('s1', 'ሰላም'); assert.ok(!bodies[0].tools); await a.chat('s1', 'ሰላም', null, null, { ground: true }); assert.ok(bodies[1].tools);
 });
+
+test('AI፦ ፍለጋ ሲጠየቅ lite ሞዴል አይቀድምም፤ ፍለጋ ካልተሳካ ያለ ፍለጋ + ማስጠንቀቂያ', async () => {
+  const ai = require('../server/ai'), calls = [];
+  let mode = 'ok'; const f = async (u, o) => { const b = JSON.parse(o.body); calls.push({ u, t: !!b.tools }); if (b.tools && mode === 'nosearch') return { ok: false, status: 400, json: async () => ({ error: { message: 'tool unsupported' } }) }; return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'መልስ' }] } }] }) }; };
+  const a = ai.create({ GEMINI_API_KEY: 'k' }, f); await a.chat('g1', 'የሮናልዶ ዜና'); assert.ok(calls[0].t && !/lite/.test(calls[0].u), 'ፍለጋ ያለው ሞዴል መጀመሪያ');
+  mode = 'nosearch'; calls.length = 0; const r = await a.chat('g2', 'የዛሬ ዜና'); assert.match(r, /ፍለጋ ለጊዜው አልተገኘም/); assert.ok(calls.some(c => !c.t));
+});

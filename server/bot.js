@@ -737,7 +737,7 @@ module.exports = function bot(c) {
     const ld = /^\/start\s+d_([\w-]{4,40})$/.exec(t); if (ld) return learnStart(chat, ld[1]);
     const dl = /^\/start\s+([sgpwej])_([\w-]{4,40})$/.exec(t); if (dl) s.deep = { t: dl[1], id: dl[2] };       // deep link — ከመግባት በኋላም ይከፈታል
     if (t === '✖️ ተው') { s.await = null; s.flow = null; s.aiproof = null; save(); return home(chat); }
-    if (/^\/(search|ፈልግ)\b/i.test(t)) { const q = t.replace(/^\/\S+\s*/, '').trim(); if (!uid && !isAdmin(chat)) return authStart(chat); if (!aiReady()) return send(chat, aiOff); if (!q) return send(chat, '🔎 <b>የድር ፍለጋ (AI Mode)</b>\n\nከድር ፍለጋ ጋር የተሳሰረ መልስ ከምንጭ ጋር ለማግኘት፦\n<code>/search የዛሬ የዶላር ምንዛሬ</code>'); return aiText(chat, uid, q, false, { ground: true }); }
+    if (/^\/(search|ፈልግ)\b/i.test(t)) { const q = t.replace(/^\/\S+\s*/, '').trim(); if (!uid && !isAdmin(chat)) return authStart(chat); if (!aiReady()) return send(chat, aiOff); if (!q) { ses(chat).srch = true; return send(chat, '🔎 <b>የድር ፍለጋ (AI Mode)</b>\n\nአሁን ጥያቄዎን ይጻፉ — ከድር ፍለጋ ጋር ተሳስሮ ከምንጭ ጋር እመልሳለሁ። (ወይም በአንድ መልእክት፦ <code>/search የዛሬ የዶላር ምንዛሬ</code>)'); } return aiText(chat, uid, q, false, { ground: true }); }
     if (uid && /^\/ai\b/.test(t)) return aiIntro(chat, uid); if (isAdmin(chat) && /^\/newstest\b/.test(t)) return axNews(chat); if (uid && /^\/voice\b/.test(t)) { const s2 = ses(chat), nx = { undefined: 'on', auto: 'on', on: 'off', off: 'auto' }[s2.vo || 'auto']; s2.vo = nx; save(); return send(chat, nx === 'on' ? '🔊 ሁልጊዜ በድምፅም እመልሳለሁ።' : nx === 'off' ? '🔇 የድምፅ መልስ ጠፍቷል (ድምፅ ቢልኩም በጽሑፍ ብቻ)።' : '🎙 በድምፅ ሲጠይቁ በድምፅ እመልሳለሁ (ነባሪ)።'); } if (uid && /^\/(new|reset)\b/.test(t)) { ai.reset(String(chat)); return send(chat, '🧹 አዲስ ውይይት ጀምረናል።', menuKb(chat)); }
     if (uid && /^\/lang\b/.test(t)) return langMenu(chat);
     if (uid && /^\/(search|near|alerts|messages)\b/.test(t)) return action(chat, uid, /^\/(\w+)/.exec(t)[1]);
@@ -750,7 +750,7 @@ module.exports = function bot(c) {
     if (LABELS[t]) { s.flow = null; return action(chat, uid, LABELS[t]); }
     if (/^\//.test(t)) return home(chat);
     if (s.flow) return flowText(chat, t, msg);
-    if (aiReady()) return aiText(chat, uid, t);          // ሌላ ማንኛውም ጽሑፍ → AI ረዳት
+    if (aiReady()) { const sr = !!ses(chat).srch; if (sr) { delete ses(chat).srch; } return aiText(chat, uid, t, false, sr ? { ground: true } : undefined); }          // ሌላ ማንኛውም ጽሑፍ → AI ረዳት
     return send(chat, '👇 ከታች ካለው ማውጫ ይምረጡ ወይም ዕቃ ለመፈለግ «🔎 ፈልግ» ይጫኑ።', menuKb(chat));
   }
   async function route(chat, data) {
