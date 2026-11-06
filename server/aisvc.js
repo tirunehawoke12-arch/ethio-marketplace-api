@@ -162,13 +162,25 @@ module.exports = function aisvc(ctx) {
     return (bd.pend[n] = (async () => {
       const q = takePages(bd.uid, bd.admin); if (!q.ok) { const e = new Error('ai_limit'); e.paywall = q.paywall; throw e; }
       try {
-        let last; for (let tr = 0; tr < 3; tr++) { try { const raw = await ai.boardPage(bd.title, n, bd.total, await bd.pageSrc(n), bd.domain), pg = cleanPage(raw); if (pg) return (bd.pages[n] = pg); last = new Error('board_parse'); } catch (e) { last = e; if (/^ai_(busy|timeout|network)$/.test(e.message)) await new Promise(r => setTimeout(r, 2500 * (tr + 1))); } }
+        let last; for (let tr = 0; tr < 3; tr++) { try { const raw = await ai.boardPage(bd.title, n, bd.total, await bd.pageSrc(n), bd.domain), pg = cleanPage(raw); if (pg) { bd.pages[n] = pg; warm(bd, n); return pg; } last = new Error('board_parse'); } catch (e) { last = e; if (/^ai_(busy|timeout|network)$/.test(e.message)) await new Promise(r => setTimeout(r, 2500 * (tr + 1))); } }
         throw last || new Error('board_parse');
       } catch (e) { ai.refund(String(bd.uid), 'pages', 1); throw e; }
     })().finally(() => { delete bd.pend[n]; }));
   }
   const wavOf = (pcm, rate) => { const h = Buffer.alloc(44); h.write('RIFF', 0); h.writeUInt32LE(36 + pcm.length, 4); h.write('WAVEfmt ', 8); h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20); h.writeUInt16LE(1, 22); h.writeUInt32LE(rate, 24); h.writeUInt32LE(rate * 2, 28); h.writeUInt16LE(2, 32); h.writeUInt16LE(16, 34); h.write('data', 36); h.writeUInt32LE(pcm.length, 40); return Buffer.concat([h, pcm]); };
-  const sendWav = async (res, key, text) => { try { let w = BTTS.get(key); if (!w) { const a = await ai.speak(text); if (!a) return res.status(204).end(); w = wavOf(a.pcm, a.rate); if (BTTS.size > 150) BTTS.delete(BTTS.keys().next().value); BTTS.set(key, w); } res.set({ 'content-type': 'audio/wav', 'cache-control': 'private, max-age=3600' }); res.send(w); } catch (e) { res.status(204).end(); } };
+  const splitSay = t => { const out = []; let rest = String(t || '').trim(); while (rest.length > 850) { let cut = Math.max(rest.lastIndexOf('።', 850), rest.lastIndexOf('. ', 850), rest.lastIndexOf('\n', 850)); if (cut < 250) cut = rest.lastIndexOf(' ', 850); if (cut < 250) cut = 850; out.push(rest.slice(0, cut + 1)); rest = rest.slice(cut + 1).trim(); } if (rest) out.push(rest); return out; };
+  async function synth(text) {          // ረጅም ንግግር በአረፍተ ነገር ተቆርጦ ተሰምቶ ይቀጠላል (አይቆረጥም)፤ 429 ላይ እንደገና ይሞክራል
+    const pcm = []; let rate = 24000; for (const part of splitSay(text)) { let a = null; for (let tr = 0; tr < 3 && !a; tr++) { a = await ai.speak(part); if (!a) await new Promise(r => setTimeout(r, 1200 * (tr + 1))); } if (!a) return null; pcm.push(a.pcm); rate = a.rate; }
+    return pcm.length ? wavOf(Buffer.concat(pcm), rate) : null;
+  }
+  function ttsGet(key, text) {          // በአንድ ጊዜ የሚመጡ ጥያቄዎች አንድ ሥራ ይጋራሉ፤ ስኬት ብቻ ይሸጎጣል
+    let p = BTTS.get(key); if (p) return p; p = synth(text).catch(() => null); BTTS.set(key, p); p.then(w => { if (!w) BTTS.delete(key); }); if (BTTS.size > 80) BTTS.delete(BTTS.keys().next().value); return p;
+  }
+  function warm(bd, n) {          // ገጹ እንደተዘጋጀ ሁሉንም መስመሮች ድምፅ ከበስተጀርባ (2 በአንድ ጊዜ) ያዘጋጃል — ተማሪው ሲደርስ ዝግጁ ነው
+    if (!ai.speak || ai.provider !== 'gemini') return; const pg = bd.pages[n]; if (!pg) return; const L = pg.lines.map((l, i) => [i, l.say]).filter(x => x[1]);
+    (async () => { let k = 0; const worker = async () => { while (k < L.length) { const [i, t] = L[k++]; await ttsGet(bd.id + ':' + n + ':' + i, t); } }; await Promise.all([worker(), worker()]); })().catch(() => { });
+  }
+  const sendWav = async (res, key, text) => { try { const w = await ttsGet(key, text); if (!w) return res.status(204).end(); res.set({ 'content-type': 'audio/wav', 'cache-control': 'private, max-age=3600' }); res.send(w); } catch (e) { res.status(204).end(); } };
   const bdOf = req => BOARDS.get(String(req.params.id));
   app.get('/api/ai/board/:id', (req, res) => { const bd = bdOf(req); if (!bd) return bad(res, 404, 'not_found'); res.set('cache-control', 'no-store'); res.json({ ok: true, title: bd.title, total: bd.total, start: bd.start, tts: ai.provider === 'gemini' }); });
   app.get('/api/ai/board/:id/page/:n', async (req, res) => {

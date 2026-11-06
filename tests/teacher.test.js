@@ -50,8 +50,26 @@ test('ሰሌዳ API፦ ገጽ በፍላጎት፣ ጽዳት፣ መሸጎጥ፣ �
   r = await call('GET /api/ai/board/:id/page/:n', { id, n: '2' }); assert.equal(r.json.page.title, 'ገጽ 2'); assert.equal(r.json.page.lines.length, 2, 'ባዶ መስመር ይወገዳል'); assert.equal(r.json.page.lines[1].k, 'text', 'ያልታወቀ አይነት → text'); assert.ok(r.json.page.lines[0].say.length <= 1400); assert.equal(r.json.page.draw.length, 1); assert.equal(r.json.page.draw[0].w, 100);
   await call('GET /api/ai/board/:id/page/:n', { id, n: '2' }); assert.equal(calls, 1, 'ገጽ ይሸጎጣል');
   r = await call('GET /api/ai/board/:id/page/:n', { id, n: '9' }); assert.equal(r.code, 404);
-  r = await call('GET /api/ai/board/:id/tts/:n/:i', { id, n: '2', i: '0' }); assert.ok(Buffer.isBuffer(r.body) && r.body.slice(0, 4).toString() === 'RIFF'); await call('GET /api/ai/board/:id/tts/:n/:i', { id, n: '2', i: '0' }); assert.equal(speaks, 1, 'ድምፅ ይሸጎጣል');
+  await new Promise(r => setTimeout(r, 80)); const sp0 = speaks; assert.ok(sp0 >= 3, 'ገጹ እንደተዘጋጀ ድምፅ ከበስተጀርባ ይዘጋጃል (ረጅም ንግግር በ2 ተቆርጦ)'); r = await call('GET /api/ai/board/:id/tts/:n/:i', { id, n: '2', i: '0' }); assert.ok(Buffer.isBuffer(r.body) && r.body.slice(0, 4).toString() === 'RIFF'); assert.ok(r.body.length > 2 * 4800 * 0.9, 'የተቆራረጡ ክፍሎች ተያይዘዋል'); await call('GET /api/ai/board/:id/tts/:n/:i', { id, n: '2', i: '0' }); assert.equal(speaks, sp0, 'ድምፅ ይሸጎጣል — ዳግም አይሰራም');
   r = await call('GET /api/ai/board/:id/tts/:n/:i', { id, n: '5', i: '0' }); assert.ok(r.ended);
   r = await call('POST /api/ai/board/:id/ask', { id }, { q: 'ኒውክሊየስ ምንድን ነው?', n: 2 }); assert.equal(r.json.text, 'መልስ'); r = await call('GET /api/ai/board/:id/tta/:aid', { id, aid: r.json.aid }); assert.equal(r.body.slice(0, 4).toString(), 'RIFF');
   r = await call('GET /api/ai/board/:id', { id: 'nope' }); assert.equal(r.code, 404);
+});
+
+test('መግቢያ፦ 3 ምርጫ፣ ትምህርት = ስልክ+የይለፍ ቃል ብቻ፤ ክፍያ በገደብ ሲያልቅ ብቻ በ«ፕላን አሳድግ»', async () => {
+  process.env.ANTHROPIC_API_KEY = 'k'; const sent = [], tg = async (m, p) => { sent.push([m, p]); return { ok: true }; }, made = [], accounts = {};
+  const srv = http.createServer((q, r) => { r.setHeader('content-type', 'application/json'); r.end(JSON.stringify({ ok: true, accounts: [{ method: 'telebirr', number: '0946705941', holder: 'T' }], items: [] })); }); await new Promise(r => srv.listen(0, r)); const port = srv.address().port;
+  const svc = { ai: {}, info: () => ({ plans: [{ id: 'p1', label: 'ወርሃዊ', price: 99, days: 30 }], free: { chat: 5, pages: 3 }, usage: { chat: 5 }, pending: false, paid: false }), tbOnly: () => false, converse: async () => ({ ok: false, error: 'ai_limit' }), takePages: () => ({ ok: true }) };
+  const db = { accounts: {} }, st5 = { docs: {} }, bot = require('../server/bot')({ aisvc: svc, tg, tokFor: () => 't', port, baseUrl: 'https://x.et', adminChat: '999', bindAdmin() { }, adminPhone: '', token: 'T', getDb: () => db, getStore: () => st5, accKey: () => 'k5', findUid: () => null, normPhoneET: x => String(x).replace(/^\+?251/, '0'), authApi: { createAccount: async o => { made.push(o); db.accounts.k5 = { chatId: o.chatId }; st5.docs['data/users/U5'] = { acct: { phone: o.phone, name: o.name } }; return { uid: 'U5' }; }, linkChat() { }, verifyPassword: async () => true }, pool: null, pgUpsert: async () => { }, isSusp: () => false });
+  const msgs = () => sent.filter(x => x[0] === 'sendMessage').map(x => x[1]), say = (t, extra = {}) => bot.handle({ message: { chat: { id: 5, type: 'private' }, from: { id: 5, first_name: 'አበበ' }, text: t, message_id: 1, ...extra } }), cb = d => bot.handle({ callback_query: { id: 'q' + Math.random(), data: d, message: { chat: { id: 5, type: 'private' } } } });
+  try {
+    await say('/start'); const w = msgs().find(m => /ምን ላይ ማተኮር/.test(m.text)); assert.ok(w); const kb = JSON.stringify(w.reply_markup); for (const k of ['ob:e', 'ob:m', 'ob:b']) assert.ok(kb.includes(k), k); assert.equal((kb.match(/callback_data/g) || []).length, 3, '3 ምርጫ ብቻ');
+    sent.length = 0; await cb('ob:e'); assert.ok(msgs().some(m => /request_contact/.test(JSON.stringify(m.reply_markup))), 'ስልክ ይጠየቃል');
+    sent.length = 0; await bot.handle({ message: { chat: { id: 5, type: 'private' }, from: { id: 5, first_name: 'አበበ' }, contact: { user_id: 5, phone_number: '+251911223344' } } }); assert.ok(msgs().some(m => /የይለፍ ቃል/.test(m.text)) && !msgs().some(m => /ኢሜይል/.test(m.text)), 'ኢሜይል አይጠየቅም');
+    sent.length = 0; await say('secret1234'); assert.equal(made.length, 1); assert.equal(made[0].phone, '0911223344'); assert.equal(made[0].name, 'አበበ'); assert.ok(msgs().some(m => /ትምህርት/.test(m.text) && /bk:l/.test(JSON.stringify(m.reply_markup))), 'ትምህርት ክፍል ይከፈታል');
+    // ገደብ ሲያልቅ፦ ክፍያ አይታይም
+    sent.length = 0; await say('ጥያቄ'); const pw = msgs().map(m => m.text).join('\n'); assert.match(pw, /እስከ ነገ|ነገ ድርሻዎ/); assert.ok(!/0946705941|telebirr|ብር/i.test(pw + JSON.stringify(msgs().map(m => m.reply_markup))), 'ክፍያ አይታይም'); assert.match(JSON.stringify(msgs().map(m => m.reply_markup)), /pw:up/);
+    sent.length = 0; await cb('pw:wait'); assert.ok(msgs().some(m => /ነገ/.test(m.text)));
+    sent.length = 0; await cb('pw:up'); const pm = msgs().map(m => m.text).join('\n'); assert.match(pm, /0946705941/); assert.match(JSON.stringify(msgs().map(m => m.reply_markup)), /aipay:p1/);
+  } finally { srv.close(); delete process.env.ANTHROPIC_API_KEY; }
 });

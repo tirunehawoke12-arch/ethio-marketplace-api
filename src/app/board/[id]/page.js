@@ -73,26 +73,34 @@ export default function Room() {
     const C = R.current.cache; if (C[k]) return C[k];
     C[k] = fetch('/api/ai/board/' + id + '/page/' + k).then(r => r.json()).then(d => { if (!d.ok) { delete C[k]; throw new Error(d.error || 'failed'); } return d.page; }).catch(e => { delete C[k]; throw e; }); return C[k];
   }, [id]);
-  const audioFor = useCallback((k, i) => {          // የመስመር ድምፅ ቀድሞ ይጫናል
-    if (!meta || !meta.tts) return null; const key = k + ':' + i; if (!R.current.aud[key]) { const a = new Audio(); a.preload = 'auto'; a.src = '/api/ai/board/' + id + '/tts/' + k + '/' + i; a.dataset.state = 'load'; a.addEventListener('error', () => { a.dataset.state = 'err'; }); a.addEventListener('canplaythrough', () => { a.dataset.state = 'ok'; }); R.current.aud[key] = a; } return R.current.aud[key];
+  const audioFor = useCallback((k, i, fresh) => {          // የመስመር ድምፅ ቀድሞ ይጫናል (ሰርቨሩ ከበስተጀርባ ያዘጋጃል)
+    if (!meta || !meta.tts) return null; const key = k + ':' + i; if (fresh) delete R.current.aud[key];
+    if (!R.current.aud[key]) { const a = new Audio(); a.preload = 'auto'; a.dataset.state = 'load'; a.addEventListener('error', () => { a.dataset.state = 'err'; }); a.addEventListener('canplaythrough', () => { a.dataset.state = 'ok'; }); a.src = '/api/ai/board/' + id + '/tts/' + k + '/' + i + (fresh ? '?r=' + Date.now() : ''); R.current.aud[key] = a; } return R.current.aud[key];
   }, [meta, id]);
-  const speakLine = useCallback((k, i, text, tok) => new Promise(res => {          // → የንግግር ጊዜ (ms)
-    if (!R.current.voice || !text) return res(Math.max(1500, text.length * 55)); let fin = false; const done = d => { if (!fin) { fin = true; setTalking(false); res(d); } };
-    const fb = () => { try { const u = new SpeechSynthesisUtterance(text); u.lang = 'am-ET'; u.rate = R.current.spd; const t0 = Date.now(); u.onend = () => done(Date.now() - t0); u.onerror = () => done(Math.max(1500, text.length * 55)); setTalking(true); window.speechSynthesis.speak(u); setTimeout(() => done(text.length * 90), Math.min(90000, text.length * 150)); } catch (e) { done(Math.max(1500, text.length * 55)); } };
-    const a = audioFor(k, i); if (!a) return fb(); R.current.audio = a; a.playbackRate = R.current.spd;
-    const t0 = Date.now(); let started = false; const tryPlay = () => { if (started) return; if (a.dataset.state === 'err') { started = true; return fb(); } if (a.readyState >= 3) { started = true; setTalking(true); a.currentTime = 0; a.play().catch(() => { started = false; fb(); }); } };
-    a.onended = () => done((a.duration || 0) * 1000 / R.current.spd); const iv = setInterval(() => { if (R.current.tok !== tok) { clearInterval(iv); try { a.pause(); } catch (e) { } return done(0); } if (R.current.paused) { if (!a.paused) a.pause(); return; } if (started && a.paused && !a.ended && R.current.voice) a.play().catch(() => { }); tryPlay(); if (!started && Date.now() - t0 > 40000) { started = true; fb(); } if (fin) clearInterval(iv); }, 150);
-    R.current.durOf = () => (a.duration && isFinite(a.duration) ? a.duration * 1000 / R.current.spd : 0);
+  const speakLine = useCallback((k, i, text, tok, onStart) => new Promise(res => {          // → የንግግር ጊዜ (ms)
+    const est = Math.max(1500, (text || '').length * 55); const go = () => { try { onStart && onStart(); } catch (e) { } }; if (!R.current.voice || !text) { go(); return res(est); } let fin = false, a = audioFor(k, i), tries = 0, started = false; const t0 = Date.now();
+    const done = d => { if (!fin) { fin = true; go(); setTalking(false); setBusy(b => (b === 'voice' ? '' : b)); res(d); } };
+    const fb = () => { if (fin) return; try { const u = new SpeechSynthesisUtterance(text); u.lang = 'am-ET'; u.rate = R.current.spd; const s0 = Date.now(); u.onend = () => done(Date.now() - s0); u.onerror = () => done(est); go(); setTalking(true); window.speechSynthesis.speak(u); setTimeout(() => done(est), Math.min(90000, text.length * 150)); } catch (e) { done(est); } };
+    if (!a) return fb(); R.current.audio = a; a.playbackRate = R.current.spd; R.current.durOf = () => (a.duration && isFinite(a.duration) ? a.duration * 1000 / R.current.spd : 0);
+    const bind = () => { a.onended = () => done((a.duration || 0) * 1000 / R.current.spd); a.playbackRate = R.current.spd; R.current.audio = a; };
+    bind(); const iv = setInterval(() => {
+      if (fin) return clearInterval(iv); if (R.current.tok !== tok) { clearInterval(iv); try { a.pause(); } catch (e) { } return done(0); }
+      if (R.current.paused) { if (!a.paused) a.pause(); return; }
+      if (started) { if (a.paused && !a.ended && R.current.voice) a.play().catch(() => { }); return; }
+      if (a.dataset.state === 'err') { if (tries < 3) { tries++; setTimeout(() => { if (!fin) { a = audioFor(k, i, true); bind(); } }, 1200 * tries); a.dataset.state = 'retry'; return; } if (a.dataset.state !== 'retry') { clearInterval(iv); started = true; return fb(); } }
+      if (a.readyState >= 3 && a.dataset.state !== 'retry') { started = true; setBusy(b => (b === 'voice' ? '' : b)); setTalking(true); a.currentTime = 0; a.play().then(go).catch(() => { started = false; tries = 9; a.dataset.state = 'err'; }); return; }
+      const w = Date.now() - t0; if (w > 1500) setBusy(b => b || 'voice'); if (w > 60000) { clearInterval(iv); started = true; fb(); }
+    }, 120);
   }), [audioFor]);
 
   const runLines = useCallback(async (k, page, from, tok) => {
     const L = page.lines; for (let i = from; i < L.length; i++) {
-      if (R.current.tok !== tok) return false; const l = L[i]; setLi(i); setWi(-1); for (let j = 1; j <= 2; j++) audioFor(k, i + j);          // 2 መስመር ቀድሞ ያዘጋጃል
+      if (R.current.tok !== tok) return false; const l = L[i]; setLi(i); setWi(-1); for (let j = 1; j <= 4; j++) audioFor(k, i + j);          // 4 መስመር ቀድሞ ይጫናል
       const W = wc(l.t) + wc(l.am), est = Math.max(1600, (l.say || '').length * 62); setMs(Math.max(220, est / Math.max(1, W)));
-      const sp = speakLine(k, i, l.say, tok); let spoken = false; sp.then(() => { spoken = true; });
-      await sleep(350); const dur = R.current.durOf && R.current.voice ? R.current.durOf() : 0, per = Math.max(220, (dur || est) / Math.max(1, W)); setMs(per);
+      let startRes; const stP = new Promise(r => { startRes = r; }); const sp = speakLine(k, i, l.say, tok, startRes); let spoken = false; sp.then(() => { spoken = true; });
+      await stP; if (R.current.tok !== tok) return false; await sleep(80); const dur = R.current.durOf && R.current.voice ? R.current.durOf() : 0, per = Math.max(220, (dur || est) / Math.max(1, W)); setMs(per);
       for (let w = 0; w < W; w++) { setWi(w); if (!(await wait(per, tok))) return false; }
-      setWi(W); while (!spoken) { if (R.current.tok !== tok) return false; await sleep(120); } if (!(await wait(600, tok))) return false;
+      setWi(W); while (!spoken) { if (R.current.tok !== tok) return false; await sleep(120); } if (!(await wait(250, tok))) return false;
     } return true;
   }, [audioFor, speakLine, wait]);
 
@@ -100,7 +108,7 @@ export default function Room() {
     const tok = ++R.current.tok; R.current.paused = false; setPaused(false); setAns(''); setShowQ(false); setHand(false); try { window.speechSynthesis.cancel(); if (R.current.audio) R.current.audio.pause(); } catch (e) { }
     setN(k); setPhase('loading'); setBusy(''); setLi(-1); setWi(-1); setTalking(false); setGaze('board');
     let page; try { page = await fetchPage(k); } catch (e) { if (R.current.tok === tok) { setPhase('error'); setBusy(ERR[e.message] || 'ገጹን ማዘጋጀት አልተቻለም — እንደገና ይሞክሩ።'); } return; }
-    if (R.current.tok !== tok) return; setPg(page); setPhase('teach'); if (meta && k < meta.total) fetchPage(k + 1).catch(() => { }); for (let j = 0; j < 2; j++) audioFor(k, j);
+    if (R.current.tok !== tok) return; setPg(page); setPhase('teach'); if (meta && k < meta.total) fetchPage(k + 1).catch(() => { }); for (let j = 0; j < 4; j++) audioFor(k, j);
     if (!page.lines.length) { setPhase('wait'); return; }
     await sleep(900); R.current.resume = { k, i: from }; const ok = await runLines(k, page, from, tok); if (!ok || R.current.tok !== tok) return; setLi(-1); setPhase(k >= (meta ? meta.total : k) ? 'end' : 'wait'); setGaze('class'); setTalking(false);
   }, [fetchPage, runLines, audioFor, meta]);
@@ -131,6 +139,7 @@ export default function Room() {
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4 }}>
         <div ref={boardEl} className="rounded-xl shadow-2xl" style={{ flex: 1, minWidth: 0, overflowY: 'auto', border: '9px solid #8b5e34', background: '#21402f', color: '#f4f1e8', padding: 12, height: '56vh', backgroundImage: 'radial-gradient(ellipse at 30% 20%,rgba(255,255,255,.07),transparent 60%)' }}>
           {!started && <div className="py-14 text-center"><p className="mb-3 text-xl">🧑‍🏫 {meta.title}</p><p className="mb-6 text-sm text-white/65">{meta.total} ስላይድ። መምህሩ እያንዳንዱን በሰሌዳ ላይ ይለጥፋል፣ መስመር በመስመር ቃል በቃል እያሰመረ ያስረዳል።{meta.tts ? '' : ' (ድምፅ ከአሳሽዎ ይሰማል — የአማርኛ ድምፅ ከሌለ በጽሑፍ ብቻ)'}</p><button onClick={() => teach(meta.start || 1)} className="rounded-full bg-[#ffe9a8] px-8 py-3 text-lg font-bold text-[#2b1d12]">▶️ ክፍሉን ጀምር</button></div>}
+          {busy === 'voice' && phase === 'teach' && <p className="mb-1 text-center text-xs text-white/60">🔊 ድምፅ እየተዘጋጀ ነው…</p>}
           {phase === 'loading' && <p className="py-16 text-center text-white/70">✍️ መምህሩ ስላይድ {n}ን እያዘጋጀ ነው…</p>}
           {phase === 'error' && <div className="py-12 text-center"><p className="mb-4 text-[#ffb3a7]">{busy}</p><button onClick={() => teach(n)} className="rounded-lg bg-[#ffe9a8] px-5 py-2 font-bold text-[#2b1d12]">🔁 እንደገና</button></div>}
           {pg && phase !== 'loading' && phase !== 'error' && <div key={n} className="paste">

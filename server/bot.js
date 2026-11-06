@@ -160,9 +160,17 @@ module.exports = function bot(c) {
 
   /* ================= መግቢያ / ምዝገባ በቦቱ ውስጥ ================= */
   const CONTACT_KB = { keyboard: [[{ text: '📱 ስልኬን አጋራ', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true };
-  function authStart(chat) {
-    ses(chat).auth = { stage: 'contact' }; save();
+  function authStart(chat) {          // አዲስ ሰው፦ /start ካለ በኋላ 3 ምርጫ ብቻ
+    const s = ses(chat); s.auth = null; save();
+    return send(chat, '🇪🇹 <b>እንኳን ወደ ኢትዮ ዲጂታል ማርኬት በደህና መጡ!</b>\n\nምን ላይ ማተኮር ይፈልጋሉ?', ik([[b('🎓 ትምህርት', 'ob:e')], [b('🛍 ዲጂታል ገበያ', 'ob:m')], [b('✨ ሁለቱንም', 'ob:b')]]));
+  }
+  function authAsk(chat, edu) {
+    ses(chat).auth = { stage: 'contact', edu: !!edu }; save();
     return send(chat, '🇪🇹 <b>እንኳን ወደ ኢትዮ ዲጂታል ማርኬት በደህና መጡ!</b>\n\nበዚህ ቦት ውስጥ ድረ-ገጹ የሚሠራውን ሁሉ ማድረግ ይችላሉ፦ ዕቃ መግዛት እና መሸጥ፣ ሥራ መፈለግ እና ማስታወቅ፣ የራስዎን ገጽ መሥራት፣ ክፍያ እና ደረሰኝ።\n\n🔒 ለመግባት ወይም አካውንት ለመክፈት በመጀመሪያ ስልክ ቁጥርዎን ያረጋግጡ — ከታች «📱 ስልኬን አጋራ» ይጫኑ።', CONTACT_KB);
+
+  }
+  async function landing(chat, uid) {          // ከመግባት በኋላ የመረጡት ክፍል ይከፈታል
+    const m = ses(chat).mode; if (m === 'edu') return eduHome(chat, uid); if (m === 'market') return marketHome(chat, uid);
   }
   async function authContact(chat, msg) {
     const ct = msg.contact; if (!msg.from || ct.user_id !== msg.from.id) return send(chat, '⚠️ የራስዎን ስልክ ቁጥር ብቻ ማጋራት ይችላሉ። «📱 ስልኬን አጋራ» ቁልፉን ይጠቀሙ።', CONTACT_KB);
@@ -178,6 +186,10 @@ module.exports = function bot(c) {
       s.auth = { stage: 'pw', phone, uid: exist, username }; save();
       await send(chat, '🔑 ከዚህ ስልክ ጋር የተመዘገበ አካውንት አለ።', { remove_keyboard: true });
       return send(chat, 'የድረ-ገጽ <b>የይለፍ ቃልዎን</b> ይጻፉ — መልዕክቱ ወዲያው ይሰረዛል።', ik([[b('🆘 የይለፍ ቃል ረሳሁ', 'rst')]]));
+    }
+    if (s.auth && s.auth.edu) {          // 🎓 ለትምህርት፦ ስልክ + የይለፍ ቃል ብቻ
+      s.auth = { stage: 'newpw', phone, username, edu: true, name: [msg.from.first_name, msg.from.last_name].filter(Boolean).join(' ').slice(0, 60) || 'ተማሪ', email: `p${phone.replace(/\D/g, '')}@tg.etio.et` }; save();
+      return send(chat, '🆕 አዲስ አካውንት እንክፈት።\n\n🔐 <b>የይለፍ ቃል</b> ይፍጠሩ (ቢያንስ 8 ቁምፊ) — መልዕክቱ ወዲያው ይሰረዛል፦', { remove_keyboard: true });
     }
     s.auth = { stage: 'email', phone, username }; save();
     return send(chat, '🆕 አዲስ አካውንት እንክፈት።\n\n📧 <b>ኢሜይልዎን</b> ይጻፉ፦', { remove_keyboard: true });
@@ -196,7 +208,7 @@ module.exports = function bot(c) {
       if (ok === null) return send(chat, '⏳ ብዙ ሙከራ — ከ15 ደቂቃ በኋላ ይሞክሩ።');
       if (!ok) return send(chat, '❌ የይለፍ ቃሉ ትክክል አይደለም፤ እንደገና ይጻፉ።');
       authApi.linkChat(a.uid, chat, a.username); rebuild(); s.auth = null; save();
-      return home(chat, `✅ ገብተዋል! እንኳን ደህና መጡ ${H(userOf(a.uid).name)}\n\nከታች ካሉት ቁልፎች ይምረጡ።`);
+      await home(chat, `✅ ገብተዋል! እንኳን ደህና መጡ ${H(userOf(a.uid).name)}\n\nከታች ካሉት ቁልፎች ይምረጡ።`); return landing(chat, a.uid);
     }
     if (a.stage === 'email') {
       const e = t.toLowerCase(); if (!/^\S+@\S+\.\S+$/.test(e)) return send(chat, '❌ ትክክለኛ ኢሜይል ያስገቡ (ለምሳሌ name@gmail.com)።');
@@ -209,7 +221,7 @@ module.exports = function bot(c) {
       const r = await authApi.createAccount({ email: a.email, phone: a.phone, name: a.name, pw: t, chatId: chat, username: a.username });
       if (r.error) { s.auth = null; save(); return send(chat, bad(r) + '\n/start ብለው እንደገና ይጀምሩ።'); }
       rebuild(); s.auth = null; save();
-      return home(chat, `🎉 አካውንትዎ ተከፍቷል! ይህን ኢሜይል እና የይለፍ ቃል በድረ-ገጹም መጠቀም ይችላሉ።\n\nከታች ካሉት ቁልፎች ይምረጡ።`);
+      await home(chat, a.edu ? `🎉 ተመዝግበዋል! ስልክዎን እና የይለፍ ቃልዎን በድረ-ገጹም መጠቀም ይችላሉ።` : `🎉 አካውንትዎ ተከፍቷል! ይህን ኢሜይል እና የይለፍ ቃል በድረ-ገጹም መጠቀም ይችላሉ።\n\nከታች ካሉት ቁልፎች ይምረጡ።`); return landing(chat, uidOf(chat));
     }
   }
 
@@ -727,7 +739,7 @@ module.exports = function bot(c) {
     if (uid && /^\/ai\b/.test(t)) return aiIntro(chat, uid); if (isAdmin(chat) && /^\/newstest\b/.test(t)) return axNews(chat); if (uid && /^\/voice\b/.test(t)) { const s2 = ses(chat), nx = { undefined: 'on', auto: 'on', on: 'off', off: 'auto' }[s2.vo || 'auto']; s2.vo = nx; save(); return send(chat, nx === 'on' ? '🔊 ሁልጊዜ በድምፅም እመልሳለሁ።' : nx === 'off' ? '🔇 የድምፅ መልስ ጠፍቷል (ድምፅ ቢልኩም በጽሑፍ ብቻ)።' : '🎙 በድምፅ ሲጠይቁ በድምፅ እመልሳለሁ (ነባሪ)።'); } if (uid && /^\/(new|reset)\b/.test(t)) { ai.reset(String(chat)); return send(chat, '🧹 አዲስ ውይይት ጀምረናል።', menuKb(chat)); }
     if (uid && /^\/lang\b/.test(t)) return langMenu(chat);
     if (uid && /^\/(search|near|alerts|messages)\b/.test(t)) return action(chat, uid, /^\/(\w+)/.exec(t)[1]);
-    if (/^\/(start|menu|login)\b/.test(t)) { s.flow = null; if (uid) return home(chat, `🇪🇹 <b>ኢትዮ ዲጂታል ማርኬት</b>\n${tx(chat, 'welcome')} ${H(userOf(uid).name)}!`); s.auth = null; return authStart(chat); }
+    if (/^\/(start|menu|login)\b/.test(t)) { s.flow = null; if (uid) { await home(chat, `🇪🇹 <b>ኢትዮ ዲጂታል ማርኬት</b>\n${tx(chat, 'welcome')} ${H(userOf(uid).name)}!`); return send(chat, '✨ ዛሬ ምን እናድርግ?', ik([[b('🎓 ትምህርት', 'ob:e'), b('🛍 ገበያ', 'ob:m')], [b('🤖 ማንኛውንም ጠይቁኝ', 'aih')]])); } s.auth = null; return authStart(chat); }
     if (/^\/account\b/.test(t) && uid) return accountMenu(chat, uid);
     if (/^\/logout\b/.test(t) && uid) return send(chat, '🚪 ከአካውንትዎ መውጣት ይፈልጋሉ?', ik([[b('✅ አዎ ውጣ', 'loc'), b('✖️ አይ', 'acc')]]));
     if (/^\/help\b/.test(t) || t === '❓ እገዛ') return send(chat, HELP, menuKb(chat));
@@ -743,6 +755,8 @@ module.exports = function bot(c) {
     const [k, a, x, y] = data.split(':'); let uid = uidOf(chat);
     if (k === 'noop') return;
     if (k === 'login') return authStart(chat);
+    if (k === 'ob') { const s0 = ses(chat); s0.mode = { e: 'edu', m: 'market', b: 'both' }[a] || 'both'; save(); if (uid) return s0.mode === 'both' ? home(chat, '✨ እንኳን ደህና መጡ — ከታች ይምረጡ።') : landing(chat, uid); return authAsk(chat, a === 'e'); }
+    if (k === 'pw') return a === 'up' ? payMenu(chat, uid) : send(chat, '🌅 እሺ! ነገ ነጻ ድርሻዎ ይታደሳል፤ ተመልሰው ይቀጥሉ — በዚህ ጊዜ ትምህርቱን ወይም ገበያውን ያስሱ።', menuKb(chat));
     if (k === 'rst') { const a = ses(chat).auth; if (a && a.stage === 'pw') { a.stage = 'resetpw'; save(); return send(chat, '🆘 ስልክዎ በ Telegram ስለተረጋገጠ አዲስ የይለፍ ቃል መፍጠር ይችላሉ።\n🔐 አዲስ የይለፍ ቃል ይጻፉ (ቢያንስ 8 ቁምፊ — መልዕክቱ ይሰረዛል)፦'); } return authStart(chat); }
     if (!uid && !(isAdmin(chat) && /^(ax|axbk|ad|avp|ast|arf|arl|ash|apt|amod|apay|asl|arfl|adis|ashp|atr|abc|bcgo|bcx|arp|aiap)/.test(k))) return authStart(chat);
     if (/^(ad|avp|ast|arf|arl|ash|ashr|apt|amod|apay|asl|arfl|adis|ashp|atr|atrq|atrp|atrph|abc|bcgo|bcx|arp|aiap)$/.test(k) && !isAdmin(chat)) return send(chat, '⛔ አድሚን ብቻ');
@@ -845,10 +859,15 @@ module.exports = function bot(c) {
   const planRows = (plans, pre = 'aipay') => plans.map(p => [b(`💳 ${p.label} — ${p.price} ብር`, `${pre}:${p.id}`)]);
   const tbf = (a) => !svc.tbOnly() || /telebirr|ቴሌብር/i.test(a.method);
   const accText = async uid => { const cf = await GET('/api/market/config', uid); return (cf.accounts || []).filter(tbf).map(a => `• ${H(a.method)}፦ <code>${H(a.number)}</code>${a.holder ? ' · ' + H(a.holder) : ''}`).join('\n'); };
-  async function paywall(chat, uid, why, partial) {
-    const inf = svc.info(uid || 'x'), reason = why === 'limit' ? '⛔ የዛሬው ነጻ የ AI መልእክት ገደብ አልቋል።' : why === 'pages' ? '⛔ የዛሬው ነጻ የትርጉም ገጾች ገደብ አልቋል።' : '🔒 ይህ ጥልቅ (ሙሉ) መልስ ለተከፈሉ ተጠቃሚዎች ነው።';
-    if (partial) await sendLong(chat, '', partial); const acc = inf.pending ? '' : await accText(uid);
-    return send(chat, `${reason}\n\n${inf.pending ? '⏳ ያለፈው ክፍያዎ እየተረጋገጠ ነው።' : `ሙሉ እና ያልተገደበ መልስ ለማግኘት እቅድ ይምረጡ፣ ከዚያ ከታች ባሉት አካውንቶች ይክፈሉ እና የክፍያ ማስረጃ (screenshot ወይም PDF) ይላኩ፦\n\n${acc || 'የክፍያ አካውንት በድረ-ገጹ ይመልከቱ'}`}\n\n<i>አስቸኳይ የጤና እርዳታ (ለምሳሌ «አሞኛል») ሁልጊዜ ነጻ ነው።</i>`, ik(inf.pending ? [] : planRows(inf.plans)));
+  async function paywall(chat, uid, why, partial) {          // ክፍያ በፍጹም አይጠቀስም፤ የነጻ ድርሻ ሲያልቅ ብቻ ለስላሳ መልእክት፤ «ፕላን አሳድግ» ሲጫን ብቻ የክፍያ መንገድ ይታያል
+    const inf = svc.info(uid || 'x'); if (partial) await sendLong(chat, '', partial);
+    if (inf.pending) return send(chat, '⏳ ያለፈው ክፍያዎ እየተረጋገጠ ነው — ሲጸድቅ ወዲያው እነግርዎታለሁ።');
+    const head = why === 'limit' ? '🌟 የዛሬውን ነጻ የ AI ድርሻዎን ተጠቅመዋል — በጣም ጥሩ እየተማሩ ነው!' : why === 'pages' ? '🌟 የዛሬውን ነጻ የገጾች ድርሻዎን ተጠቅመዋል!' : '🌟 ይህ ጥልቅ መልስ በከፍተኛ ፕላን ይገኛል።';
+    return send(chat, `${head}\n\nነገ ድርሻዎ ይታደሳል፤ አሁኑኑ መቀጠል ከፈለጉ ፕላንዎን ማሳደግ ይችላሉ።`, ik([[b('⬆️ ፕላን አሳድግ', 'pw:up'), b('⏳ እስከ ነገ እጠብቃለሁ', 'pw:wait')]]));
+  }
+  async function payMenu(chat, uid) {
+    const inf = svc.info(uid || 'x'); if (inf.pending) return send(chat, '⏳ ያለፈው ክፍያዎ እየተረጋገጠ ነው።'); const acc = await accText(uid);
+    return send(chat, `⬆️ <b>ፕላን ማሳደግ</b>\n\nእቅድ ይምረጡ፣ ከዚያ ከታች ባሉት አካውንቶች ይክፈሉ እና የክፍያ ማስረጃ (screenshot ወይም PDF) ይላኩ፦\n\n${acc || 'የክፍያ አካውንት በድረ-ገጹ ይመልከቱ'}`, ik(planRows(inf.plans)));
   }
   async function aiIntro(chat, uid) {
     if (!aiReady()) return send(chat, aiOff, menuKb(chat));
@@ -859,7 +878,7 @@ module.exports = function bot(c) {
 • ማንኛውንም ጥያቄ እዚሁ ይጻፉ — እመልሳለሁ።
 • 📎 <b>PDF ወይም PowerPoint (.pptx)</b> ይላኩ — እንግሊዝኛውን ገጽ በገጽ በአውድ ወደ አማርኛ እተረጉማለሁ።\n• 📷 <b>ፎቶ ወይም ፋይል</b> (PDF፣ DOCX፣ PPTX፣ TXT፣ CSV) ከጥያቄዎ (caption) ጋር ይላኩ — አንብቤ እመልሳለሁ፤ ተከታይ ጥያቄም ይችላሉ። ለትርጉም ያለ caption ወይም «ተርጉም» ብለው ይላኩ።
 • ስለ ገበያው ወይም ስለ ፈጣሪዬ ይጠይቁኝ።
-• 🎙 <b>በድምፅ ይጠይቁ</b> (voice message) — እሰማለሁ፤ በድምፅም እመልሳለሁ። /voice — የድምፅ መልስ ማብራት/ማጥፋት\n• /new — አዲስ ውይይት`, ik([[b('🛍 ስለ ገበያው', 'aih:m'), b('📄 ሰነድ አስተርጉም', 'aih:d')], [b('🩺 አጣዳፊ ጥያቄ', 'aih:u'), b('🎓 ትምህርት', 'aih:s')], ...(adm || inf.paid || inf.pending ? [] : planRows(inf.plans))]));
+• 🎙 <b>በድምፅ ይጠይቁ</b> (voice message) — እሰማለሁ፤ በድምፅም እመልሳለሁ። /voice — የድምፅ መልስ ማብራት/ማጥፋት\n• /new — አዲስ ውይይት`, ik([[b('🛍 ስለ ገበያው', 'aih:m'), b('📄 ሰነድ አስተርጉም', 'aih:d')], [b('🩺 አጣዳፊ ጥያቄ', 'aih:u'), b('🎓 ትምህርት', 'aih:s')], ]));
   }
   async function aiPayStart(chat, uid, planId) {
     const inf = svc.info(uid), p = inf.plans.find(x => x.id === planId); if (!p) return; if (inf.pending) return send(chat, '⏳ ያለፈው ክፍያዎ እየተረጋገጠ ነው።');
@@ -926,6 +945,7 @@ module.exports = function bot(c) {
     const tm = setInterval(() => typing(chat), 4500); typing(chat);
     try {
       const r = await svc.converse({ uid: uid || 'admin', key: String(chat), text, admin: isAdmin(chat), media });
+      if (!r.ok && r.error === 'ai_limit') return paywall(chat, uid, 'limit');
       if (!r.ok) return send(chat, r.error === 'ai_disabled' ? '⏸ AI ለጊዜው በአድሚን ተዘግቷል።' : r.error === 'ai_blocked' ? '⛔ የ AI አገልግሎት ለእርስዎ ተዘግቷል።' : r.error === 'ai_limit' ? '⛔ የዛሬው የ AI መልእክት ገደብ አልቋል።' : aiOff, menuKb(chat));
       if (r.paywall) return await paywall(chat, uid, r.paywall, r.text); await sendLong(chat, '', r.text || '…'); const lm2 = MEDIA.get(chat); await send(chat, '💬 ስለዚህ ፋይል ተጨማሪ ጥያቄ ይጻፉ (ለ20 ደቂቃ ይታወሳል) ወይም ሌላ ይምረጡ፦', ik([[b(FK.qs, 'fk:qs'), b(FK.ex, 'fk:ex')], [b(FK.nt, 'fk:nt'), b(FK.tr, 'fk:tr')]]));
     } catch (e) { await send(chat, aiErr(e, chat)); } finally { clearInterval(tm); }
@@ -937,6 +957,7 @@ module.exports = function bot(c) {
   async function askAI(chat, uid, text, media) {
     try {
       const r = await svc.converse({ uid: uid || 'admin', key: String(chat), text, admin: isAdmin(chat), media });
+      if (!r.ok && r.error === 'ai_limit') { await paywall(chat, uid, 'limit'); return null; }
       if (!r.ok) { await send(chat, r.error === 'ai_disabled' ? '⏸ AI ለጊዜው በአድሚን ተዘግቷል።' : r.error === 'ai_blocked' ? '⛔ የ AI አገልግሎት ለእርስዎ ተዘግቷል።' : r.error === 'ai_limit' ? '⛔ የዛሬው የ AI መልእክት ገደብ አልቋል።' : aiOff, menuKb(chat)); return null; }
       if (r.paywall) { await paywall(chat, uid, r.paywall, r.text); return null; } return r.text || '';
     } catch (e) { await send(chat, aiErr(e, chat)); return null; }
@@ -1098,6 +1119,7 @@ module.exports = function bot(c) {
     try {
       const lm = MEDIA.get(chat), media = lm && Date.now() - lm.ts < 20 * 60e3 ? lm.m : null, tcOn = !!(lm && lm.tc && Date.now() - lm.ts < 20 * 60e3); if (tcOn) { lm.ts = Date.now(); t = TEACHER + `\nአሁን ርዕስ «${lm.tc.topics[lm.tc.i]}» እያስተማርክ ነው። ተማሪው በትምህርቱ መሃል የሚከተለውን ጻፈ/ጠየቀ (መልስ ከሆነ አርመው)፤ እንደ መምህር በትዕግሥት መልስ፣ አስፈላጊ ከሆነ ምሳሌ ስጥ፤ መጨረሻ ላይ «ገባዎት?» በል፦\n` + t; }          // የቅርብ ጊዜ ፎቶ/PDF ለተከታይ ጥያቄዎች ይታወሳል (20 ደቂቃ)
       const r = await svc.converse({ uid: uid || 'admin', key: String(chat), text: lm && lm.t && media === null && Date.now() - lm.ts < 20 * 60e3 ? t + '\n\n[የፋይሉ ጽሑፍ — ' + lm.name + ']\n' + lm.t : t, admin: isAdmin(chat), media });
+      if (!r.ok && r.error === 'ai_limit') return paywall(chat, uid, 'limit');
       if (!r.ok) return send(chat, r.error === 'ai_disabled' ? '⏸ AI ለጊዜው በአድሚን ተዘግቷል።' : r.error === 'ai_blocked' ? '⛔ የ AI አገልግሎት ለእርስዎ ተዘግቷል።' : r.error === 'ai_limit' ? '⛔ የዛሬው የ AI መልእክት ገደብ አልቋል — ነገ ይሞክሩ።' : aiOff, menuKb(chat));
       if (r.paywall) return await paywall(chat, uid, r.paywall, r.text); await sendLong(chat, '', r.text || '…'); const vo = ses(chat).vo; if (vo === 'on' || (vo !== 'off' && (voice || tcOn))) await speakTo(chat, r.text, tcOn); if (tcOn) await send(chat, '👆', tcKb(chat, lm));
     } catch (e) { await send(chat, aiErr(e, chat)); } finally { clearInterval(tm); }
