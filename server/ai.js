@@ -25,7 +25,7 @@ function nowInfo(t) {          // አሁን፦ ዓ.ም (ኢትዮጵያ) + ግ�
   const d = new Date(t + 3 * 3600e3), jdn = Math.floor((t + 3 * 3600e3) / 86400e3) + 2440588, r = (jdn - 1723856) % 1461, n = r % 365 + 365 * Math.floor(r / 1460), yr = 4 * Math.floor((jdn - 1723856) / 1461) + Math.floor(r / 365) - Math.floor(r / 1460), mo = Math.floor(n / 30), dy = n % 30 + 1;
   return `${WD[d.getUTCDay()]} ${EM[mo]} ${dy} ቀን ${yr} ዓ.ም (ግሪጎሪያን ${d.toISOString().slice(0, 10)}) ሰዓት ${d.toISOString().slice(11, 16)} (የኢትዮጵያ ሰዓት)`;
 }
-const TIMELY = /ዛሬ|አሁን|መቼ|ሊግ|ተጫዋች|ተመረጠ|ተሾመ|ሞተ|ተቀጠረ|ተከፈተ|ጦርነት|ምርጫ|ማን አሸነፈ|ምን አዲስ|\\b(when|who won|match|fixture|election|died|stock|bitcoin)\\b|ዘንድሮ|ትናንት|ነገ|ወቅታዊ|ዜና|የአየር|ዋጋ|ምንዛሬ|ዶላር|ውጤት|ጨዋታ|አዲስ|ማን ነው|\b(today|tonight|now|current|currently|latest|recent|news|price|weather|score|rate|exchange|who is|202\d)\b/i;
+const TIMELY = /ዛሬ|አሁን|መቼ|ሊግ|ተጫዋች|ተመረጠ|ተሾመ|ሞተ|ተቀጠረ|ተከፈተ|ጦርነት|ምርጫ|ማን አሸነፈ|ምን አዲስ|\b(when|who won|match|fixture|election|died|stock|bitcoin)\b|ዘንድሮ|ትናንት|ነገ|ወቅታዊ|ዜና|የአየር|ዋጋ|ምንዛሬ|ዶላር|ውጤት|ጨዋታ|አዲስ|ማን ነው|\b(today|tonight|now|current|currently|latest|recent|news|price|weather|score|rate|exchange|who is|202\d)\b/i;
 const dayKey = (t) => new Date(t + 3 * 3600e3).toISOString().slice(0, 10);
 
 function countPdfPages(buf) {          // ያልተጨመቀ የገጽ ዕቃዎችን ይቆጥራል፤ 0 = አልታወቀም
@@ -78,8 +78,26 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
   }
   /* ሞዴል ሲሞላ (503/429)፣ ሲዘገይ ወይም ሲጠፋ (404) ወደሚቀጥለው ሞዴል ይሸጋገራል፤ የሰራው ለ10 ደቂቃ ይታወሳል */
   const good = {}, dead = new Map();          // dead = 404 (ሞዴሉ የለም/ለአዲስ ተጠቃሚ ተዘግቷል) → ለ6 ሰዓት አይሞከርም
+  const decode = x => String(x || '').replace(/<!\[CDATA\[|\]\]>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
+  async function newsCtx(q) {          // የ Google ፍለጋ ኮታ ሲያልቅ፦ ነፃ የ Google News RSS ርዕሶች (ያለ ቁልፍ)
+    const query = String(q || '').replace(/\[[^\]]*\]/g, ' ').replace(/[^\p{L}\p{N} ]+/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 120); if (!query) return null;
+    const ctl = typeof AbortController === 'function' ? new AbortController() : null, tm = ctl && setTimeout(() => ctl.abort(), 8000);
+    try {
+      const r = await fetchImpl('https://news.google.com/rss/search?q=' + encodeURIComponent(query) + '&hl=en-US&gl=US&ceid=US:en', { signal: ctl && ctl.signal }); if (!r.ok) return null; const x = await r.text(), items = [];
+      for (const m of x.matchAll(/<item>([\s\S]*?)<\/item>/g)) { const g = t => { const k = new RegExp('<' + t + '[^>]*>([\\s\\S]*?)</' + t + '>').exec(m[1]); return k ? decode(k[1]) : ''; }; const title = g('title'), link = g('link'); if (title && link) items.push({ title, link, date: g('pubDate').slice(0, 16), src: g('source') }); if (items.length >= 6) break; }
+      return items.length ? items : null;
+    } catch (e) { return null; } finally { clearTimeout(tm); }
+  }
+  async function plainWithNews(o, why) {          // ያለ ፍለጋ፦ የዜና ርዕሶችን ወደ ጥያቄው ጨምሮ ይመልሳል
+    const last = o.msgs && o.msgs.length ? o.msgs[o.msgs.length - 1].content : '', items = o.media || o.pdf ? null : await newsCtx(last);
+    if (items) { const ctx = '\n\n[ከ Google News የተገኙ የቅርብ ጊዜ ርዕሶች (የዛሬ ጉዳይ ከዚህ ብቻ ተመርኩዘህ መልስ፤ ቀኑን ጥቀስ፤ ርዕሶቹ ካልተዛመዱ እንዳልተገኘ ተናገር)]\n' + items.map((i, n) => `${n + 1}. ${i.title}${i.date ? ' (' + i.date + ')' : ''}`).join('\n'); const out = await askMain0({ ...o, ground: false, system: o.system + ctx }); return out + '\n\n📰 ምንጮች (Google News)፦\n' + items.slice(0, 3).map(i => `• ${i.src || 'ዜና'} — ${i.link}`).join('\n'); }
+    return (await askMain0({ ...o, ground: false })) + '\n\n⚠️ የድር ፍለጋ ለጊዜው አልተገኘም (' + why + ') — መልሱ ከፍለጋ ውጭ ነው።';
+  }
+  let groundOff = 0, groundWhy = '';
   async function askMain(o) {          // ፍለጋ ከተጠየቀ በመጀመሪያ ፍለጋ የሚችሉ ሞዴሎች ሁሉ ይሞከራሉ (lite ሞዴል ፍለጋ ላይሰራ ይችላል)፤ ሁሉም ካልሆኑ ብቻ ያለ ፍለጋ + ማስጠንቀቂያ
-    if (o.ground) { try { return await askMain0(o); } catch (e) { console.warn('AI ground failed (' + e.message + (e.status ? ' ' + e.status : '') + ') → ያለ ፍለጋ'); const out = await askMain0({ ...o, ground: false }); return out + '\n\n⚠️ የድር ፍለጋ ለጊዜው አልተገኘም (የ AI ኮታ ሊሆን ይችላል) — መልሱ ከፍለጋ ውጭ ነው፤ ቆይተው ይሞክሩ።'; } }
+    if (o.ground && now() < groundOff) o = { ...o, ground: false, _gskip: groundWhy };
+    if (o.ground) { try { return await askMain0(o); } catch (e) { const why = (e.status || e.message) + (e.detail ? ' ' + String(e.detail).slice(0, 90) : ''); groundWhy = why; groundOff = now() + ([429, 503].includes(e.status) || e.message === 'ai_busy' ? 2 * 60e3 : 10 * 60e3); console.warn('AI ground failed (' + why + ') → ያለ ፍለጋ'); return plainWithNews(o, why); } }
+    if (o._gskip) return plainWithNews(o, o._gskip);
     return askMain0(o);
   }
   async function askMain0(o) {

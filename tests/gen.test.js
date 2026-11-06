@@ -61,5 +61,12 @@ test('AI፦ ፍለጋ ሲጠየቅ lite ሞዴል አይቀድምም፤ ፍለ�
   const ai = require('../server/ai'), calls = [];
   let mode = 'ok'; const f = async (u, o) => { const b = JSON.parse(o.body); calls.push({ u, t: !!b.tools }); if (b.tools && mode === 'nosearch') return { ok: false, status: 400, json: async () => ({ error: { message: 'tool unsupported' } }) }; return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'መልስ' }] } }] }) }; };
   const a = ai.create({ GEMINI_API_KEY: 'k' }, f); await a.chat('g1', 'የሮናልዶ ዜና'); assert.ok(calls[0].t && !/lite/.test(calls[0].u), 'ፍለጋ ያለው ሞዴል መጀመሪያ');
-  mode = 'nosearch'; calls.length = 0; const r = await a.chat('g2', 'የዛሬ ዜና'); assert.match(r, /ፍለጋ ለጊዜው አልተገኘም/); assert.ok(calls.some(c => !c.t));
+  mode = 'nosearch'; calls.length = 0; const r = await a.chat('g2', 'የዛሬ ዜና'); assert.match(r, /ፍለጋ ለጊዜው አልተገኘም \(400/); assert.ok(calls.some(c => !c.t));
+});
+
+test('AI፦ Google ፍለጋ ሲከለከል የ Google News ርዕሶች ወደ መልሱ ይጨመራሉ', async () => {
+  const ai = require('../server/ai'); let sys = '';
+  const rss = '<rss><channel><item><title>Ronaldo quits Portugal squad - BBC</title><link>https://n.example/1</link><pubDate>Fri, 06 Nov 2026 10:00:00 GMT</pubDate><source url="x">BBC</source></item></channel></rss>';
+  const f = async (u, o) => { if (/news\.google\.com/.test(u)) return { ok: true, status: 200, text: async () => rss }; const b = JSON.parse(o.body); if (b.tools) return { ok: false, status: 429, json: async () => ({ error: { message: 'limit 0' } }) }; sys = b.systemInstruction.parts[0].text; return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'ሮናልዶ ራሱን አግልሏል' }] } }] }) }; };
+  const a = ai.create({ GEMINI_API_KEY: 'k', AI_RETRY_MS: '0' }, f); const r = await a.chat('n1', 'ሮናልዶ ዜና'); assert.match(sys, /Ronaldo quits Portugal/); assert.match(r, /📰 ምንጮች[\s\S]*n\.example\/1/);
 });
