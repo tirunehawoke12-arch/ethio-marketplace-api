@@ -79,18 +79,25 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
   /* ሞዴል ሲሞላ (503/429)፣ ሲዘገይ ወይም ሲጠፋ (404) ወደሚቀጥለው ሞዴል ይሸጋገራል፤ የሰራው ለ10 ደቂቃ ይታወሳል */
   const good = {}, dead = new Map();          // dead = 404 (ሞዴሉ የለም/ለአዲስ ተጠቃሚ ተዘግቷል) → ለ6 ሰዓት አይሞከርም
   const decode = x => String(x || '').replace(/<!\[CDATA\[|\]\]>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
-  async function newsCtx(q) {          // የ Google ፍለጋ ኮታ ሲያልቅ፦ ነፃ የ Google News RSS ርዕሶች (ያለ ቁልፍ)
-    const query = String(q || '').replace(/\[[^\]]*\]/g, ' ').replace(/[^\p{L}\p{N} ]+/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 120); if (!query) return null;
-    const ctl = typeof AbortController === 'function' ? new AbortController() : null, tm = ctl && setTimeout(() => ctl.abort(), 8000);
-    try {
-      const r = await fetchImpl('https://news.google.com/rss/search?q=' + encodeURIComponent(query) + '&hl=en-US&gl=US&ceid=US:en', { signal: ctl && ctl.signal }); if (!r.ok) return null; const x = await r.text(), items = [];
-      for (const m of x.matchAll(/<item>([\s\S]*?)<\/item>/g)) { const g = t => { const k = new RegExp('<' + t + '[^>]*>([\\s\\S]*?)</' + t + '>').exec(m[1]); return k ? decode(k[1]) : ''; }; const title = g('title'), link = g('link'); if (title && link) items.push({ title, link, date: g('pubDate').slice(0, 16), src: g('source') }); if (items.length >= 6) break; }
-      return items.length ? items : null;
-    } catch (e) { return null; } finally { clearTimeout(tm); }
+  const qOf = q => { let t = String(q || '').replace(/\[[^\]]*\]/g, ' ').replace(/[^\p{L}\p{N} ]+/gu, ' ').replace(/\s+/g, ' ').trim(); const lat = t.split(' ').filter(w => /^[A-Za-z0-9]+$/.test(w)); if (lat.length) t = lat.join(' '); return t.slice(0, 120); };          // ላቲን ቃል ካለ እሱ ብቻ (የውጭ ፍለጋ በእንግሊዝኛ የተሻለ ነው)
+  const getTxt = async (url, tmo = 8000, headers) => { const ctl = typeof AbortController === 'function' ? new AbortController() : null, tm = ctl && setTimeout(() => ctl.abort(), tmo); try { const r = await fetchImpl(url, { signal: ctl && ctl.signal, headers }); return r.ok ? await r.text() : null; } catch (e) { return null; } finally { clearTimeout(tm); } };
+  async function newsRss(query) {
+    const x = await getTxt('https://news.google.com/rss/search?q=' + encodeURIComponent(query) + '&hl=en-US&gl=US&ceid=US:en'); if (!x) return []; const items = [];
+    for (const m of x.matchAll(/<item>([\s\S]*?)<\/item>/g)) { const g = t => { const k = new RegExp('<' + t + '[^>]*>([\\s\\S]*?)</' + t + '>').exec(m[1]); return k ? decode(k[1]) : ''; }; const title = g('title'); if (title) items.push({ kind: 'news', title, date: g('pubDate').slice(0, 16), src: g('source') }); if (items.length >= 5) break; }
+    return items;
   }
-  async function plainWithNews(o, why) {          // ያለ ፍለጋ፦ የዜና ርዕሶችን ወደ ጥያቄው ጨምሮ ይመልሳል
+  async function webSnips(query) {          // DuckDuckGo HTML (ያለ ቁልፍ)፦ ርዕስ + ማጠቃለያ + እውነተኛ ሊንክ
+    const x = await getTxt('https://html.duckduckgo.com/html/?q=' + encodeURIComponent(query), 8000, { 'user-agent': 'Mozilla/5.0 (compatible; EtioBot/1.0)' }); if (!x) return []; const out = [];
+    for (const blk of x.split(/(?=<a[^>]+class="result__a")/).filter(b => /^<a[^>]+class="result__a"/.test(b))) {
+      const a = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/.exec(blk); if (!a) continue; const sn = /class="result__snippet"[^>]*>([\s\S]*?)<\/a>/.exec(blk);
+      let href = decode(a[1]); const u = /[?&]uddg=([^&]+)/.exec(href); if (u) { try { href = decodeURIComponent(u[1]); } catch (e) { } } if (!/^https?:\/\//.test(href)) continue; const strip = t => decode(String(t || '').replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ');
+      out.push({ kind: 'web', title: strip(a[2]).slice(0, 140), snip: strip(sn && sn[1]).slice(0, 240), link: href }); if (out.length >= 5) break;
+    } return out;
+  }
+  async function newsCtx(q) { const query = qOf(q); if (!query) return null; const [a, b] = await Promise.all([newsRss(query).catch(() => []), webSnips(query).catch(() => [])]); const all = [...a, ...b]; return all.length ? all : null; }
+  async function plainWithNews(o, why) {          // ያለ Google ፍለጋ፦ ከነፃ ምንጮች (News + ድር) የተገኘውን ወደ ጥያቄው ጨምሮ ይመልሳል
     const last = o.msgs && o.msgs.length ? o.msgs[o.msgs.length - 1].content : '', items = o.media || o.pdf ? null : await newsCtx(last);
-    if (items) { const ctx = '\n\n[ከ Google News የተገኙ የቅርብ ጊዜ ርዕሶች (የዛሬ ጉዳይ ከዚህ ብቻ ተመርኩዘህ መልስ፤ ቀኑን ጥቀስ፤ ርዕሶቹ ካልተዛመዱ እንዳልተገኘ ተናገር)]\n' + items.map((i, n) => `${n + 1}. ${i.title}${i.date ? ' (' + i.date + ')' : ''}`).join('\n'); const out = await askMain0({ ...o, ground: false, system: o.system + ctx }); return out + '\n\n📰 ምንጮች (Google News)፦\n' + items.slice(0, 3).map(i => `• ${i.src || 'ዜና'} — ${i.link}`).join('\n'); }
+    if (items) { const ctx = '\n\n[ከድር የተገኙ የቅርብ ጊዜ ውጤቶች (ዜና + የፍለጋ ውጤት) — ጥያቄው የዛሬ/ወቅታዊ ከሆነ ከነዚህ ብቻ ተመርኩዘህ መልስ፤ ቀኑን ጥቀስ፤ ውጤቶቹ ከጥያቄው ጋር ካልተዛመዱ እንዳልተገኘ ተናገር እንጂ አትገምት]\n' + items.map((i, n) => i.kind === 'news' ? `${n + 1}. [ዜና${i.src ? ' — ' + i.src : ''}${i.date ? ', ' + i.date : ''}] ${i.title}` : `${n + 1}. [ድር] ${i.title} — ${i.snip}`).join('\n'); const out = await askMain0({ ...o, ground: false, system: o.system + ctx }); const links = items.filter(i => i.link).slice(0, 3), nw = items.filter(i => i.kind === 'news').slice(0, 2); return out + '\n\n🔎 ምንጮች፦\n' + [...links.map(i => `• ${i.title.slice(0, 60)} — ${i.link}`), ...nw.map(i => `• ${i.src || 'ዜና'}፦ ${i.title.slice(0, 70)}`)].join('\n'); }
     return (await askMain0({ ...o, ground: false })) + '\n\n⚠️ የድር ፍለጋ ለጊዜው አልተገኘም (' + why + ') — መልሱ ከፍለጋ ውጭ ነው።';
   }
   let groundOff = 0, groundWhy = '';
@@ -144,7 +151,7 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
     const h = hist.get(id) || { ts: now(), m: [] }; if (now() - h.ts > HIST_TTL) h.m = [];
     h.m.push({ role: 'user', content: String(text).slice(0, 6000) }); const msgs = h.m.slice(-HIST_TURNS * 2).map((x, i, a) => (i < a.length - 12 && x.content.length > 900 ? { ...x, content: x.content.slice(0, 900) + ' …' } : x));          // የቆዩ መልእክቶች ይጠረዛሉ (ወጪ)፤ የቅርብ 12 ሙሉ
     while (msgs.length && msgs[0].role !== 'user') msgs.shift();
-    const out = await ask({ system: (system || SYS) + (media ? ACC : '') + '\n\nአሁን፦ ' + nowInfo(now()), msgs, max: media ? 4000 : 1500, media, ground: !media && env.AI_GROUNDING !== '0' && (env.AI_GROUNDING === '1' || (opt && opt.ground) || TIMELY.test(String(text)))}); if (media) h.m[h.m.length - 1].content = '[📎 ' + (media.mime === 'application/pdf' ? 'PDF' : 'ፎቶ') + '] ' + h.m[h.m.length - 1].content; h.m.push({ role: 'assistant', content: out || '…' }); h.m = h.m.slice(-HIST_TURNS * 2); h.ts = now(); hist.set(id, h); return out;
+    const out = await ask({ system: (system || SYS) + (media ? ACC : '') + '\n\nአሁን፦ ' + nowInfo(now()), msgs, max: media ? 4000 : 1500, media, ground: !media && env.AI_GROUNDING !== '0' && (env.AI_GROUNDING === '1' || (opt && opt.ground) || TIMELY.test(String(text)))}); if (media) h.m[h.m.length - 1].content = '[📎 ' + (media.mime === 'application/pdf' ? 'PDF' : 'ፎቶ') + '] ' + h.m[h.m.length - 1].content; h.m.push({ role: 'assistant', content: String(out || '…').replace(/\n\n(?:⚠️ የድር ፍለጋ|🔎 ምንጮች|📰 ምንጮች|📚 ምንጮች)[\s\S]*$/, '') || '…' }); h.m = h.m.slice(-HIST_TURNS * 2); h.ts = now(); hist.set(id, h); return out;
   }
   const snap = id => { const h = hist.get(id); return h ? h.m.slice(-12).map(x => ({ role: x.role, content: String(x.content).slice(0, 500) })) : []; }, has = id => !!(hist.get(id) && hist.get(id).m.length), restore = (id, arr) => { if (!has(id) && Array.isArray(arr) && arr.length) hist.set(id, { ts: now(), m: arr.filter(x => x && (x.role === 'user' || x.role === 'assistant') && x.content).map(x => ({ role: x.role, content: String(x.content).slice(0, 700) })) }); }, note = (id, content) => { const h = hist.get(id) || { ts: now(), m: [] }; h.m.push({ role: 'assistant', content: String(content).slice(0, 700) }); h.ts = now(); hist.set(id, h); };
   const reset = id => hist.delete(id), usage = uid => { const u = used.get(uid); return u && u.d === dayKey(now()) ? { chat: u.chat, pages: u.pages } : { chat: 0, pages: 0 }; };
