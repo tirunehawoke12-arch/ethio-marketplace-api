@@ -180,9 +180,14 @@ module.exports = function aisvc(ctx) {
   }
   const wavOf = (pcm, rate) => { const h = Buffer.alloc(44); h.write('RIFF', 0); h.writeUInt32LE(36 + pcm.length, 4); h.write('WAVEfmt ', 8); h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20); h.writeUInt16LE(1, 22); h.writeUInt32LE(rate, 24); h.writeUInt32LE(rate * 2, 28); h.writeUInt16LE(2, 32); h.writeUInt16LE(16, 34); h.write('data', 36); h.writeUInt32LE(pcm.length, 40); return Buffer.concat([h, pcm]); };
   const splitSay = t => { const out = []; let rest = String(t || '').trim(); while (rest.length > 850) { let cut = Math.max(rest.lastIndexOf('።', 850), rest.lastIndexOf('. ', 850), rest.lastIndexOf('\n', 850)); if (cut < 250) cut = rest.lastIndexOf(' ', 850); if (cut < 250) cut = 850; out.push(rest.slice(0, cut + 1)); rest = rest.slice(cut + 1).trim(); } if (rest) out.push(rest); return out; };
-  async function synth(text) {          // ረጅም ንግግር በአረፍተ ነገር ተቆርጦ ተሰምቶ ይቀጠላል (አይቆረጥም)፤ 429 ላይ እንደገና ይሞክራል
-    const pcm = []; let rate = 24000; for (const part of splitSay(text)) { let a = null; for (let tr = 0; tr < 3 && !a; tr++) { a = await ai.speak(part); if (!a) await new Promise(r => setTimeout(r, 1200 * (tr + 1))); } if (!a) return null; pcm.push(a.pcm); rate = a.rate; }
-    return pcm.length ? wavOf(Buffer.concat(pcm), rate) : null;
+  let ttsDown = 0, gemDown = 0;          // Gemini ድምፅ ሲወድቅ (ኮታ…) ለ60 ሰከንድ ቀጥታ ወደ ነፃው መጠባበቂያ ይሄዳል፤ ሁለቱም ካልሠሩ 30 ሰከንድ «የለም»
+  async function synth(text) {
+    if (Date.now() < ttsDown) return null;
+    if (Date.now() >= gemDown) {          // ረጅም ንግግር በአረፍተ ነገር ተቆርጦ ተሰምቶ ይቀጠላል (አይቆረጥም)
+      const pcm = []; let rate = 24000, ok = true; for (const part of splitSay(text)) { let a = null; for (let tr = 0; tr < 2 && !a; tr++) { a = await ai.speak(part); if (!a && tr < 1) await new Promise(r => setTimeout(r, 800)); } if (!a) { ok = false; break; } pcm.push(a.pcm); rate = a.rate; }
+      if (ok && pcm.length) return wavOf(Buffer.concat(pcm), rate); gemDown = Date.now() + 60e3;
+    }
+    const f = ai.speakFree ? await ai.speakFree(text) : null; if (f) return f; ttsDown = Date.now() + 30e3; return null;
   }
   const groupsOf = pg => { const G = []; let cur = [], len = 0; (pg.lines || []).forEach((l, i) => { const n = (l.say || '').length; if (cur.length && (G.length === 0 || cur.length >= 3 || len + n > 700)) { G.push(cur); cur = []; len = 0; } cur.push(i); len += n; }); if (cur.length) G.push(cur); return G; };          // የመጀመሪያው ቡድን 1 መስመር (ፈጣን ጅምር)፤ ቀጥሎ እስከ 3 መስመር በአንድ ድምፅ — ጥያቄ ያነሰ፣ በመስመሮች መካከል ክፍተት የለም
   const groupSay = (pg, g) => g.map(i => pg.lines[i].say || '').filter(Boolean).join(' ');
@@ -193,7 +198,7 @@ module.exports = function aisvc(ctx) {
     if (!ai.speak || ai.provider !== 'gemini') return; const pg = bd.pages[n]; if (!pg) return; const G = groupsOf(pg).map((g, gi) => [gi, groupSay(pg, g)]).filter(x => x[1]);
     (async () => { let k = 0; const worker = async () => { while (k < G.length) { const [gi, t] = G[k++]; await ttsGet(bd.id + ':' + n + ':g' + gi, t); } }; await Promise.all([worker(), worker()]); })().catch(() => { });
   }
-  const sendWav = async (res, key, text) => { try { const w = await ttsGet(key, text); if (!w) return res.status(204).end(); res.set({ 'content-type': 'audio/wav', 'cache-control': 'private, max-age=3600' }); res.send(w); } catch (e) { res.status(204).end(); } };
+  const sendWav = async (res, key, text) => { try { const w = await ttsGet(key, text); if (!w) { res.set('x-tts-why', encodeURIComponent((ai.ttsLast && ai.ttsLast()) || 'down')); return res.status(204).end(); } res.set({ 'content-type': w.mime || 'audio/wav', 'cache-control': 'private, max-age=3600' }); res.send(w); } catch (e) { res.status(204).end(); } };
   const bdOf = req => BOARDS.get(String(req.params.id));
   app.get('/api/ai/board/:id', (req, res) => { const bd = bdOf(req); if (!bd) return bad(res, 404, 'not_found'); res.set('cache-control', 'no-store'); res.json({ ok: true, title: bd.title, total: bd.total, start: bd.start, tts: ai.provider === 'gemini' }); });
   app.get('/api/ai/board/:id/page/:n', async (req, res) => {

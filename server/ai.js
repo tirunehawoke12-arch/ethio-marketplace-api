@@ -209,20 +209,28 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
     return /^\s*\[\[EMPTY\]\]\s*$/.test(out) || !out.trim() ? '' : out.trim();
   }
   /* ጽሑፍ → ድምፅ (Gemini TTS፤ PCM 24kHz mono 16-bit)፤ አይገኝ ከሆነ null */
+  let lastTts = '';
+  /* ነፃ መጠባበቂያ ድምፅ (Gemini ኮታ ሲያልቅ)፦ የ Google Translate የድምፅ አገልግሎት (ይፋዊ API አይደለም፤ ያለ ቁልፍ፤ በ AI_TTS_FREE=0 ይጠፋል) → mp3 */
+  async function speakFree(text) {
+    if (env.AI_TTS_FREE === '0' || !text) return null; const chunks = []; let rest = String(text).replace(/\s+/g, ' ').trim();
+    while (rest.length) { if (rest.length <= 160) { chunks.push(rest); break; } let cut = Math.max(rest.lastIndexOf('።', 160), rest.lastIndexOf('. ', 160), rest.lastIndexOf('፣', 160), rest.lastIndexOf(' ', 160)); if (cut < 40) cut = 160; chunks.push(rest.slice(0, cut + 1)); rest = rest.slice(cut + 1).trim(); }
+    const bufs = []; for (const c of chunks.slice(0, 12)) { try { const ctl = typeof AbortController === 'function' ? new AbortController() : null, tm = ctl && setTimeout(() => ctl.abort(), 10000); const r = await fetchImpl('https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=am&q=' + encodeURIComponent(c), { signal: ctl && ctl.signal, headers: { 'user-agent': 'Mozilla/5.0 (compatible; EtioBot/1.0)' } }); clearTimeout(tm); if (!r.ok) { lastTts = 'free ' + r.status; return null; } const b = Buffer.from(await r.arrayBuffer()); if (b.length < 200) { lastTts = 'free empty'; return null; } bufs.push(b); } catch (e) { lastTts = 'free network'; return null; } }
+    if (!bufs.length) return null; const out = Buffer.concat(bufs); out.mime = 'audio/mpeg'; return out;
+  }
   async function speak(text) {
     if (prov !== 'gemini' || !text) return null; const list = String(env.AI_TTS_MODEL || 'gemini-2.5-flash-preview-tts,gemini-3.1-flash-tts-preview,gemini-2.5-pro-preview-tts').split(',').map(x => x.trim()).filter(Boolean), voice = env.AI_TTS_VOICE || 'Kore';
     for (const mdl of list) {
       if (dead.get('tts:' + mdl) > now()) continue;
       try {
         const r = await fetchImpl(`${base}/v1beta/models/${mdl}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': gkey }, body: JSON.stringify({ contents: [{ parts: [{ text: String(text).slice(0, 1200) }] }], generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } } }) });
-        const j = await r.json().catch(() => null); if (!r.ok) { if (r.status === 404 || r.status === 400 || r.status === 403) dead.set('tts:' + mdl, now() + 6 * 3600e3); continue; }
-        const part = j && j.candidates && j.candidates[0] && j.candidates[0].content && (j.candidates[0].content.parts || []).find(p => p.inlineData && p.inlineData.data); if (!part) continue;
+        const j = await r.json().catch(() => null); if (!r.ok) { lastTts = r.status + ' ' + String(j && j.error && (j.error.message || j.error.status) || '').slice(0, 80); console.warn('AI tts ' + mdl + ' ' + lastTts); if (r.status === 404 || r.status === 400 || r.status === 403) dead.set('tts:' + mdl, now() + 6 * 3600e3); continue; }
+        const part = j && j.candidates && j.candidates[0] && j.candidates[0].content && (j.candidates[0].content.parts || []).find(p => p.inlineData && p.inlineData.data); if (!part) { lastTts = 'no_audio'; continue; }
         const m = /rate=(\d+)/.exec(part.inlineData.mimeType || ''); return { pcm: Buffer.from(part.inlineData.data, 'base64'), rate: m ? +m[1] : 24000 };
-      } catch (e) { /* ቀጣዩን ሞዴል ይሞክራል */ }
+      } catch (e) { lastTts = 'network'; /* ቀጣዩን ሞዴል ይሞክራል */ }
     }
     return null;
   }
-  return { extras: extras.map(x => x.n), enabled: !!prov, provider: prov, model, lim, chat, reset, take, refund, usage, pdfPage, slideTr, domainBrief, boardPage, boardAsk, genDocSpec, snap, has, restore, note, transcribe, speak };
+  return { speakFree, ttsLast: () => lastTts, extras: extras.map(x => x.n), enabled: !!prov, provider: prov, model, lim, chat, reset, take, refund, usage, pdfPage, slideTr, domainBrief, boardPage, boardAsk, genDocSpec, snap, has, restore, note, transcribe, speak };
 }
 let inst = null; const shared = () => inst || (inst = create());
 module.exports = { nowInfo, create, shared, countPdfPages, chunkText, slideText, SYS, TR };

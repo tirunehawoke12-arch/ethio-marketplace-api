@@ -83,7 +83,7 @@ export default function Room() {
     C[k] = fetch('/api/ai/board/' + id + '/page/' + k).then(r => r.json()).then(d => { if (!d.ok) { delete C[k]; throw new Error(d.error || 'failed'); } return Object.assign({}, d.page, { groups: d.groups }); }).catch(e => { delete C[k]; throw e; }); return C[k];
   }, [id]);
   const audioFor = useCallback((k, i, fresh) => {          // የመስመር ድምፅ ቀድሞ ይጫናል (ሰርቨሩ ከበስተጀርባ ያዘጋጃል)
-    if (!meta || !meta.tts) return null; const key = k + ':' + i; if (fresh) delete R.current.aud[key];
+    if (!meta || !meta.tts || (R.current.ttsBad && Date.now() - R.current.ttsBad < 90000)) return null; const key = k + ':' + i; if (fresh) delete R.current.aud[key];
     if (!R.current.aud[key]) { const a = new Audio(); a.preload = 'auto'; a.dataset.state = 'load'; a.addEventListener('error', () => { a.dataset.state = 'err'; }); a.addEventListener('canplaythrough', () => { a.dataset.state = 'ok'; }); a.src = '/api/ai/board/' + id + '/tts/' + k + '/' + i + (fresh ? '?r=' + Date.now() : ''); R.current.aud[key] = a; } return R.current.aud[key];
   }, [meta, id]);
   const speakLine = useCallback((k, i, text, tok, onStart) => new Promise(res => {          // → የንግግር ጊዜ (ms)
@@ -113,17 +113,20 @@ export default function Room() {
     } return true;
   }, [audioFor, speakLine, wait]);
 
-  const gAudio = useCallback((k, g, fresh) => {          // የቡድን ድምፅ (1–3 መስመር በአንድ ፋይል) — ቀድሞ ይጫናል
+  const gAudio = useCallback((k, g, fresh) => {          // የቡድን ድምፅ ሙሉ በሙሉ ወርዶ (blob) ይጫናል — በማጫወት ጊዜ መቆራረጥ የለም፤ ሰርቨሩ «ድምፅ የለም» ካለ ወዲያው ይታወቃል
     if (!meta || !meta.tts) return null; const key = 'g' + k + ':' + g; if (fresh) delete R.current.aud[key];
-    if (!R.current.aud[key]) { const a = new Audio(); a.preload = 'auto'; a.dataset.state = 'load'; a.addEventListener('error', () => { a.dataset.state = 'err'; }); a.addEventListener('canplaythrough', () => { a.dataset.state = 'ok'; }); a.src = '/api/ai/board/' + id + '/tts/' + k + '/g/' + g + (fresh ? '?r=' + Date.now() : ''); R.current.aud[key] = a; } return R.current.aud[key];
+    if (!R.current.aud[key]) { const pr = fetch('/api/ai/board/' + id + '/tts/' + k + '/g/' + g + (fresh ? '?r=' + Date.now() : '')).then(async r => { if (r.status === 200) { const b = await r.blob(); return URL.createObjectURL(b); } const e = new Error('tts_' + r.status); e.final = true; e.why = decodeURIComponent(r.headers.get('x-tts-why') || ''); throw e; }); pr.catch(() => { }); R.current.aud[key] = pr; } return R.current.aud[key];
   }, [meta, id]);
   const playGroup = useCallback(async (k, page, gi, tok) => {          // → true | false (ተቋርጧል) | 'fail'
-    const L = page.lines, G = page.groups[gi]; let a = gAudio(k, gi), tries = 0; const t0 = Date.now();
-    for (; ;) {
-      if (R.current.tok !== tok) return false; if (R.current.paused) { await sleep(120); continue; }
-      if (a.dataset.state === 'err') { if (tries < 3) { tries++; await sleep(1200 * tries); a = gAudio(k, gi, true); continue; } return 'fail'; }
-      if (a.readyState >= 3) break; const w = Date.now() - t0; if (w > 1500) setBusy(b => b || 'voice'); if (w > 70000) return 'fail'; await sleep(100);
-    }
+    const L = page.lines, G = page.groups[gi]; let url = null, tries = 0; const t0 = Date.now(), tm = setInterval(() => { if (Date.now() - t0 > 1500) setBusy(b => b || 'voice'); }, 300);
+    try {
+      for (; ;) {
+        if (R.current.tok !== tok) return false; if (R.current.paused) { await sleep(120); continue; }
+        try { url = await Promise.race([gAudio(k, gi), sleep(70000).then(() => { const e = new Error('tts_timeout'); e.final = true; throw e; })]); break; }
+        catch (e) { if (R.current.tok !== tok) return false; if (e.final || ++tries > 2) { R.current.ttsBad = Date.now(); R.current.ttsWhy = e.why || e.message; return 'fail'; } await sleep(1000 * tries); gAudio(k, gi, true); }
+      }
+    } finally { clearInterval(tm); }
+    const a = new Audio(url); a.preload = 'auto'; for (let w = 0; w < 100 && a.readyState < 3; w++) await sleep(50);
     setBusy(b => (b === 'voice' ? '' : b)); R.current.audio = a; a.playbackRate = R.current.spd; try { a.preservesPitch = true; } catch (e) { } a.currentTime = 0; setTalking(true);
     try { await a.play(); } catch (e) { return 'fail'; }
     const wt = G.map(i => Math.max(1, (L[i].say || '').length)), tot = wt.reduce((x, y) => x + y, 0); const cum = [0]; wt.forEach(x => cum.push(cum[cum.length - 1] + x / tot));
@@ -138,11 +141,12 @@ export default function Room() {
   }, [gAudio, wait]);
   const runLines = useCallback(async (k, page, from, tok) => {
     const L = page.lines; if (!(meta && meta.tts && R.current.voice && page.groups && page.groups.length)) return runLineSet(k, page, L.map((_, i) => i).filter(i => i >= from), tok);
+    if (R.current.ttsBad && Date.now() - R.current.ttsBad < 90000) { setBusy('novoice'); return runLineSet(k, page, L.map((_, i) => i).filter(i => i >= from), tok); }
     let g0 = page.groups.findIndex(g => g.includes(from)); if (g0 < 0) g0 = 0;
     for (let gi = g0; gi < page.groups.length; gi++) {
       if (R.current.tok !== tok) return false; gAudio(k, gi + 1); gAudio(k, gi + 2); setWi(-1);
       const r = await playGroup(k, page, gi, tok); if (r === false) return false;
-      if (r === 'fail') { if (!(await runLineSet(k, page, page.groups[gi], tok))) return false; }
+      if (r === 'fail') { setBusy('novoice'); if (!(await runLineSet(k, page, page.groups[gi], tok))) return false; }
     } setTalking(false); return true;
   }, [meta, gAudio, playGroup, runLineSet, wait]);
 
@@ -181,6 +185,7 @@ export default function Room() {
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4 }}>
         <div ref={boardEl} className="rounded-xl shadow-2xl" style={{ flex: 1, minWidth: 0, overflowY: 'auto', border: '9px solid #8b5e34', background: '#21402f', color: '#f4f1e8', padding: 12, height: '56vh', backgroundImage: 'radial-gradient(ellipse at 30% 20%,rgba(255,255,255,.07),transparent 60%)' }}>
           {!started && <div className="py-14 text-center"><p className="mb-3 text-xl">🧑‍🏫 {meta.title}</p><p className="mb-6 text-sm text-white/65">{meta.total} ስላይድ። መምህሩ እያንዳንዱን በሰሌዳ ላይ ይለጥፋል፣ መስመር በመስመር ቃል በቃል እያሰመረ ያስረዳል።{meta.tts ? '' : ' (ድምፅ ከአሳሽዎ ይሰማል — የአማርኛ ድምፅ ከሌለ በጽሑፍ ብቻ)'}</p><button onClick={() => teach(meta.start || 1)} className="rounded-full bg-[#ffe9a8] px-8 py-3 text-lg font-bold text-[#2b1d12]">▶️ ክፍሉን ጀምር</button></div>}
+          {busy === 'novoice' && phase === 'teach' && <p className="mb-1 text-center text-xs text-[#ffb3a7]">🔇 የ AI ድምፅ ለጊዜው አልተገኘም{R.current.ttsWhy ? ' (' + R.current.ttsWhy.slice(0, 60) + ')' : ''} — በጽሑፍ (እና በአሳሽ ድምፅ) ይቀጥላል</p>}
           {busy === 'voice' && phase === 'teach' && <p className="mb-1 text-center text-xs text-white/60">🔊 ድምፅ እየተዘጋጀ ነው…</p>}
           {phase === 'loading' && <p className="py-16 text-center text-white/70">✍️ መምህሩ ስላይድ {n}ን እያዘጋጀ ነው…</p>}
           {phase === 'error' && <div className="py-12 text-center"><p className="mb-4 text-[#ffb3a7]">{busy}</p><button onClick={() => teach(n)} className="rounded-lg bg-[#ffe9a8] px-5 py-2 font-bold text-[#2b1d12]">🔁 እንደገና</button></div>}

@@ -71,3 +71,11 @@ test('AI፦ Google ፍለጋ ሲከለከል የ Google News ርዕሶች ወደ
   const f = async (u, o) => { if (/news\.google\.com/.test(u)) return { ok: true, status: 200, text: async () => rss }; if (/duckduckgo/.test(u)) return { ok: true, status: 200, text: async () => ddg }; const b = JSON.parse(o.body); if (b.tools) return { ok: false, status: 429, json: async () => ({ error: { message: 'limit 0' } }) }; sys = b.systemInstruction.parts[0].text; return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'ሮናልዶ ራሱን አግልሏል' }] } }] }) }; };
   const a = ai.create({ GEMINI_API_KEY: 'k', AI_RETRY_MS: '0' }, f); const r = await a.chat('n1', 'ሮናልዶ ዜና'); assert.match(sys, /Ronaldo quits Portugal/); assert.match(sys, /\[ድር\] Ronaldo news — He quit the squad/); assert.match(r, /bbc\.example\/ronaldo/); assert.match(r, /🔎 ምንጮች[\s\S]*Ronaldo quits/);
 });
+
+test('ድምፅ፦ Gemini TTS ሲወድቅ (429) ነፃ መጠባበቂያ mp3 ይሰጣል፤ AI_TTS_FREE=0 ሲሆን አይሰጥም', async () => {
+  const ai = require('../server/ai'), urls = [];
+  const f = async (u, o) => { urls.push(u); if (/translate_tts/.test(u)) return { ok: true, status: 200, arrayBuffer: async () => new Uint8Array(500).buffer }; return { ok: false, status: 429, json: async () => ({ error: { message: 'quota' } }) }; };
+  const a = ai.create({ GEMINI_API_KEY: 'k' }, f); assert.equal(await a.speak('ሰላም'), null);
+  const m = await a.speakFree('ሰላም። እንዴት ነህ? ' + 'ሀ'.repeat(300)); assert.ok(Buffer.isBuffer(m) && m.mime === 'audio/mpeg' && m.length >= 1000, 'የተቆራረጡ ተያይዘዋል'); assert.ok(urls.filter(u => /translate_tts/.test(u)).every(u => /tl=am/.test(u)));
+  assert.equal(await ai.create({ GEMINI_API_KEY: 'k', AI_TTS_FREE: '0' }, f).speakFree('ሰላም'), null);
+});
