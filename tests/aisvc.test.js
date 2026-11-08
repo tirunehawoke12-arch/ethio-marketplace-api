@@ -13,11 +13,11 @@ function harness(replyFn, extra = {}) {
   return { call, svc, col, sent, told, prompts, docs };
 }
 const U = { u: 'u1', k: 'user' }, A = { k: 'admin' }, PROOF = { data: Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(30)]).toString('base64') };
-test('AI፦ ነጻ ተጠቃሚ — ጥልቅ ጥያቄ ከፊል መልስ + ክፍያ፤ ፈጣሪ/ገበያ ነጻ፤ ስርዓት መመሪያ ፈጣሪን ይይዛል', async () => {
-  const h = harness(b => (/ሕክምና/.test(JSON.stringify(b.messages)) ? 'ከፊል መልስ።\n[[PAID]]' : 'ሙሉ መልስ'));
+test('AI፦ ነጻ ተጠቃሚ — ሙሉ መልስ ያለ ክፍያ ግፊት፤ ስርዓት መመሪያ ፈጣሪን ይይዛል', async () => {
+  const h = harness(() => 'ሙሉ መልስ');
   let r = (await h.call('POST', '/api/ai/chat', { tok: U, body: { text: 'ሰላም' } })).json; assert.equal(r.paywall, ''); assert.equal(r.text, 'ሙሉ መልስ');
-  r = (await h.call('POST', '/api/ai/chat', { tok: U, body: { text: 'ሕክምና ደረጃ በደረጃ' } })).json; assert.equal(r.paywall, 'premium'); assert.equal(r.text, 'ከፊል መልስ።'); assert.ok(!/PAID/.test(r.text));
-  assert.match(h.prompts[0], /Tiruneh Awoke/); assert.match(h.prompts[0], /Bahir Dar/); assert.match(h.prompts[0], /ኢትዮ ዲጂታል ማርኬት/); assert.match(h.prompts[0], /ነጻ ተጠቃሚ/); assert.match(h.prompts[0], /አምቡላንስ/);
+  r = (await h.call('POST', '/api/ai/chat', { tok: U, body: { text: 'ሕክምና ደረጃ በደረጃ' } })).json; assert.equal(r.paywall, ''); assert.equal(r.text, 'ሙሉ መልስ'); assert.ok(!/PAID/.test(r.text));
+  assert.match(h.prompts[0], /Tiruneh Awoke/); assert.match(h.prompts[0], /Bahir Dar/); assert.match(h.prompts[0], /ኢትዮ ዲጂታል ማርኬት/); assert.doesNotMatch(h.prompts[0], /ነጻ ተጠቃሚ/);
 });
 test('AI፦ ነጻ ገደብ ሲያልቅ ክፍያ፤ እቅድ → ጥያቄ → አድሚን ያጸድቃል → የተከፈለ ሙሉ መልስ', async () => {
   const h = harness(() => 'መልስ [[PAID]]'); await h.call('POST', '/api/ai/admin/config', { tok: A, body: { freeChatDay: 1, paidChatDay: 5 } });

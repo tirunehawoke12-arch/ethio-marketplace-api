@@ -25,7 +25,7 @@ module.exports = function aisvc(ctx) {
   const acc = uid => { const a = col(ACC)[uid] || {}; return { until: a.until || 0, blocked: !!a.blocked, paid: (a.until || 0) > now() }; };
   const isTb = m => /telebirr|ቴሌብር|tele\s*birr/i.test(String(m || '')), tbOnly = () => !!(pv && pv.enabled && cfg().autoApprove);
   const planOf = (c, id) => c.plans.find(p => p.id === id);
-  const sysFor = (c, paid) => AIM.SYS + `\n\n[ስለ ፈጣሪ]\n${c.creator}\n\n[ስለ ገበያው]\n${c.market}${c.extra ? '\n\n[ተጨማሪ መረጃ ከአድሚን]\n' + c.extra : ''}` + (paid || !c.paywall ? SYS_PAID : SYS_FREE(c));
+  const sysFor = (c, paid) => AIM.SYS + `\n\n[ስለ ፈጣሪ]\n${c.creator}\n\n[ስለ ገበያው]\n${c.market}${c.extra ? '\n\n[ተጨማሪ መረጃ ከአድሚን]\n' + c.extra : ''}` + SYS_PAID;
   const stats = { chats: 0, pages: 0, paywalls: 0, urgent: 0 }, last9 = x => String(x || '').replace(/\D/g, '').slice(-9), urgentUse = new Map();
   const isOwner = uid => { if (uid === 'admin') return true; const a = (col('data/users/' + uid) || {}).acct; return !!(a && a.phone && last9(a.phone) === last9(adminPhone) && last9(adminPhone).length === 9); };
   const keywords = t => [...new Set(String(t || '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(w => (/[\u1200-\u137F]/.test(w) ? w.length >= 2 : w.length >= 3) && !STOP.has(w)))].slice(0, 4);
@@ -77,7 +77,7 @@ module.exports = function aisvc(ctx) {
   const newsDiag = async () => { const r = await newsInfo('latest news today Ethiopia', true); return { ...nd, ok: !/አልተቻለም/.test(r), items: (r.match(/^• /gm) || []).length }; };
 
   /* የጽሑፍ ውይይት፦ → { ok, text, paywall: ''|'premium'|'limit' } */
-  async function converse({ uid, key, text, admin, media, ground }) {
+  async function converse({ uid, key, text, admin, media, ground, mode }) {
     const c = cfg(); if (!ai.enabled) return { ok: false, error: 'ai_off' }; const owner = admin || isOwner(uid); if (!c.enabled && !owner) return { ok: false, error: 'ai_disabled' };
     const a = acc(uid); if (a.blocked && !owner) return { ok: false, error: 'ai_blocked' };
     const t = now(), day = Math.floor((t + 3 * 3600e3) / 86400e3), ug = urgentUse.get(uid) || { d: day, n: 0 }; if (ug.d !== day) { ug.d = day; ug.n = 0; }
@@ -85,8 +85,11 @@ module.exports = function aisvc(ctx) {
     const paid = owner || a.paid; let sys;
     if (urgent) { ug.n++; urgentUse.set(uid, ug); stats.urgent++; sys = sysFor(c, true).replace(SYS_PAID, SYS_URGENT); }
     else { const q = ai.take(String(uid), 'chat', 1, owner, paid ? c.paidChatDay : c.freeChatDay); if (!q.ok) { if (!paid && c.paywall) { stats.paywalls++; return { ok: true, text: '', paywall: 'limit' }; } return { ok: false, error: 'ai_limit' }; } sys = sysFor(c, paid); }
+    if (mode === 'edu') sys = sys.replace(/\n\n\[ስለ ገበያው\][\s\S]*?(?=\n\n\[|$)/, '') + '\n\n' + clockInfo() + SYS_GUARD + '\n\n[የትምህርት ክፍል ተመርጧል፦ ተማሪው ትምህርትን ብቻ መርጧል። ስለ ገበያ፣ ሱቅ፣ ዕቃ፣ ሽያጭ፣ ዋጋ ወይም ክፍያ ራስህ በጭራሽ አትጥቀስ ወይም አትጠቁም፤ ሙሉ በሙሉ በትምህርትና በተማሪው ጥያቄ ላይ አተኩር፤ ተማሪውን በትዕግሥት ተንከባከብ።]';
+    else {
     sys += '\n\n' + clockInfo() + await newsInfo(text);
-    sys += SYS_GUARD + '\n\n[ከድረ-ገጹ የተገኘ ወቅታዊ መረጃ — ስለ ገበያው ሲጠየቅ ከዚህ ብቻ ተመርኩዘህ ንገር፤ የሌለውን አትፍጠር፤ ዕቃ ሲጠቅስ ዋጋ እና አገናኝ ስጥ]\n' + await siteInfo(text);
+      sys += SYS_GUARD + '\n\n[ከድረ-ገጹ የተገኘ ወቅታዊ መረጃ — ስለ ገበያው ሲጠየቅ ከዚህ ብቻ ተመርኩዘህ ንገር፤ የሌለውን አትፍጠር፤ ዕቃ ሲጠቅስ ዋጋ እና አገናኝ ስጥ]\n' + await siteInfo(text);
+    }
     let out; try { out = await ai.chat(String(key || uid), text, sys, media, ground ? { ground: true } : undefined); } catch (e) { if (!urgent) ai.refund(String(uid), 'chat', 1); throw e; }
     stats.chats++; const wants = /\[\[PAID\]\]/.test(out), clean = out.replace(MARK, ' ').trim();
     if (wants && !paid && !urgent && c.paywall) { stats.paywalls++; return { ok: true, text: clean, paywall: 'premium' }; }
@@ -203,7 +206,7 @@ module.exports = function aisvc(ctx) {
   }
   function warm(bd, n) {          // ገጹ እንደተዘጋጀ የቡድን ድምፆች ከበስተጀርባ (2 በአንድ ጊዜ) ይዘጋጃሉ
     if (!ai.speak || ai.provider !== 'gemini') return; const pg = bd.pages[n]; if (!pg) return; const G = groupsOf(pg).map((g, gi) => [gi, groupSay(pg, g)]).filter(x => x[1]);
-    (async () => { let k = 0; const worker = async () => { while (k < G.length) { const [gi, t] = G[k++]; await ttsGet(bd.id + ':' + n + ':g' + gi, t); } }; await Promise.all([worker(), worker()]); })().catch(() => { });
+    (async () => { let k = 0; const worker = async () => { while (k < G.length) { const [gi, t] = G[k++]; await ttsGet(bd.id + ':' + n + ':g' + gi, t); } }; await Promise.all([worker(), worker(), worker(), worker()]); })().catch(() => { });
   }
   const sendWav = async (res, key, text) => { try { const w = await ttsGet(key, text); if (!w) { res.set('x-tts-why', encodeURIComponent((ai.ttsLast && ai.ttsLast()) || 'down')); return res.status(204).end(); } res.set({ 'content-type': w.mime || 'audio/wav', 'cache-control': 'private, max-age=3600' }); res.send(w); } catch (e) { res.status(204).end(); } };
   const bdOf = req => BOARDS.get(String(req.params.id));
@@ -213,7 +216,7 @@ module.exports = function aisvc(ctx) {
     const bd = bdOf(req), n = Number(req.params.n); if (!bd || !(n >= 1 && n <= bd.total)) return bad(res, 404, 'not_found'); if (!limit('bpg' + bd.id, 150, 3600e3)) return bad(res, 429, 'slow_down');
     try { const pg = await boardGet(bd, n); res.set('cache-control', 'no-store'); res.json({ ok: true, n, total: bd.total, page: pg, groups: groupsOf(pg) }); } catch (e) { bad(res, e.message === 'ai_limit' ? 429 : 503, e.message === 'ai_limit' ? 'ai_limit' : /^ai_/.test(e.message) ? e.message : 'board_failed'); }
   });
-  app.get('/api/ai/board/:id/tts/:n/g/:g', async (req, res) => { const bd = bdOf(req), pg = bd && bd.pages[Number(req.params.n)], gr = pg && groupsOf(pg)[Number(req.params.g)], t = gr && groupSay(pg, gr); if (!t) return res.status(204).end(); if (!limit('btts' + req.ip, 90, 60e3)) return res.status(429).end(); return sendWav(res, bd.id + ':' + req.params.n + ':g' + req.params.g, t); });
+  app.get('/api/ai/board/:id/tts/:n/g/:g', async (req, res) => { const bd = bdOf(req), pg = bd && bd.pages[Number(req.params.n)], gr = pg && groupsOf(pg)[Number(req.params.g)], t = gr && groupSay(pg, gr); if (!t) return res.status(204).end(); if (!limit('btts' + req.ip, 300, 60e3)) return res.status(429).end(); return sendWav(res, bd.id + ':' + req.params.n + ':g' + req.params.g, t); });
   app.get('/api/ai/board/:id/tts/:n/:i', async (req, res) => { const bd = bdOf(req), pg = bd && bd.pages[Number(req.params.n)], l = pg && pg.lines[Number(req.params.i)]; if (!l || !l.say) return res.status(204).end(); if (!limit('btts' + req.ip, 90, 60e3)) return res.status(429).end(); return sendWav(res, bd.id + ':' + req.params.n + ':' + req.params.i, l.say); });
   app.post('/api/ai/board/:id/ask', async (req, res) => {
     const bd = bdOf(req); if (!bd) return bad(res, 404, 'not_found'); if (!limit('bak' + bd.id, 30, 3600e3)) return bad(res, 429, 'slow_down'); const q = S((req.body || {}).q, 600); if (q.length < 2) return bad(res, 400, 'missing_text');

@@ -174,13 +174,18 @@ export default function Room() {
     const url = '/api/ai/board/' + id + '/tts/' + k + '/g/' + g, cs = await cacheOf(id); if (!cs) return gAudio(k, g); if (await cs.match(url)) return;
     const r = await fetch(url); if (r.status !== 200) { const e = new Error('tts_' + r.status); e.final = true; throw e; } await cs.put(url, r);
   }, [id, gAudio]);
-  const prepAll = useCallback(async () => {          // ሁሉንም ገጽ + ድምፅ አስቀድሞ ያዘጋጃል/ያወርዳል (ዲስክ ላይ) — ከዚያ ዳታ ቢጠፋ ይሠራል
-    if (!meta || R.current.prep === 'run') return; R.current.prep = 'run'; const pt = ++R.current.ptok; let failed = 0;
-    for (let k = 1; k <= meta.total; k++) {
-      if (R.current.ptok !== pt) return; setPrep({ s: 'run', k: k - 1, msg: '' });
-      let page; try { page = await fetchPage(k); } catch (e) { R.current.prep = ''; setPrep({ s: 'stop', k: k - 1, msg: e.message === 'ai_limit' ? 'የነጻ ድርሻ እስከዚህ ገጽ ብቻ ፈቀደ — የተዘጋጀው ይሠራል' : (ERR[e.message] || 'ማዘጋጀት አልተቻለም') }); return; }
-      if (meta.tts) for (let g = 0; g < (page.groups || []).length; g++) { if (R.current.ptok !== pt) return; try { await diskWarm(k, g); } catch (e) { failed++; if (e && e.final) break; } }
-    }
+  const prepAll = useCallback(async () => {          // ሁሉንም ገጽ + ድምፅ በትይዩ (3 ገጽ በአንድ ጊዜ፣ በእያንዳንዱ 2 ድምፅ) ያዘጋጃል/ያወርዳል (ዲስክ ላይ) — ከዚያ ዳታ ቢጠፋ ይሠራል
+    if (!meta || R.current.prep === 'run') return; R.current.prep = 'run'; const pt = ++R.current.ptok; let failed = 0, doneP = 0, next = 1, stopMsg = '', ttsOff = false; const tick = () => setPrep({ s: 'run', k: doneP, msg: '' });
+    const aud = async (k, page) => { const G = page.groups || []; let gi = 0; const w = async () => { while (gi < G.length && !ttsOff) { const g = gi++; if (R.current.ptok !== pt) return; for (let t = 0; t < 3; t++) { try { await diskWarm(k, g); break; } catch (e) { if (e && e.message === 'tts_429' && t < 2) { await sleep(2500 * (t + 1)); continue; } failed++; if (e && e.final) ttsOff = true; break; } } } }; await Promise.all([w(), w()]); };
+    const worker = async () => {
+      for (; ;) {
+        const k = next++; if (k > meta.total || stopMsg || R.current.ptok !== pt) return; let page = null;
+        for (let t = 0; t < 3 && !page; t++) { try { page = await fetchPage(k); } catch (e) { if (e.message === 'ai_limit') { stopMsg = 'የነጻ ድርሻ እስከዚህ ገጽ ብቻ ፈቀደ — የተዘጋጀው ይሠራል'; return; } if (t < 2) await sleep(2500 * (t + 1)); else { stopMsg = ERR[e.message] || 'ማዘጋጀት አልተቻለም'; return; } } }
+        if (meta.tts && page) await aud(k, page); doneP++; tick();
+      }
+    };
+    tick(); await Promise.all([worker(), worker(), worker()]); if (R.current.ptok !== pt) return;
+    if (stopMsg) { R.current.prep = ''; setPrep({ s: 'stop', k: doneP, msg: stopMsg }); return; }
     R.current.prep = 'done'; setPrep({ s: 'done', k: meta.total, msg: failed ? 'ድምፅ በከፊል ጠፍቷል (በአሳሽ ድምፅ/በጽሑፍ ይቀጥላል)' : '' });
   }, [meta, fetchPage, diskWarm]);
 

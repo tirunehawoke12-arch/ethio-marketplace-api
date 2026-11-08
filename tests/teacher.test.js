@@ -15,7 +15,7 @@ test('መምህር ሁነታ፦ ርዕሶች፣ ትምህርት፣ ጥያቄ፣ 
     await cb(999, 'axbk:new'); sent.length = 0; await bot.handle({ message: { chat: { id: 999, type: 'private' }, document: { file_id: 'BK1', file_name: 'Biology9.pdf', mime_type: 'application/pdf', file_size: 100 }, caption: 'ባዮሎጂ 9 | 9ኛ ክፍል' } });
     assert.ok(msgs().some(m => /ተጨመረ/.test(m.text)));
     // ተማሪ፦ 🎓 ትምህርት → መጻሕፍት → መጽሐፍ
-    sent.length = 0; await say(1, '🎓 ትምህርት'); assert.ok(msgs().some(m => /መማሪያ መጻሕፍት/.test(m.text))); sent.length = 0; await cb(1, 'bk:l:0');
+    sent.length = 0; await say(1, '🎓 ትምህርት'); assert.ok(msgs().some(m => /ed:b/.test(JSON.stringify(m.reply_markup)))); sent.length = 0; await cb(1, 'bk:l:0');
     const bl = msgs().find(m => /ባዮሎጂ 9/.test(JSON.stringify(m.reply_markup))); assert.ok(bl); const id = /bk:o:(\w+)/.exec(JSON.stringify(bl.reply_markup))[1];
     sent.length = 0; await cb(1, 'bk:o:' + id); assert.ok(msgs().some(m => /fk:tc/.test(JSON.stringify(m.reply_markup))));
     // አስተምረኝ
@@ -68,7 +68,7 @@ test('መግቢያ፦ 3 ምርጫ፣ ትምህርት = ስልክ+የይለፍ �
     await say('/start'); const w = msgs().find(m => /ምን ላይ ማተኮር/.test(m.text)); assert.ok(w); const kb = JSON.stringify(w.reply_markup); for (const k of ['ob:e', 'ob:m', 'ob:b']) assert.ok(kb.includes(k), k); assert.equal((kb.match(/callback_data/g) || []).length, 3, '3 ምርጫ ብቻ');
     sent.length = 0; await cb('ob:e'); assert.ok(msgs().some(m => /request_contact/.test(JSON.stringify(m.reply_markup))), 'ስልክ ይጠየቃል');
     sent.length = 0; await bot.handle({ message: { chat: { id: 5, type: 'private' }, from: { id: 5, first_name: 'አበበ' }, contact: { user_id: 5, phone_number: '+251911223344' } } }); assert.ok(msgs().some(m => /የይለፍ ቃል/.test(m.text)) && !msgs().some(m => /ኢሜይል/.test(m.text)), 'ኢሜይል አይጠየቅም');
-    sent.length = 0; await say('secret1234'); assert.equal(made.length, 1); assert.equal(made[0].phone, '0911223344'); assert.equal(made[0].name, 'አበበ'); assert.ok(msgs().some(m => /ትምህርት/.test(m.text) && /bk:l/.test(JSON.stringify(m.reply_markup))), 'ትምህርት ክፍል ይከፈታል');
+    sent.length = 0; await say('secret1234'); assert.equal(made.length, 1); assert.equal(made[0].phone, '0911223344'); assert.equal(made[0].name, 'አበበ'); assert.ok(msgs().some(m => /ed:b/.test(JSON.stringify(m.reply_markup))), 'ትምህርት ክፍል ይከፈታል');
     // ገደብ ሲያልቅ፦ ክፍያ አይታይም
     sent.length = 0; await say('ጥያቄ'); const pw = msgs().map(m => m.text).join('\n'); assert.match(pw, /እስከ ነገ|ነገ ድርሻዎ/); assert.ok(!/0946705941|telebirr|ብር/i.test(pw + JSON.stringify(msgs().map(m => m.reply_markup))), 'ክፍያ አይታይም'); assert.match(JSON.stringify(msgs().map(m => m.reply_markup)), /pw:up/);
     sent.length = 0; await cb('pw:wait'); assert.ok(msgs().some(m => /ነገ/.test(m.text)));
