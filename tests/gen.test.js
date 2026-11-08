@@ -79,3 +79,10 @@ test('ድምፅ፦ Gemini TTS ሲወድቅ (429) ነፃ መጠባበቂያ mp3 �
   const m = await a.speakFree('ሰላም። እንዴት ነህ? ' + 'ሀ'.repeat(300)); assert.ok(Buffer.isBuffer(m) && m.mime === 'audio/mpeg' && m.length >= 1000, 'የተቆራረጡ ተያይዘዋል'); assert.ok(urls.filter(u => /translate_tts/.test(u)).every(u => /tl=am/.test(u)));
   assert.equal(await ai.create({ GEMINI_API_KEY: 'k', AI_TTS_FREE: '0' }, f).speakFree('ሰላም'), null);
 });
+
+test('AI፦ ብዙ የ Gemini ቁልፍ — አንዱ 429 ሲል ወደ ቀጣዩ ይሄዳል', async () => {
+  const ai = require('../server/ai'), used = [];
+  const f = async (u, o) => { const k = o.headers['x-goog-api-key']; used.push(k); if (k === 'k1') return { ok: false, status: 429, json: async () => ({ error: { message: 'quota' } }) }; return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'መልስ' }] } }] }) }; };
+  const a = ai.create({ GEMINI_API_KEYS: 'k1, k2', GEMINI_API_KEY: 'k3' }, f); assert.equal(await a.chat('mk1', 'ሰላም'), 'መልስ'); assert.deepEqual(used.slice(0, 2), ['k1', 'k2']);
+  used.length = 0; await a.chat('mk1', 'ሁለተኛ'); assert.equal(used[0], 'k2', 'የሠራው ቁልፍ ይታወሳል');
+});

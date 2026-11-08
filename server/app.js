@@ -222,7 +222,7 @@ async function configureWebhook() {
     const result = await tg('setWebhook', {
       url: `${PUBLIC_BASE_URL}/api/telegram/webhook`,
       secret_token: WEBHOOK_SECRET,
-      allowed_updates: ['message', 'callback_query', 'inline_query'],
+      allowed_updates: ['message', 'callback_query', 'inline_query', 'poll_answer'],
       drop_pending_updates: false
     });
     tg('setMyCommands', { commands: [{ command: 'menu', description: 'ዋና ማውጫ' }, { command: 'search', description: 'ፈልግ' }, { command: 'near', description: 'በአቅራቢያዬ' }, { command: 'alerts', description: 'ማንቂያዎቼ' }, { command: 'messages', description: 'መልእክቶች' }, { command: 'account', description: 'አካውንቴ' }, { command: 'lang', description: 'ቋንቋ / Language' }, { command: 'logout', description: 'ውጣ' }, { command: 'login', description: 'ግባ / ተመዝገብ' }, { command: 'cancel', description: 'የጀመሩትን ሰርዝ' }, { command: 'help', description: 'እገዛ' }, { command: 'myid', description: 'Chat ID' }] }).catch(() => { });

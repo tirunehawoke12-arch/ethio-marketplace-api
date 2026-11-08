@@ -47,8 +47,15 @@ function slideText(s, i) {          // የ pptx ስላይድ → ጽሑፍ
 }
 
 function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () => Date.now()) {
-  const akey = env.ANTHROPIC_API_KEY || '', gkey = env.GEMINI_API_KEY || '', prov = akey ? 'claude' : gkey ? 'gemini' : '';
+  const akey = env.ANTHROPIC_API_KEY || '', gkeys = [...new Set([...(String(env.GEMINI_API_KEYS || '').split(/[\s,]+/)), env.GEMINI_API_KEY || ''].map(x => x.trim()).filter(Boolean))], gkey = gkeys[0] || '', prov = akey ? 'claude' : gkey ? 'gemini' : '';
   const model = prov === 'gemini' ? (env.GEMINI_MODEL || 'gemini-flash-latest').split(',')[0].trim() : (env.AI_MODEL || 'claude-sonnet-5-5'), base = (prov === 'gemini' ? (env.GEMINI_API_BASE || 'https://generativelanguage.googleapis.com') : (env.ANTHROPIC_API_BASE || 'https://api.anthropic.com')).replace(/\/$/, '');
+  /* ብዙ የ Gemini ቁልፍ (GEMINI_API_KEYS=k1,k2,… ወይም ከ GEMINI_API_KEY ጋር)፦ አንዱ 429 ሲል ለ2 ደቂቃ አርፎ ወደ ቀጣዩ ይሄዳል */
+  const kcool = new Map(); let kcur = 0;
+  async function gfetch(url, init) {
+    const N = gkeys.length || 1; let r;
+    for (let t = 0; t < N; t++) { const i = (kcur + t) % N; if (N > 1 && kcool.get(i) > now() && t < N - 1) continue; r = await fetchImpl(url, { ...init, headers: { ...(init && init.headers), 'x-goog-api-key': gkeys[i] || '' } }); if (r.status === 429 && N > 1) { kcool.set(i, now() + 120e3); console.warn('AI gemini key #' + (i + 1) + ' 429 → ቀጣይ ቁልፍ'); continue; } kcur = i; return r; }
+    return r;
+  }
   const gl = String(env.GEMINI_MODEL || '').split(',').map(x => x.trim()).filter(Boolean), uniq = a => [...new Set(a)];
   const models = { g: uniq([...gl.filter(x => !/lite/i.test(x)), 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.6-flash']), chat: uniq([...gl, 'gemini-flash-lite-latest', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.6-flash']), doc: uniq([...gl, 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-flash-lite-latest']) };
   const num = (v, d) => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? n : d; };
@@ -64,7 +71,7 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
     try {
       if (prov === 'gemini') {
         const contents = msgs.map((m, i) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [...(pdf && i === msgs.length - 1 ? [{ inlineData: { mimeType: 'application/pdf', data: Buffer.from(pdf).toString('base64') } }] : media && media.mime !== 'application/pdf' && i === msgs.length - 1 ? [{ inlineData: { mimeType: media.mime, data: Buffer.from(media.buf).toString('base64') } }] : []), { text: m.content }] }));
-        r = await fetchImpl(`${base}/v1beta/models/${mdl}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': gkey }, signal: ctl && ctl.signal, body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents, generationConfig: { maxOutputTokens: max }, ...(ground && prov === 'gemini' ? { tools: [{ google_search: {} }] } : {}) }) });
+        r = await gfetch(`${base}/v1beta/models/${mdl}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json' }, signal: ctl && ctl.signal, body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents, generationConfig: { maxOutputTokens: max }, ...(ground && prov === 'gemini' ? { tools: [{ google_search: {} }] } : {}) }) });
       } else {
         const messages = msgs.map((m, i) => (media && media.mime !== 'application/pdf' && i === msgs.length - 1 ? { role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: media.mime, data: Buffer.from(media.buf).toString('base64') } }, { type: 'text', text: m.content }] } : pdf && i === msgs.length - 1 ? { role: 'user', content: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: Buffer.from(pdf).toString('base64') }, cache_control: { type: 'ephemeral' } }, { type: 'text', text: m.content }] } : m));
         r = await fetchImpl(base + '/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': akey, 'anthropic-version': API_VER }, signal: ctl && ctl.signal, body: JSON.stringify({ model: mdl, max_tokens: max, system, messages, ...(ground ? { tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }] } : {}) }) });
@@ -222,7 +229,7 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
     for (const mdl of list) {
       if (dead.get('tts:' + mdl) > now()) continue;
       try {
-        const r = await fetchImpl(`${base}/v1beta/models/${mdl}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': gkey }, body: JSON.stringify({ contents: [{ parts: [{ text: String(text).slice(0, 1200) }] }], generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } } }) });
+        const r = await gfetch(`${base}/v1beta/models/${mdl}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: String(text).slice(0, 1200) }] }], generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } } }) });
         const j = await r.json().catch(() => null); if (!r.ok) { lastTts = r.status + ' ' + String(j && j.error && (j.error.message || j.error.status) || '').slice(0, 80); console.warn('AI tts ' + mdl + ' ' + lastTts); if (r.status === 404 || r.status === 400 || r.status === 403) dead.set('tts:' + mdl, now() + 6 * 3600e3); continue; }
         const part = j && j.candidates && j.candidates[0] && j.candidates[0].content && (j.candidates[0].content.parts || []).find(p => p.inlineData && p.inlineData.data); if (!part) { lastTts = 'no_audio'; continue; }
         const m = /rate=(\d+)/.exec(part.inlineData.mimeType || ''); return { pcm: Buffer.from(part.inlineData.data, 'base64'), rate: m ? +m[1] : 24000 };

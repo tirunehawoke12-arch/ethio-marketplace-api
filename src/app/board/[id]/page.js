@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 
+const cacheOf = async id => { try { return typeof caches !== 'undefined' ? await caches.open('board-' + id) : null; } catch (e) { return null; } };          // ዲስክ ላይ (Cache Storage) ይቀመጣል — ዳታ ቢጠፋም ይሠራል
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const F = "'Noto Sans Ethiopic','Nyala','Abyssinica SIL',system-ui,sans-serif";
 const ERR = { ai_limit: 'የ AI ገጽ ገደብ አልቋል — በቦቱ ውስጥ ጥቅል ይግዙ ወይም ነገ ይሞክሩ።', ai_busy: 'AI ሥራ በዝቶበታል — ትንሽ ቆይተው «እንደገና» ይጫኑ።', ai_timeout: 'AI ዘግይቷል — «እንደገና» ይጫኑ።', slow_down: 'ትንሽ ቀስ ይበሉ።', not_found: 'ሰሌዳው ጊዜው አልፏል (48 ሰዓት) — ከቦቱ እንደገና ይጠይቁ።' };
@@ -66,8 +67,8 @@ function Students({ hand, talkingQ }) {
 }
 
 export default function Room() {
-  const { id } = useParams(), [meta, setMeta] = useState(null), [err, setErr] = useState(''), [pg, setPg] = useState(null), [n, setN] = useState(0), [li, setLi] = useState(-1), [wi, setWi] = useState(-1), [ms, setMs] = useState(300), [phase, setPhase] = useState('idle'), [busy, setBusy] = useState(''), [voice, setVoice] = useState(true), [spd, setSpd] = useState(1), [gaze, setGaze] = useState('board'), [talking, setTalking] = useState(false), [paused, setPaused] = useState(false), [q, setQ] = useState(''), [ans, setAns] = useState(''), [hand, setHand] = useState(false), [showQ, setShowQ] = useState(false), [tx, setTx] = useState(0.85), [walk, setWalk] = useState(false), walkT = useRef(null);
-  const R = useRef({ tok: 0, paused: false, voice: true, spd: 1, audio: null, cache: {}, aud: {}, resume: null }), boardEl = useRef(null);
+  const { id } = useParams(), [meta, setMeta] = useState(null), [err, setErr] = useState(''), [pg, setPg] = useState(null), [n, setN] = useState(0), [li, setLi] = useState(-1), [wi, setWi] = useState(-1), [ms, setMs] = useState(300), [phase, setPhase] = useState('idle'), [busy, setBusy] = useState(''), [voice, setVoice] = useState(true), [spd, setSpd] = useState(1), [gaze, setGaze] = useState('board'), [talking, setTalking] = useState(false), [paused, setPaused] = useState(false), [q, setQ] = useState(''), [ans, setAns] = useState(''), [hand, setHand] = useState(false), [showQ, setShowQ] = useState(false), [tx, setTx] = useState(0.85), [walk, setWalk] = useState(false), walkT = useRef(null), [auto, setAuto] = useState(false), [prep, setPrep] = useState({ s: 'idle', k: 0, msg: '' });
+  const R = useRef({ ptok: 0, prep: '', auto: false, tok: 0, paused: false, voice: true, spd: 1, audio: null, cache: {}, aud: {}, resume: null }), boardEl = useRef(null);
   useEffect(() => { R.current.voice = voice; if (!voice && R.current.audio) R.current.audio.pause(); }, [voice]); useEffect(() => { R.current.spd = spd; }, [spd]);
   useEffect(() => { fetch('/api/ai/board/' + id).then(r => r.json()).then(d => d.ok ? setMeta(d) : setErr(ERR.not_found)).catch(() => setErr('ግንኙነት ተቋርጧል')); try { const w = window.Telegram && window.Telegram.WebApp; if (w) { w.ready(); w.expand(); } } catch (e) { } }, [id]);
   useEffect(() => {          // መምህሩ ሲያስተምር ወደዚህ ወደዚያ ይራመዳል፦ መስመር በመስመር ሰሌዳውን ተከትሎ (ገጽ በገጽ አቅጣጫ ይቀያየራል)፤ ሲጨርስ ወደ መሃል ይመለሳል
@@ -78,9 +79,12 @@ export default function Room() {
   useEffect(() => { if (!talking) return; const t = setInterval(() => setGaze(g => (g === 'board' ? 'class' : 'board')), 3200 + Math.random() * 1500); return () => clearInterval(t); }, [talking]);
   const wait = useCallback(async (ms2, tok) => { let t = 0; while (t < ms2) { if (R.current.tok !== tok) return false; if (R.current.paused) { await sleep(120); continue; } await sleep(40); t += 40 / R.current.spd; } return R.current.tok === tok; }, []);
 
-  const fetchPage = useCallback(async k => {          // ገጽ k (በቅድሚያ ይታወሳል)
-    const C = R.current.cache; if (C[k]) return C[k];
-    C[k] = fetch('/api/ai/board/' + id + '/page/' + k).then(r => r.json()).then(d => { if (!d.ok) { delete C[k]; throw new Error(d.error || 'failed'); } return Object.assign({}, d.page, { groups: d.groups }); }).catch(e => { delete C[k]; throw e; }); return C[k];
+  const fetchPage = useCallback(async k => {          // ገጽ k (ከዲስክ መሸጎጫ ቀድሞ፤ ከዚያ ኔትወርክ፤ በቅድሚያ ይታወሳል)
+    const C = R.current.cache; if (C[k]) return C[k]; const url = '/api/ai/board/' + id + '/page/' + k;
+    C[k] = (async () => {
+      const cs = await cacheOf(id); if (cs) { try { const m = await cs.match(url); if (m) { const d = await m.json(); if (d && d.ok) return Object.assign({}, d.page, { groups: d.groups }); } } catch (e) { } }
+      const r = await fetch(url), d = await r.json(); if (!d.ok) throw new Error(d.error || 'failed'); if (cs) { try { await cs.put(url, new Response(JSON.stringify(d), { headers: { 'content-type': 'application/json' } })); } catch (e) { } } return Object.assign({}, d.page, { groups: d.groups });
+    })().catch(e => { delete C[k]; throw e; }); return C[k];
   }, [id]);
   const audioFor = useCallback((k, i, fresh) => {          // የመስመር ድምፅ ቀድሞ ይጫናል (ሰርቨሩ ከበስተጀርባ ያዘጋጃል)
     if (!meta || !meta.tts || (R.current.ttsBad && Date.now() - R.current.ttsBad < 90000)) return null; const key = k + ':' + i; if (fresh) delete R.current.aud[key];
@@ -113,9 +117,11 @@ export default function Room() {
     } return true;
   }, [audioFor, speakLine, wait]);
 
-  const gAudio = useCallback((k, g, fresh) => {          // የቡድን ድምፅ ሙሉ በሙሉ ወርዶ (blob) ይጫናል — በማጫወት ጊዜ መቆራረጥ የለም፤ ሰርቨሩ «ድምፅ የለም» ካለ ወዲያው ይታወቃል
+  const gAudio = useCallback((k, g, fresh) => {          // የቡድን ድምፅ፦ ከዲስክ መሸጎጫ ቀድሞ፣ ከዚያ ኔትወርክ (ከተሳካ ዲስክ ላይ ይቀመጣል)፤ ሙሉ በሙሉ ወርዶ (blob) ይጫወታል
     if (!meta || !meta.tts) return null; const key = 'g' + k + ':' + g; if (fresh) delete R.current.aud[key];
-    if (!R.current.aud[key]) { const pr = fetch('/api/ai/board/' + id + '/tts/' + k + '/g/' + g + (fresh ? '?r=' + Date.now() : '')).then(async r => { if (r.status === 200) { const b = await r.blob(); return URL.createObjectURL(b); } const e = new Error('tts_' + r.status); e.final = true; e.why = decodeURIComponent(r.headers.get('x-tts-why') || ''); throw e; }); pr.catch(() => { }); R.current.aud[key] = pr; } return R.current.aud[key];
+    if (!R.current.aud[key]) { const url = '/api/ai/board/' + id + '/tts/' + k + '/g/' + g; const pr = (async () => {
+      const cs = await cacheOf(id); if (cs && !fresh) { try { const m = await cs.match(url); if (m) return URL.createObjectURL(await m.blob()); } catch (e) { } }
+      const r = await fetch(url + (fresh ? '?r=' + Date.now() : '')); if (r.status === 200) { if (cs) { try { await cs.put(url, r.clone()); } catch (e) { } } return URL.createObjectURL(await r.blob()); } const e = new Error('tts_' + r.status); e.final = true; e.why = decodeURIComponent(r.headers.get('x-tts-why') || ''); throw e; })(); pr.catch(() => { }); R.current.aud[key] = pr; } return R.current.aud[key];
   }, [meta, id]);
   const playGroup = useCallback(async (k, page, gi, tok) => {          // → true | false (ተቋርጧል) | 'fail'
     const L = page.lines, G = page.groups[gi]; let url = null, tries = 0; const t0 = Date.now(), tm = setInterval(() => { if (Date.now() - t0 > 1500) setBusy(b => b || 'voice'); }, 300);
@@ -144,7 +150,7 @@ export default function Room() {
     if (R.current.ttsBad && Date.now() - R.current.ttsBad < 90000) { setBusy('novoice'); return runLineSet(k, page, L.map((_, i) => i).filter(i => i >= from), tok); }
     let g0 = page.groups.findIndex(g => g.includes(from)); if (g0 < 0) g0 = 0;
     for (let gi = g0; gi < page.groups.length; gi++) {
-      if (R.current.tok !== tok) return false; gAudio(k, gi + 1); gAudio(k, gi + 2); setWi(-1);
+      if (R.current.tok !== tok) return false; if (gi + 1 < page.groups.length) gAudio(k, gi + 1); if (gi + 2 < page.groups.length) gAudio(k, gi + 2); setWi(-1);
       const r = await playGroup(k, page, gi, tok); if (r === false) return false;
       if (r === 'fail') { setBusy('novoice'); if (!(await runLineSet(k, page, page.groups[gi], tok))) return false; }
     } setTalking(false); return true;
@@ -152,12 +158,32 @@ export default function Room() {
 
   const teach = useCallback(async (k, from = 0) => {
     const tok = ++R.current.tok; R.current.paused = false; setPaused(false); setAns(''); setShowQ(false); setHand(false); try { window.speechSynthesis.cancel(); if (R.current.audio) R.current.audio.pause(); } catch (e) { }
+    try { fetch('/api/ai/board/' + id + '/at/' + k, { method: 'POST' }).catch(() => { }); } catch (e) { }
     setN(k); setPhase('loading'); setBusy(''); setLi(-1); setWi(-1); setTalking(false); setGaze('board');
     let page; try { page = await fetchPage(k); } catch (e) { if (R.current.tok === tok) { setPhase('error'); setBusy(ERR[e.message] || 'ገጹን ማዘጋጀት አልተቻለም — እንደገና ይሞክሩ።'); } return; }
-    if (R.current.tok !== tok) return; setPg(page); setPhase('teach'); if (meta && k < meta.total) fetchPage(k + 1).catch(() => { }); gAudio(k, 0); gAudio(k, 1);
+    if (R.current.tok !== tok) return; setPg(page); setPhase('teach'); if (meta && k < meta.total) fetchPage(k + 1).catch(() => { }); gAudio(k, 0); if ((page.groups || []).length > 1) gAudio(k, 1);
     if (!page.lines.length) { setPhase('wait'); return; }
-    await sleep(900); R.current.resume = { k, i: from }; const ok = await runLines(k, page, from, tok); if (!ok || R.current.tok !== tok) return; setLi(-1); setPhase(k >= (meta ? meta.total : k) ? 'end' : 'wait'); setGaze('class'); setTalking(false);
+    for (const key of Object.keys(R.current.aud)) { const m = /^g(\d+):/.exec(key); if (m && Number(m[1]) < k - 1) { const pr = R.current.aud[key]; delete R.current.aud[key]; Promise.resolve(pr).then(u => { try { URL.revokeObjectURL(u); } catch (e) { } }).catch(() => { }); } }          // የድሮ ገጾች ከ RAM ይለቀቃሉ (ዲስክ ላይ ይቀራሉ)
+    await sleep(900); R.current.resume = { k, i: from }; const ok = await runLines(k, page, from, tok); if (!ok || R.current.tok !== tok) return; setLi(-1); const last = k >= (meta ? meta.total : k); setPhase(last ? 'end' : 'wait'); setGaze('class'); setTalking(false);
+    if (!last && R.current.auto) { for (let t = 0; t < 22; t++) { await sleep(100); if (R.current.tok !== tok) return; } while (R.current.paused) { await sleep(150); if (R.current.tok !== tok) return; } if (R.current.tok === tok && R.current.auto) { setPg(null); teachRef.current(k + 1); } }          // ራስ-ሰር ቀጣይ
   }, [fetchPage, runLines, gAudio, meta]);
+  const teachRef = useRef(null); teachRef.current = teach;
+  useEffect(() => { try { const a = localStorage.getItem('boardAuto') === '1'; setAuto(a); R.current.auto = a; } catch (e) { } }, []);
+  const toggleAuto = () => { const a = !R.current.auto; R.current.auto = a; setAuto(a); try { localStorage.setItem('boardAuto', a ? '1' : '0'); } catch (e) { } };
+  const diskWarm = useCallback(async (k, g) => {          // ድምፅን ዲስክ ላይ ብቻ ያስቀምጣል (RAM አይይዝም)፤ መሸጎጫ ከሌለ በ RAM
+    const url = '/api/ai/board/' + id + '/tts/' + k + '/g/' + g, cs = await cacheOf(id); if (!cs) return gAudio(k, g); if (await cs.match(url)) return;
+    const r = await fetch(url); if (r.status !== 200) { const e = new Error('tts_' + r.status); e.final = true; throw e; } await cs.put(url, r);
+  }, [id, gAudio]);
+  const prepAll = useCallback(async () => {          // ሁሉንም ገጽ + ድምፅ አስቀድሞ ያዘጋጃል/ያወርዳል (ዲስክ ላይ) — ከዚያ ዳታ ቢጠፋ ይሠራል
+    if (!meta || R.current.prep === 'run') return; R.current.prep = 'run'; const pt = ++R.current.ptok; let failed = 0;
+    for (let k = 1; k <= meta.total; k++) {
+      if (R.current.ptok !== pt) return; setPrep({ s: 'run', k: k - 1, msg: '' });
+      let page; try { page = await fetchPage(k); } catch (e) { R.current.prep = ''; setPrep({ s: 'stop', k: k - 1, msg: e.message === 'ai_limit' ? 'የነጻ ድርሻ እስከዚህ ገጽ ብቻ ፈቀደ — የተዘጋጀው ይሠራል' : (ERR[e.message] || 'ማዘጋጀት አልተቻለም') }); return; }
+      if (meta.tts) for (let g = 0; g < (page.groups || []).length; g++) { if (R.current.ptok !== pt) return; try { await diskWarm(k, g); } catch (e) { failed++; if (e && e.final) break; } }
+    }
+    R.current.prep = 'done'; setPrep({ s: 'done', k: meta.total, msg: failed ? 'ድምፅ በከፊል ጠፍቷል (በአሳሽ ድምፅ/በጽሑፍ ይቀጥላል)' : '' });
+  }, [meta, fetchPage, diskWarm]);
+
 
   const stop = () => { R.current.tok++; setTalking(false); try { window.speechSynthesis.cancel(); if (R.current.audio) R.current.audio.pause(); } catch (e) { } };
   const pause = () => { R.current.paused = !R.current.paused; setPaused(R.current.paused); try { R.current.paused ? window.speechSynthesis.pause() : window.speechSynthesis.resume(); } catch (e) { } };
@@ -184,7 +210,7 @@ export default function Room() {
       <div className="mb-1 flex items-center justify-between px-1 text-xs text-[#3b2a17]"><span>🧑‍🏫 {meta.title}</span><span>{n ? `ስላይድ ${n}/${meta.total}` : ''}</span></div>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4 }}>
         <div ref={boardEl} className="rounded-xl shadow-2xl" style={{ flex: 1, minWidth: 0, overflowY: 'auto', border: '9px solid #8b5e34', background: '#21402f', color: '#f4f1e8', padding: 12, height: '56vh', backgroundImage: 'radial-gradient(ellipse at 30% 20%,rgba(255,255,255,.07),transparent 60%)' }}>
-          {!started && <div className="py-14 text-center"><p className="mb-3 text-xl">🧑‍🏫 {meta.title}</p><p className="mb-6 text-sm text-white/65">{meta.total} ስላይድ። መምህሩ እያንዳንዱን በሰሌዳ ላይ ይለጥፋል፣ መስመር በመስመር ቃል በቃል እያሰመረ ያስረዳል።{meta.tts ? '' : ' (ድምፅ ከአሳሽዎ ይሰማል — የአማርኛ ድምፅ ከሌለ በጽሑፍ ብቻ)'}</p><button onClick={() => teach(meta.start || 1)} className="rounded-full bg-[#ffe9a8] px-8 py-3 text-lg font-bold text-[#2b1d12]">▶️ ክፍሉን ጀምር</button></div>}
+          {!started && <div className="py-14 text-center"><p className="mb-3 text-xl">🧑‍🏫 {meta.title}</p><p className="mb-6 text-sm text-white/65">{meta.total} ስላይድ። መምህሩ እያንዳንዱን በሰሌዳ ላይ ይለጥፋል፣ መስመር በመስመር ቃል በቃል እያሰመረ ያስረዳል።{meta.tts ? '' : ' (ድምፅ ከአሳሽዎ ይሰማል — የአማርኛ ድምፅ ከሌለ በጽሑፍ ብቻ)'}</p><div className="flex flex-col items-center gap-3"><button onClick={() => teach(meta.start || 1)} className="rounded-full bg-[#ffe9a8] px-8 py-3 text-lg font-bold text-[#2b1d12]">▶️ ክፍሉን ጀምር</button><button onClick={prepAll} disabled={prep.s === 'run' || prep.s === 'done'} className="rounded-full bg-white/10 px-6 py-2 text-sm">{prep.s === 'run' ? `⏳ እያዘጋጀሁ ነው ${prep.k}/${meta.total}…` : prep.s === 'done' ? '✅ ሁሉም ተዘጋጅቷል — ዳታ ቢጠፋም ይሠራል' : '⬇️ ሁሉንም አስቀድሞ አዘጋጅ (ዳታ ከጠፋ በኋላም እንዲሠራ)'}</button>{prep.msg && <p className="text-xs text-[#ffb3a7]">{prep.msg}</p>}<button onClick={toggleAuto} className="rounded-full bg-white/10 px-6 py-2 text-sm">{auto ? '🔁 ቀጣይ፦ ራስ-ሰር' : '✋ ቀጣይ፦ በእጅ'}</button></div></div>}
           {busy === 'novoice' && phase === 'teach' && <p className="mb-1 text-center text-xs text-[#ffb3a7]">🔇 የ AI ድምፅ ለጊዜው አልተገኘም{R.current.ttsWhy ? ' (' + R.current.ttsWhy.slice(0, 60) + ')' : ''} — በጽሑፍ (እና በአሳሽ ድምፅ) ይቀጥላል</p>}
           {busy === 'voice' && phase === 'teach' && <p className="mb-1 text-center text-xs text-white/60">🔊 ድምፅ እየተዘጋጀ ነው…</p>}
           {phase === 'loading' && <p className="py-16 text-center text-white/70">✍️ መምህሩ ስላይድ {n}ን እያዘጋጀ ነው…</p>}
@@ -211,6 +237,8 @@ export default function Room() {
           <button onClick={prevP} className="rounded-lg bg-white/10 px-3 py-2" title="ቀዳሚ">⏮</button>
           {phase === 'teach' && <button onClick={pause} className="rounded-lg bg-[#ffe9a8] px-4 py-2 font-bold text-[#2b1d12]">{paused ? '▶️ ቀጥል' : '⏸ አቁም'}</button>}
           <button onClick={nextP} className="rounded-lg bg-white/10 px-3 py-2" title="ቀጣይ">⏭ ቀጣይ</button>
+          <button onClick={toggleAuto} className="rounded-lg bg-white/10 px-3 py-2 text-sm" title="ቀጣይ ስላይድ በራስ-ሰር ወይስ በእጅ">{auto ? '🔁 ራስ-ሰር' : '✋ በእጅ'}</button>
+          <button onClick={prepAll} disabled={prep.s === 'run' || prep.s === 'done'} className="rounded-lg bg-white/10 px-3 py-2 text-sm" title="ሁሉንም አስቀድሞ አዘጋጅ (ከዳታ ነጻ ለመሆን)">{prep.s === 'run' ? `⬇️ ${prep.k}/${meta ? meta.total : '?'}` : prep.s === 'done' ? '✅ ዝግጁ' : '⬇️'}</button>
           <button onClick={() => { stop(); setShowQ(v => !v); }} className="rounded-lg bg-white/10 px-3 py-2">🙋 ጥያቄ</button>
           <button onClick={() => setVoice(v => !v)} className="rounded-lg bg-white/10 px-3 py-2">{voice ? '🔊' : '🔇'}</button>
           <select value={spd} onChange={e => setSpd(Number(e.target.value))} className="rounded-lg bg-white/10 px-2 py-2 text-sm">{[0.75, 1, 1.25, 1.5].map(v => <option key={v} value={v} className="text-black">{v}×</option>)}</select>
