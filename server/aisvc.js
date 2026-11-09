@@ -163,29 +163,32 @@ module.exports = function aisvc(ctx) {
   const srcSig = src => src ? (src.text != null ? 't' + src.text : src.pdfBuf ? 'p' + sha(src.pdfBuf) : src.media && src.media.buf ? 'm' + sha(src.media.buf) : '') : '';
   const BOARDS = new Map(), BTTS = new Map(), BK = ['title', 'text', 'bullet', 'formula', 'note'], SH = ['line', 'arrow', 'rect', 'circle', 'label'];
   const cl = (v, a, b) => Math.min(b, Math.max(a, Number(v) || 0));
-  function cleanPage(j) {
+  function cleanPage(j, nImg) {
     if (!j || typeof j !== 'object') return null; const lines = [];
-    for (const l of (Array.isArray(j.lines) ? j.lines : []).slice(0, 32)) { if (!l || typeof l !== 'object') continue; const t = S(l.t, 300), say = S(l.say, 1400); if (!t && !say) continue; lines.push({ k: BK.includes(l.k) ? l.k : 'text', t, am: S(l.am, 300), say }); }
+    for (const l of (Array.isArray(j.lines) ? j.lines : []).slice(0, 32)) { if (!l || typeof l !== 'object') continue; const t = S(l.t, 300), say = S(l.say, 1400); if (!t && !say) continue; const im = (Array.isArray(l.img) ? l.img : l.img != null ? [l.img] : []).map(Number).filter(x => Number.isInteger(x) && x >= 0 && x < (nImg || 0)).slice(0, 4); lines.push({ k: BK.includes(l.k) ? l.k : 'text', t, am: S(l.am, 300), say, ...(im.length ? { img: im } : {}) }); }
     const draw = (Array.isArray(j.draw) ? j.draw : []).filter(x => x && SH.includes(x.k)).slice(0, 24).map(x => ({ k: x.k, x1: cl(x.x1, 0, 100), y1: cl(x.y1, 0, 56), x2: cl(x.x2, 0, 100), y2: cl(x.y2, 0, 56), x: cl(x.x, 0, 100), y: cl(x.y, 0, 56), w: cl(x.w, 1, 100), h: cl(x.h, 1, 56), r: cl(x.r, 1, 40), t: S(x.t, 40) }));
-    return { title: S(j.title, 120), lines, draw };
+    if (nImg) { const used = new Set(); lines.forEach(l => (l.img || []).forEach(i => used.add(i))); const miss = []; for (let i = 0; i < nImg; i++) if (!used.has(i)) miss.push(i); if (miss.length && lines.length) { const L = lines[lines.length - 1]; L.img = [...(L.img || []), ...miss].slice(0, 6); } }          // AI ያልጠቀሰው ምስል ከመጨረሻው መስመር ጋር ይታያል
+    return { title: S(j.title, 120), lines, draw, ...(nImg ? { nimg: nImg } : {}) };
   }
   /* src = { total, pageSrc: async n => ({ pdfBuf, real } | { media } | { text }) } */
   function boardPut(uid, title, src, opt = {}) {
     if (!src || !src.pageSrc) return null; const t = now(); for (const [k, v] of BOARDS) if (t - v.ts > 48 * 3600e3) { BOARDS.delete(k); for (const x of BTTS.keys()) if (x.startsWith(k + ':')) BTTS.delete(x); }
     if (BOARDS.size > 200) { const k0 = BOARDS.keys().next().value; BOARDS.delete(k0); } const id = require('crypto').randomBytes(9).toString('base64url');
-    BOARDS.set(id, { id, uid, admin: !!opt.admin, title: S(title, 80), total: Math.max(1, Math.min(200, src.total || 1)), pageSrc: src.pageSrc, domain: opt.domain || '', onPage: typeof opt.onPage === 'function' ? opt.onPage : null, pages: {}, pend: {}, start: Math.max(1, opt.start || 1), ts: t }); return id;
+    const bd0 = { id, uid, admin: !!opt.admin, title: S(title, 80), total: Math.max(1, Math.min(200, src.total || 1)), pageSrc: src.pageSrc, domain: opt.domain || '', onPage: typeof opt.onPage === 'function' ? opt.onPage : null, key: S(opt.key, 40), pl: { m: {}, d: {}, s: {} }, im: {}, pend: {}, start: Math.max(1, opt.start || 1), ts: t };
+    bd0.pages = bd0.pl.m; BOARDS.set(id, bd0); return id;
   }
-  async function boardGet(bd, n) {
-    if (bd.pages[n]) return bd.pages[n]; if (bd.pend[n]) return bd.pend[n];
-    return (bd.pend[n] = (async () => {
-      const src = await bd.pageSrc(n), pk = sha([bd.title, bd.domain || '', n, bd.total, srcSig(src)].join('|')), hit = srcSig(src) ? col(PC)[pk] : null;
-      if (hit && hit.pg) { const pg = cleanPage(hit.pg); if (pg) { hit.ts = Date.now(); bd.pages[n] = pg; warm(bd, n); return pg; } }          // ቀድሞ የተዘጋጀ → ኮታ አይቆረጥም
+  const LVS = ['m', 'd', 's'], lvOf = v => (LVS.includes(String(v)) ? String(v) : 'm');
+  async function boardGet(bd, n, lv = 'm') {
+    const P = bd.pl[lv], pk0 = lv + n; if (P[n]) return P[n]; if (bd.pend[pk0]) return bd.pend[pk0];
+    return (bd.pend[pk0] = (async () => {
+      const src = await bd.pageSrc(n), imgs = (src && src.imgs) || []; bd.im[n] = imgs; src.imgs = imgs; const pk = sha([bd.title, bd.domain || '', n, bd.total, srcSig(src), imgs.length, lv === 'm' ? '' : lv].join('|')), hit = srcSig(src) ? col(PC)[pk] : null;
+      if (hit && hit.pg) { const pg = cleanPage(hit.pg, imgs.length); if (pg) { hit.ts = Date.now(); P[n] = pg; warm(bd, n, lv); return pg; } }          // ቀድሞ የተዘጋጀ → ኮታ አይቆረጥም
       const q = takePages(bd.uid, bd.admin); if (!q.ok) { const e = new Error('ai_limit'); e.paywall = q.paywall; throw e; }
       try {
-        let last; for (let tr = 0; tr < 3; tr++) { try { const raw = await ai.boardPage(bd.title, n, bd.total, src, bd.domain), pg = cleanPage(raw); if (pg) { bd.pages[n] = pg; if (srcSig(src)) { col(PC)[pk] = { pg, ts: Date.now() }; keep(PC, pk, PMAX, x => !!x.pg); } warm(bd, n); return pg; } last = new Error('board_parse'); } catch (e) { last = e; if (/^ai_(busy|timeout|network)$/.test(e.message)) await new Promise(r => setTimeout(r, 2500 * (tr + 1))); } }
+        let last; for (let tr = 0; tr < 3; tr++) { try { const raw = await ai.boardPage(bd.title, n, bd.total, src, bd.domain, lv), pg = cleanPage(raw, imgs.length); if (pg) { P[n] = pg; if (srcSig(src)) { col(PC)[pk] = { pg, ts: Date.now() }; keep(PC, pk, PMAX, x => !!x.pg); } warm(bd, n, lv); return pg; } last = new Error('board_parse'); } catch (e) { last = e; if (/^ai_(busy|timeout|network)$/.test(e.message)) await new Promise(r => setTimeout(r, 2500 * (tr + 1))); } }
         throw last || new Error('board_parse');
       } catch (e) { ai.refund(String(bd.uid), 'pages', 1); throw e; }
-    })().finally(() => { delete bd.pend[n]; }));
+    })().finally(() => { delete bd.pend[pk0]; }));
   }
   const wavOf = (pcm, rate) => { const h = Buffer.alloc(44); h.write('RIFF', 0); h.writeUInt32LE(36 + pcm.length, 4); h.write('WAVEfmt ', 8); h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20); h.writeUInt16LE(1, 22); h.writeUInt32LE(rate, 24); h.writeUInt32LE(rate * 2, 28); h.writeUInt16LE(2, 32); h.writeUInt16LE(16, 34); h.write('data', 36); h.writeUInt32LE(pcm.length, 40); return Buffer.concat([h, pcm]); };
   const splitSay = t => { const out = []; let rest = String(t || '').trim(); while (rest.length > 850) { let cut = Math.max(rest.lastIndexOf('።', 850), rest.lastIndexOf('. ', 850), rest.lastIndexOf('\n', 850)); if (cut < 250) cut = rest.lastIndexOf(' ', 850); if (cut < 250) cut = 850; out.push(rest.slice(0, cut + 1)); rest = rest.slice(cut + 1).trim(); } if (rest) out.push(rest); return out; };
@@ -204,23 +207,31 @@ module.exports = function aisvc(ctx) {
     let p = BTTS.get(key); if (p) return p; const tk = sha('tts|' + text), ch = col(TC)[tk]; if (ch && ch.d) { ch.ts = Date.now(); const b = Buffer.from(ch.d, 'base64'); if (ch.m) b.mime = ch.m; p = Promise.resolve(b); BTTS.set(key, p); return p; }
     p = synth(text).catch(() => null); p.then(w => { if (w && w.length < 600e3) { col(TC)[tk] = { d: w.toString('base64'), m: w.mime || '', ts: Date.now() }; keep(TC, tk, TMAX, x => !!x.d); } }); BTTS.set(key, p); p.then(w => { if (!w) BTTS.delete(key); }); if (BTTS.size > 80) BTTS.delete(BTTS.keys().next().value); return p;
   }
-  function warm(bd, n) {          // ገጹ እንደተዘጋጀ የቡድን ድምፆች ከበስተጀርባ (2 በአንድ ጊዜ) ይዘጋጃሉ
-    if (!ai.speak || ai.provider !== 'gemini') return; const pg = bd.pages[n]; if (!pg) return; const G = groupsOf(pg).map((g, gi) => [gi, groupSay(pg, g)]).filter(x => x[1]);
-    (async () => { let k = 0; const worker = async () => { while (k < G.length) { const [gi, t] = G[k++]; await ttsGet(bd.id + ':' + n + ':g' + gi, t); } }; await Promise.all([worker(), worker(), worker(), worker()]); })().catch(() => { });
+  function warm(bd, n, lv = 'm') {          // ገጹ እንደተዘጋጀ የቡድን ድምፆች ከበስተጀርባ (2 በአንድ ጊዜ) ይዘጋጃሉ
+    if (!ai.speak || ai.provider !== 'gemini') return; const pg = bd.pl[lv][n]; if (!pg) return; const G = groupsOf(pg).map((g, gi) => [gi, groupSay(pg, g)]).filter(x => x[1]);
+    (async () => { let k = 0; const worker = async () => { while (k < G.length) { const [gi, t] = G[k++]; await ttsGet(bd.id + ':' + lv + n + ':g' + gi, t); } }; await Promise.all([worker(), worker(), worker(), worker()]); })().catch(() => { });
   }
-  const sendWav = async (res, key, text) => { try { const w = await ttsGet(key, text); if (!w) { res.set('x-tts-why', encodeURIComponent((ai.ttsLast && ai.ttsLast()) || 'down')); return res.status(204).end(); } res.set({ 'content-type': w.mime || 'audio/wav', 'cache-control': 'private, max-age=3600' }); res.send(w); } catch (e) { res.status(204).end(); } };
+  const GZ = new WeakMap();
+  const sendWav = async (res, key, text, req) => { try { const w = await ttsGet(key, text); if (!w) { res.set('x-tts-why', encodeURIComponent((ai.ttsLast && ai.ttsLast()) || 'down')); return res.status(204).end(); } res.set({ 'content-type': w.mime || 'audio/wav', 'cache-control': 'private, max-age=3600' });
+    if (req && /\bgzip\b/.test(((req.headers || {})['accept-encoding'] || '')) && /wav/i.test(w.mime || 'audio/wav') && w.length > 2000) { let z = GZ.get(w); if (!z) { z = require('zlib').gzipSync(w, { level: 6 }); GZ.set(w, z); } if (z.length < w.length * 0.9) { res.set({ 'content-encoding': 'gzip', vary: 'Accept-Encoding' }); return res.send(z); } }          // WAV ማውረድ ፈጣን እንዲሆን ይጨመቃል
+    res.send(w); } catch (e) { res.status(204).end(); } };
   const bdOf = req => BOARDS.get(String(req.params.id));
-  app.get('/api/ai/board/:id', (req, res) => { const bd = bdOf(req); if (!bd) return bad(res, 404, 'not_found'); res.set('cache-control', 'no-store'); res.json({ ok: true, title: bd.title, total: bd.total, start: bd.start, tts: ai.provider === 'gemini' }); });
+  app.get('/api/ai/board/:id', (req, res) => { const bd = bdOf(req); if (!bd) return bad(res, 404, 'not_found'); res.set('cache-control', 'no-store'); res.json({ ok: true, title: bd.title, total: bd.total, start: bd.start, key: bd.key || bd.id, tts: ai.provider === 'gemini' }); });
   app.post('/api/ai/board/:id/at/:n', (req, res) => { const bd = bdOf(req), n = Number(req.params.n); if (bd && bd.onPage && n >= 1 && n <= bd.total) { try { bd.onPage(n); } catch (e) { } } res.json({ ok: true }); });
   app.get('/api/ai/board/:id/page/:n', async (req, res) => {
-    const bd = bdOf(req), n = Number(req.params.n); if (!bd || !(n >= 1 && n <= bd.total)) return bad(res, 404, 'not_found'); if (!limit('bpg' + bd.id, 150, 3600e3)) return bad(res, 429, 'slow_down');
-    try { const pg = await boardGet(bd, n); res.set('cache-control', 'no-store'); res.json({ ok: true, n, total: bd.total, page: pg, groups: groupsOf(pg) }); } catch (e) { bad(res, e.message === 'ai_limit' ? 429 : 503, e.message === 'ai_limit' ? 'ai_limit' : /^ai_/.test(e.message) ? e.message : 'board_failed'); }
+    const bd = bdOf(req), n = Number(req.params.n), lv = lvOf((req.query || {}).lv); if (!bd || !(n >= 1 && n <= bd.total)) return bad(res, 404, 'not_found'); if (!limit('bpg' + bd.id, 250, 3600e3)) return bad(res, 429, 'slow_down');
+    try { const pg = await boardGet(bd, n, lv); res.set('cache-control', 'no-store'); res.json({ ok: true, n, total: bd.total, lv, page: pg, groups: groupsOf(pg) }); } catch (e) { bad(res, e.message === 'ai_limit' ? 429 : 503, e.message === 'ai_limit' ? 'ai_limit' : /^ai_/.test(e.message) ? e.message : 'board_failed'); }
   });
-  app.get('/api/ai/board/:id/tts/:n/g/:g', async (req, res) => { const bd = bdOf(req), pg = bd && bd.pages[Number(req.params.n)], gr = pg && groupsOf(pg)[Number(req.params.g)], t = gr && groupSay(pg, gr); if (!t) return res.status(204).end(); if (!limit('btts' + req.ip, 300, 60e3)) return res.status(429).end(); return sendWav(res, bd.id + ':' + req.params.n + ':g' + req.params.g, t); });
-  app.get('/api/ai/board/:id/tts/:n/:i', async (req, res) => { const bd = bdOf(req), pg = bd && bd.pages[Number(req.params.n)], l = pg && pg.lines[Number(req.params.i)]; if (!l || !l.say) return res.status(204).end(); if (!limit('btts' + req.ip, 90, 60e3)) return res.status(429).end(); return sendWav(res, bd.id + ':' + req.params.n + ':' + req.params.i, l.say); });
+  app.get('/api/ai/board/:id/img/:n/:i', async (req, res) => {          // ከፋይሉ የወጣ ምስል
+    const bd = bdOf(req), n = Number(req.params.n), i = Number(req.params.i); if (!bd || !(n >= 1 && n <= bd.total)) return res.status(404).end();
+    try { if (!bd.im[n]) { const src = await bd.pageSrc(n); bd.im[n] = (src && src.imgs) || []; } const im = bd.im[n][i]; if (!im) return res.status(404).end(); res.set({ 'content-type': im.mime, 'cache-control': 'private, max-age=86400' }); res.send(im.buf); } catch (e) { res.status(404).end(); }
+  });
+  const sendTts = async (req, res, key, text) => { if (!limit('btts' + req.ip, 400, 60e3)) return res.status(429).end(); return sendWav(res, key, text, req); };
+  app.get('/api/ai/board/:id/tts/:n/g/:g', async (req, res) => { const bd = bdOf(req), lv = lvOf((req.query || {}).lv), pg = bd && bd.pl[lv][Number(req.params.n)], gr = pg && groupsOf(pg)[Number(req.params.g)], t = gr && groupSay(pg, gr); if (!t) return res.status(204).end(); return sendTts(req, res, bd.id + ':' + lv + req.params.n + ':g' + req.params.g, t); });
+  app.get('/api/ai/board/:id/tts/:n/:i', async (req, res) => { const bd = bdOf(req), lv = lvOf((req.query || {}).lv), pg = bd && bd.pl[lv][Number(req.params.n)], l = pg && pg.lines[Number(req.params.i)]; if (!l || !l.say) return res.status(204).end(); return sendTts(req, res, bd.id + ':' + lv + req.params.n + ':' + req.params.i, l.say); });
   app.post('/api/ai/board/:id/ask', async (req, res) => {
     const bd = bdOf(req); if (!bd) return bad(res, 404, 'not_found'); if (!limit('bak' + bd.id, 30, 3600e3)) return bad(res, 429, 'slow_down'); const q = S((req.body || {}).q, 600); if (q.length < 2) return bad(res, 400, 'missing_text');
-    try { const text = String(await ai.boardAsk(bd.title, bd.pages[Number(req.body.n)] || null, q) || '').trim(); const aid = 'a' + nid(); bd.ans = bd.ans || {}; if (Object.keys(bd.ans).length > 40) delete bd.ans[Object.keys(bd.ans)[0]]; bd.ans[aid] = text; res.json({ ok: true, text, aid }); } catch (e) { bad(res, 503, /^ai_/.test(e.message) ? e.message : 'board_failed'); }
+    try { const text = String(await ai.boardAsk(bd.title, (bd.pl[lvOf((req.body || {}).lv)][Number(req.body.n)] || bd.pages[Number(req.body.n)]) || null, q) || '').trim(); const aid = 'a' + nid(); bd.ans = bd.ans || {}; if (Object.keys(bd.ans).length > 40) delete bd.ans[Object.keys(bd.ans)[0]]; bd.ans[aid] = text; res.json({ ok: true, text, aid }); } catch (e) { bad(res, 503, /^ai_/.test(e.message) ? e.message : 'board_failed'); }
   });
   app.get('/api/ai/board/:id/tta/:aid', async (req, res) => { const bd = bdOf(req), t = bd && bd.ans && bd.ans[req.params.aid]; if (!t) return res.status(204).end(); if (!limit('btts' + req.ip, 90, 60e3)) return res.status(429).end(); return sendWav(res, bd.id + ':' + req.params.aid, t); });
 

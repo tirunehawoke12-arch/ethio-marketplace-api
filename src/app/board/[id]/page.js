@@ -5,6 +5,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 
 const cacheOf = async id => { try { return typeof caches !== 'undefined' ? await caches.open('board-' + id) : null; } catch (e) { return null; } };          // ዲስክ ላይ (Cache Storage) ይቀመጣል — ዳታ ቢጠፋም ይሠራል
+const CK = (cid, path) => '/__bk/' + cid + path;          // ከሰሌዳ መታወቂያ ነጻ የሆነ ቋሚ ቁልፍ — ሊንኩ ቢቀየርም የወረደው ይታወቃል
+const SPEEDS = [1, 1.5, 1.75, 2, 2.5, 3, 3.5], LEVELS = [['d', '🔬 በጣም ዝርዝር + ምሳሌ'], ['m', '📖 መካከለኛ'], ['s', '⚡ በገረፍ ገረፍ']];
+const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } }, lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const F = "'Noto Sans Ethiopic','Nyala','Abyssinica SIL',system-ui,sans-serif";
 const ERR = { ai_limit: 'የ AI ገጽ ገደብ አልቋል — በቦቱ ውስጥ ጥቅል ይግዙ ወይም ነገ ይሞክሩ።', ai_busy: 'AI ሥራ በዝቶበታል — ትንሽ ቆይተው «እንደገና» ይጫኑ።', ai_timeout: 'AI ዘግይቷል — «እንደገና» ይጫኑ።', slow_down: 'ትንሽ ቀስ ይበሉ።', not_found: 'ሰሌዳው ጊዜው አልፏል (48 ሰዓት) — ከቦቱ እንደገና ይጠይቁ።' };
@@ -66,11 +69,27 @@ function Students({ hand, talkingQ }) {
   </svg>);
 }
 
+/* ከፋይሉ የወጣ ምስል — ከዲስክ መሸጎጫ ቀድሞ፤ ከሌለ ከኔትወርክ */
+function BoardImg({ id, cid, k, i, cur }) {
+  const [src, setSrc] = useState('');
+  useEffect(() => { let url = '', dead = false; (async () => {
+    const ck = CK(cid, '/img/' + k + '/' + i), cs = await cacheOf(cid);
+    try { if (cs) { const m = await cs.match(ck); if (m) { url = URL.createObjectURL(await m.blob()); if (!dead) setSrc(url); return; } } } catch (e) { }
+    try { const r = await fetch('/api/ai/board/' + id + '/img/' + k + '/' + i); if (r.ok) { if (cs) { try { await cs.put(ck, r.clone()); } catch (e) { } } url = URL.createObjectURL(await r.blob()); if (!dead) setSrc(url); } } catch (e) { }
+  })(); return () => { dead = true; if (url) try { URL.revokeObjectURL(url); } catch (e) { } }; }, [id, cid, k, i]);
+  return src ? <img src={src} alt={'ምስል ' + (i + 1)} className={'my-2 max-h-64 w-full rounded-lg bg-white/90 object-contain p-1 transition-all ' + (cur ? 'ring-4 ring-[#ffe9a8]' : 'opacity-90')} /> : <div className="my-2 h-16 rounded-lg bg-white/5 text-center text-xs leading-[4rem] text-white/50">🖼 ምስል እየወረደ ነው…</div>;
+}
+
 export default function Room() {
-  const { id } = useParams(), [meta, setMeta] = useState(null), [err, setErr] = useState(''), [pg, setPg] = useState(null), [n, setN] = useState(0), [li, setLi] = useState(-1), [wi, setWi] = useState(-1), [ms, setMs] = useState(300), [phase, setPhase] = useState('idle'), [busy, setBusy] = useState(''), [voice, setVoice] = useState(true), [spd, setSpd] = useState(1), [gaze, setGaze] = useState('board'), [talking, setTalking] = useState(false), [paused, setPaused] = useState(false), [q, setQ] = useState(''), [ans, setAns] = useState(''), [hand, setHand] = useState(false), [showQ, setShowQ] = useState(false), [tx, setTx] = useState(0.85), [walk, setWalk] = useState(false), walkT = useRef(null), [auto, setAuto] = useState(false), [prep, setPrep] = useState({ s: 'idle', k: 0, msg: '' });
-  const R = useRef({ ptok: 0, prep: '', auto: false, tok: 0, paused: false, voice: true, spd: 1, audio: null, cache: {}, aud: {}, resume: null }), boardEl = useRef(null);
-  useEffect(() => { R.current.voice = voice; if (!voice && R.current.audio) R.current.audio.pause(); }, [voice]); useEffect(() => { R.current.spd = spd; }, [spd]);
-  useEffect(() => { fetch('/api/ai/board/' + id).then(r => r.json()).then(d => d.ok ? setMeta(d) : setErr(ERR.not_found)).catch(() => setErr('ግንኙነት ተቋርጧል')); try { const w = window.Telegram && window.Telegram.WebApp; if (w) { w.ready(); w.expand(); } } catch (e) { } }, [id]);
+  const { id } = useParams(), [meta, setMeta] = useState(null), [err, setErr] = useState(''), [pg, setPg] = useState(null), [n, setN] = useState(0), [li, setLi] = useState(-1), [wi, setWi] = useState(-1), [ms, setMs] = useState(300), [phase, setPhase] = useState('idle'), [busy, setBusy] = useState(''), [voice, setVoice] = useState(true), [spd, setSpd] = useState(1), [lv, setLv] = useState('m'), [prepOk, setPrepOk] = useState(false), [gaze, setGaze] = useState('board'), [talking, setTalking] = useState(false), [paused, setPaused] = useState(false), [q, setQ] = useState(''), [ans, setAns] = useState(''), [hand, setHand] = useState(false), [showQ, setShowQ] = useState(false), [tx, setTx] = useState(0.85), [walk, setWalk] = useState(false), walkT = useRef(null), [auto, setAuto] = useState(false), [prep, setPrep] = useState({ s: 'idle', k: 0, msg: '' });
+  const R = useRef({ ptok: 0, prep: '', auto: false, tok: 0, paused: false, voice: true, spd: 1, lv: 'm', audio: null, cache: {}, aud: {}, resume: null }), boardEl = useRef(null);
+  useEffect(() => { R.current.voice = voice; if (!voice && R.current.audio) R.current.audio.pause(); }, [voice]); useEffect(() => { R.current.spd = spd; lsSet('boardSpd', String(spd)); try { if (R.current.audio) R.current.audio.playbackRate = spd; } catch (e) { } }, [spd]);
+  const cid = meta && meta.key ? meta.key : id;
+  useEffect(() => { R.current.n = n; R.current.started = n > 0; }, [n]);
+  useEffect(() => { if (meta) setPrepOk(lsGet('bprep:' + cid + ':' + lv, '') === 'done'); }, [meta, cid, lv]);
+  useEffect(() => { const cachedMeta = () => { try { return JSON.parse(lsGet('bmeta:' + id, 'null')); } catch (e) { return null; } };
+    fetch('/api/ai/board/' + id).then(r => r.json()).then(d => { if (d.ok) { lsSet('bmeta:' + id, JSON.stringify(d)); setMeta(d); } else { const c = cachedMeta(); c ? setMeta({ ...c, offline: true }) : setErr(ERR.not_found); } }).catch(() => { const c = cachedMeta(); c ? setMeta({ ...c, offline: true }) : setErr('ግንኙነት ተቋርጧል'); });
+    const sp = Number(lsGet('boardSpd', '1')), l0 = lsGet('boardLv', 'm'); if (SPEEDS.includes(sp)) { setSpd(sp); R.current.spd = sp; } if (['d', 'm', 's'].includes(l0)) { setLv(l0); R.current.lv = l0; } try { const w = window.Telegram && window.Telegram.WebApp; if (w) { w.ready(); w.expand(); } } catch (e) { } }, [id]);
   useEffect(() => {          // መምህሩ ሲያስተምር ወደዚህ ወደዚያ ይራመዳል፦ መስመር በመስመር ሰሌዳውን ተከትሎ (ገጽ በገጽ አቅጣጫ ይቀያየራል)፤ ሲጨርስ ወደ መሃል ይመለሳል
     if (!pg) return; const L = pg.lines ? pg.lines.length : 0; let to = tx; if (li >= 0 && L) { const f = L > 1 ? li / (L - 1) : 0.5; to = 0.08 + 0.84 * (n % 2 ? 1 - f : f); } else if (phase === 'wait' || phase === 'end') to = 0.5;
     if (Math.abs(to - tx) < 0.03) return; setTx(to); setWalk(true); clearTimeout(walkT.current); walkT.current = setTimeout(() => setWalk(false), 2100);
@@ -80,15 +99,15 @@ export default function Room() {
   const wait = useCallback(async (ms2, tok) => { let t = 0; while (t < ms2) { if (R.current.tok !== tok) return false; if (R.current.paused) { await sleep(120); continue; } await sleep(40); t += 40 / R.current.spd; } return R.current.tok === tok; }, []);
 
   const fetchPage = useCallback(async k => {          // ገጽ k (ከዲስክ መሸጎጫ ቀድሞ፤ ከዚያ ኔትወርክ፤ በቅድሚያ ይታወሳል)
-    const C = R.current.cache; if (C[k]) return C[k]; const url = '/api/ai/board/' + id + '/page/' + k;
+    const C = R.current.cache; if (C[k]) return C[k]; const lv0 = R.current.lv, url = '/api/ai/board/' + id + '/page/' + k + '?lv=' + lv0, ck = CK(cid, '/page/' + k + '?lv=' + lv0);
     C[k] = (async () => {
-      const cs = await cacheOf(id); if (cs) { try { const m = await cs.match(url); if (m) { const d = await m.json(); if (d && d.ok) return Object.assign({}, d.page, { groups: d.groups }); } } catch (e) { } }
-      const r = await fetch(url), d = await r.json(); if (!d.ok) throw new Error(d.error || 'failed'); if (cs) { try { await cs.put(url, new Response(JSON.stringify(d), { headers: { 'content-type': 'application/json' } })); } catch (e) { } } return Object.assign({}, d.page, { groups: d.groups });
+      const cs = await cacheOf(cid); if (cs) { try { const m = await cs.match(ck); if (m) { const d = await m.json(); if (d && d.ok) return Object.assign({}, d.page, { groups: d.groups }); } } catch (e) { } }
+      const r = await fetch(url), d = await r.json(); if (!d.ok) throw new Error(d.error || 'failed'); if (cs) { try { await cs.put(ck, new Response(JSON.stringify(d), { headers: { 'content-type': 'application/json' } })); } catch (e) { } } return Object.assign({}, d.page, { groups: d.groups });
     })().catch(e => { delete C[k]; throw e; }); return C[k];
-  }, [id]);
+  }, [id, cid]);
   const audioFor = useCallback((k, i, fresh) => {          // የመስመር ድምፅ ቀድሞ ይጫናል (ሰርቨሩ ከበስተጀርባ ያዘጋጃል)
     if (!meta || !meta.tts || (R.current.ttsBad && Date.now() - R.current.ttsBad < 90000)) return null; const key = k + ':' + i; if (fresh) delete R.current.aud[key];
-    if (!R.current.aud[key]) { const a = new Audio(); a.preload = 'auto'; a.dataset.state = 'load'; a.addEventListener('error', () => { a.dataset.state = 'err'; }); a.addEventListener('canplaythrough', () => { a.dataset.state = 'ok'; }); a.src = '/api/ai/board/' + id + '/tts/' + k + '/' + i + (fresh ? '?r=' + Date.now() : ''); R.current.aud[key] = a; } return R.current.aud[key];
+    if (!R.current.aud[key]) { const a = new Audio(); a.preload = 'auto'; a.dataset.state = 'load'; a.addEventListener('error', () => { a.dataset.state = 'err'; }); a.addEventListener('canplaythrough', () => { a.dataset.state = 'ok'; }); a.src = '/api/ai/board/' + id + '/tts/' + k + '/' + i + '?lv=' + R.current.lv + (fresh ? '&r=' + Date.now() : ''); R.current.aud[key] = a; } return R.current.aud[key];
   }, [meta, id]);
   const speakLine = useCallback((k, i, text, tok, onStart) => new Promise(res => {          // → የንግግር ጊዜ (ms)
     const est = Math.max(1500, (text || '').length * 55); const go = () => { try { onStart && onStart(); } catch (e) { } }; if (!R.current.voice || !text) { go(); return res(est); } let fin = false, a = audioFor(k, i), tries = 0, started = false; const t0 = Date.now();
@@ -119,10 +138,10 @@ export default function Room() {
 
   const gAudio = useCallback((k, g, fresh) => {          // የቡድን ድምፅ፦ ከዲስክ መሸጎጫ ቀድሞ፣ ከዚያ ኔትወርክ (ከተሳካ ዲስክ ላይ ይቀመጣል)፤ ሙሉ በሙሉ ወርዶ (blob) ይጫወታል
     if (!meta || !meta.tts) return null; const key = 'g' + k + ':' + g; if (fresh) delete R.current.aud[key];
-    if (!R.current.aud[key]) { const url = '/api/ai/board/' + id + '/tts/' + k + '/g/' + g; const pr = (async () => {
-      const cs = await cacheOf(id); if (cs && !fresh) { try { const m = await cs.match(url); if (m) return URL.createObjectURL(await m.blob()); } catch (e) { } }
-      const r = await fetch(url + (fresh ? '?r=' + Date.now() : '')); if (r.status === 200) { if (cs) { try { await cs.put(url, r.clone()); } catch (e) { } } return URL.createObjectURL(await r.blob()); } const e = new Error('tts_' + r.status); e.final = true; e.why = decodeURIComponent(r.headers.get('x-tts-why') || ''); throw e; })(); pr.catch(() => { }); R.current.aud[key] = pr; } return R.current.aud[key];
-  }, [meta, id]);
+    if (!R.current.aud[key]) { const lv0 = R.current.lv, url = '/api/ai/board/' + id + '/tts/' + k + '/g/' + g + '?lv=' + lv0, ck = CK(cid, '/tts/' + k + '/g/' + g + '?lv=' + lv0); const pr = (async () => {
+      const cs = await cacheOf(cid); if (cs && !fresh) { try { const m = await cs.match(ck); if (m) return URL.createObjectURL(await m.blob()); } catch (e) { } }
+      const r = await fetch(url + (fresh ? '&r=' + Date.now() : '')); if (r.status === 200) { if (cs) { try { await cs.put(ck, r.clone()); } catch (e) { } } return URL.createObjectURL(await r.blob()); } const e = new Error('tts_' + r.status); e.final = true; e.why = decodeURIComponent(r.headers.get('x-tts-why') || ''); throw e; })(); pr.catch(() => { }); R.current.aud[key] = pr; } return R.current.aud[key];
+  }, [meta, id, cid]);
   const playGroup = useCallback(async (k, page, gi, tok) => {          // → true | false (ተቋርጧል) | 'fail'
     const L = page.lines, G = page.groups[gi]; let url = null, tries = 0; const t0 = Date.now(), tm = setInterval(() => { if (Date.now() - t0 > 1500) setBusy(b => b || 'voice'); }, 300);
     try {
@@ -168,26 +187,32 @@ export default function Room() {
     if (!last && R.current.auto) { for (let t = 0; t < 22; t++) { await sleep(100); if (R.current.tok !== tok) return; } while (R.current.paused) { await sleep(150); if (R.current.tok !== tok) return; } if (R.current.tok === tok && R.current.auto) { setPg(null); teachRef.current(k + 1); } }          // ራስ-ሰር ቀጣይ
   }, [fetchPage, runLines, gAudio, meta]);
   const teachRef = useRef(null); teachRef.current = teach;
+  const changeLv = v => {          // የማብራሪያ ደረጃ ሲቀየር የድሮው ደረጃ ማህደረ ትውስታ ይጸዳል፤ አሁን ያለው ስላይድ በአዲሱ ደረጃ እንደገና ይነገራል
+    if (v === R.current.lv) return; R.current.lv = v; setLv(v); lsSet('boardLv', v); R.current.ptok++; R.current.prep = ''; setPrep({ s: 'idle', k: 0, msg: '' }); R.current.cache = {};
+    for (const key of Object.keys(R.current.aud)) { const pr = R.current.aud[key]; if (key[0] === 'g') Promise.resolve(pr).then(u => { try { URL.revokeObjectURL(u); } catch (e) { } }).catch(() => { }); } R.current.aud = {};
+    if (R.current.started && R.current.n) { const k = R.current.n; stop(); setPg(null); teachRef.current(k); }
+  };
   useEffect(() => { try { const a = localStorage.getItem('boardAuto') === '1'; setAuto(a); R.current.auto = a; } catch (e) { } }, []);
   const toggleAuto = () => { const a = !R.current.auto; R.current.auto = a; setAuto(a); try { localStorage.setItem('boardAuto', a ? '1' : '0'); } catch (e) { } };
   const diskWarm = useCallback(async (k, g) => {          // ድምፅን ዲስክ ላይ ብቻ ያስቀምጣል (RAM አይይዝም)፤ መሸጎጫ ከሌለ በ RAM
-    const url = '/api/ai/board/' + id + '/tts/' + k + '/g/' + g, cs = await cacheOf(id); if (!cs) return gAudio(k, g); if (await cs.match(url)) return;
-    const r = await fetch(url); if (r.status !== 200) { const e = new Error('tts_' + r.status); e.final = true; throw e; } await cs.put(url, r);
-  }, [id, gAudio]);
+    const lv0 = R.current.lv, url = '/api/ai/board/' + id + '/tts/' + k + '/g/' + g + '?lv=' + lv0, ck = CK(cid, '/tts/' + k + '/g/' + g + '?lv=' + lv0), cs = await cacheOf(cid); if (!cs) return gAudio(k, g); if (await cs.match(ck)) return;
+    const r = await fetch(url); if (r.status !== 200) { const e = new Error('tts_' + r.status); e.final = true; throw e; } await cs.put(ck, r);
+  }, [id, cid, gAudio]);
   const prepAll = useCallback(async () => {          // ሁሉንም ገጽ + ድምፅ በትይዩ (3 ገጽ በአንድ ጊዜ፣ በእያንዳንዱ 2 ድምፅ) ያዘጋጃል/ያወርዳል (ዲስክ ላይ) — ከዚያ ዳታ ቢጠፋ ይሠራል
-    if (!meta || R.current.prep === 'run') return; R.current.prep = 'run'; const pt = ++R.current.ptok; let failed = 0, doneP = 0, next = 1, stopMsg = '', ttsOff = false; const tick = () => setPrep({ s: 'run', k: doneP, msg: '' });
-    const aud = async (k, page) => { const G = page.groups || []; let gi = 0; const w = async () => { while (gi < G.length && !ttsOff) { const g = gi++; if (R.current.ptok !== pt) return; for (let t = 0; t < 3; t++) { try { await diskWarm(k, g); break; } catch (e) { if (e && e.message === 'tts_429' && t < 2) { await sleep(2500 * (t + 1)); continue; } failed++; if (e && e.final) ttsOff = true; break; } } } }; await Promise.all([w(), w()]); };
+    if (!meta || R.current.prep === 'run') return; R.current.prep = 'run'; const pt = ++R.current.ptok, lvp = R.current.lv; let failed = 0, doneP = 0, next = 1, stopMsg = '', ttsOff = false; const tick = () => setPrep({ s: 'run', k: doneP, msg: '' });
+    const aud = async (k, page) => { const G = page.groups || []; let gi = 0; const w = async () => { while (gi < G.length && !ttsOff) { const g = gi++; if (R.current.ptok !== pt) return; for (let t = 0; t < 3; t++) { try { await diskWarm(k, g); break; } catch (e) { if (e && e.message === 'tts_429' && t < 2) { await sleep(2500 * (t + 1)); continue; } failed++; if (e && e.final) ttsOff = true; break; } } } }; await Promise.all([w(), w(), w()]); };
+    const imgs = async (k, page) => { const cs = await cacheOf(cid); if (!cs) return; const set = new Set(); (page.lines || []).forEach(l => (l.img || []).forEach(x => set.add(x))); for (const x of set) { const ck = CK(cid, '/img/' + k + '/' + x); try { if (!(await cs.match(ck))) { const r = await fetch('/api/ai/board/' + id + '/img/' + k + '/' + x); if (r.ok) await cs.put(ck, r); } } catch (e) { } } };
     const worker = async () => {
       for (; ;) {
         const k = next++; if (k > meta.total || stopMsg || R.current.ptok !== pt) return; let page = null;
         for (let t = 0; t < 3 && !page; t++) { try { page = await fetchPage(k); } catch (e) { if (e.message === 'ai_limit') { stopMsg = 'የነጻ ድርሻ እስከዚህ ገጽ ብቻ ፈቀደ — የተዘጋጀው ይሠራል'; return; } if (t < 2) await sleep(2500 * (t + 1)); else { stopMsg = ERR[e.message] || 'ማዘጋጀት አልተቻለም'; return; } } }
-        if (meta.tts && page) await aud(k, page); doneP++; tick();
+        if (page) { await Promise.all([imgs(k, page), meta.tts ? aud(k, page) : null]); } doneP++; tick();
       }
     };
-    tick(); await Promise.all([worker(), worker(), worker()]); if (R.current.ptok !== pt) return;
+    tick(); await Promise.all([worker(), worker(), worker(), worker()]); if (R.current.ptok !== pt) return;
     if (stopMsg) { R.current.prep = ''; setPrep({ s: 'stop', k: doneP, msg: stopMsg }); return; }
-    R.current.prep = 'done'; setPrep({ s: 'done', k: meta.total, msg: failed ? 'ድምፅ በከፊል ጠፍቷል (በአሳሽ ድምፅ/በጽሑፍ ይቀጥላል)' : '' });
-  }, [meta, fetchPage, diskWarm]);
+    R.current.prep = 'done'; if (!failed) { lsSet('bprep:' + cid + ':' + lvp, 'done'); setPrepOk(true); } setPrep({ s: 'done', k: meta.total, msg: failed ? 'ድምፅ በከፊል ጠፍቷል (በአሳሽ ድምፅ/በጽሑፍ ይቀጥላል)' : '' });
+  }, [meta, fetchPage, diskWarm, cid, id]);
 
 
   const stop = () => { R.current.tok++; setTalking(false); try { window.speechSynthesis.cancel(); if (R.current.audio) R.current.audio.pause(); } catch (e) { } };
@@ -196,7 +221,7 @@ export default function Room() {
   const replay = i => { if (phase === 'loading' || !pg) return; teach(n, i); };
   async function ask(e) {
     e && e.preventDefault(); const text = q.trim(); if (text.length < 2) return; stop(); setBusy('ask'); setHand(true); setGaze('class'); setQ(''); setAns('…');
-    try { const r = await fetch('/api/ai/board/' + id + '/ask', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ q: text, n }) }).then(x => x.json()); if (!r.ok) throw new Error(r.error); setAns(r.text); setHand(false); setBusy('');
+    try { const r = await fetch('/api/ai/board/' + id + '/ask', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ q: text, n, lv: R.current.lv }) }).then(x => x.json()); if (!r.ok) throw new Error(r.error); setAns(r.text); setHand(false); setBusy('');
       if (R.current.voice) { setTalking(true); const done = () => setTalking(false); if (meta && meta.tts) { const a = new Audio('/api/ai/board/' + id + '/tta/' + r.aid); R.current.audio = a; a.playbackRate = R.current.spd; a.onended = done; a.onerror = () => { try { const u = new SpeechSynthesisUtterance(r.text); u.lang = 'am-ET'; u.onend = done; u.onerror = done; window.speechSynthesis.speak(u); } catch (x) { done(); } }; a.play().catch(() => a.onerror()); } else { try { const u = new SpeechSynthesisUtterance(r.text); u.lang = 'am-ET'; u.onend = done; u.onerror = done; window.speechSynthesis.speak(u); } catch (x) { done(); } } }
     } catch (x) { setHand(false); setBusy(''); setAns(ERR[x.message] || 'መልስ ማግኘት አልተቻለም — እንደገና ይሞክሩ።'); }
   }
@@ -215,7 +240,7 @@ export default function Room() {
       <div className="mb-1 flex items-center justify-between px-1 text-xs text-[#3b2a17]"><span>🧑‍🏫 {meta.title}</span><span>{n ? `ስላይድ ${n}/${meta.total}` : ''}</span></div>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4 }}>
         <div ref={boardEl} className="rounded-xl shadow-2xl" style={{ flex: 1, minWidth: 0, overflowY: 'auto', border: '9px solid #8b5e34', background: '#21402f', color: '#f4f1e8', padding: 12, height: '56vh', backgroundImage: 'radial-gradient(ellipse at 30% 20%,rgba(255,255,255,.07),transparent 60%)' }}>
-          {!started && <div className="py-14 text-center"><p className="mb-3 text-xl">🧑‍🏫 {meta.title}</p><p className="mb-6 text-sm text-white/65">{meta.total} ስላይድ። መምህሩ እያንዳንዱን በሰሌዳ ላይ ይለጥፋል፣ መስመር በመስመር ቃል በቃል እያሰመረ ያስረዳል።{meta.tts ? '' : ' (ድምፅ ከአሳሽዎ ይሰማል — የአማርኛ ድምፅ ከሌለ በጽሑፍ ብቻ)'}</p><div className="flex flex-col items-center gap-3"><button onClick={() => teach(meta.start || 1)} className="rounded-full bg-[#ffe9a8] px-8 py-3 text-lg font-bold text-[#2b1d12]">▶️ ክፍሉን ጀምር</button><button onClick={prepAll} disabled={prep.s === 'run' || prep.s === 'done'} className="rounded-full bg-white/10 px-6 py-2 text-sm">{prep.s === 'run' ? `⏳ እያዘጋጀሁ ነው ${prep.k}/${meta.total}…` : prep.s === 'done' ? '✅ ሁሉም ተዘጋጅቷል — ዳታ ቢጠፋም ይሠራል' : '⬇️ ሁሉንም አስቀድሞ አዘጋጅ (ዳታ ከጠፋ በኋላም እንዲሠራ)'}</button>{prep.msg && <p className="text-xs text-[#ffb3a7]">{prep.msg}</p>}<button onClick={toggleAuto} className="rounded-full bg-white/10 px-6 py-2 text-sm">{auto ? '🔁 ቀጣይ፦ ራስ-ሰር' : '✋ ቀጣይ፦ በእጅ'}</button></div></div>}
+          {!started && <div className="py-14 text-center"><p className="mb-3 text-xl">🧑‍🏫 {meta.title}</p><p className="mb-6 text-sm text-white/65">{meta.total} ስላይድ። መምህሩ እያንዳንዱን በሰሌዳ ላይ ይለጥፋል፣ መስመር በመስመር ቃል በቃል እያሰመረ ያስረዳል።{meta.tts ? '' : ' (ድምፅ ከአሳሽዎ ይሰማል — የአማርኛ ድምፅ ከሌለ በጽሑፍ ብቻ)'}</p><div className="flex flex-col items-center gap-3"><button onClick={() => teach(meta.start || 1)} className="rounded-full bg-[#ffe9a8] px-8 py-3 text-lg font-bold text-[#2b1d12]">▶️ ክፍሉን ጀምር</button><button onClick={prepAll} disabled={prep.s === 'run' || prep.s === 'done' || prepOk} className="rounded-full bg-white/10 px-6 py-2 text-sm">{prep.s === 'run' ? `⏳ እያዘጋጀሁ ነው ${prep.k}/${meta.total}…` : prep.s === 'done' || prepOk ? '✅ ሁሉም ወርዷል — ዳታ ቢጠፋም ይሠራል (ዳግም አይጠይቅም)' : '⬇️ ሁሉንም አስቀድሞ አዘጋጅ (ዳታ ከጠፋ በኋላም እንዲሠራ)'}</button>{prep.msg && <p className="text-xs text-[#ffb3a7]">{prep.msg}</p>}<button onClick={toggleAuto} className="rounded-full bg-white/10 px-6 py-2 text-sm">{auto ? '🔁 ቀጣይ፦ ራስ-ሰር' : '✋ ቀጣይ፦ በእጅ'}</button><div className="flex flex-wrap justify-center gap-2">{LEVELS.map(([v, t]) => <button key={v} onClick={() => changeLv(v)} className={'rounded-full px-4 py-2 text-sm ' + (lv === v ? 'bg-[#ffe9a8] font-bold text-[#2b1d12]' : 'bg-white/10')}>{t}</button>)}</div><div className="flex flex-wrap justify-center gap-1">{SPEEDS.map(v => <button key={v} onClick={() => setSpd(v)} className={'rounded-full px-3 py-1 text-xs ' + (spd === v ? 'bg-[#ffe9a8] font-bold text-[#2b1d12]' : 'bg-white/10')}>{v}×</button>)}</div></div></div>}
           {busy === 'novoice' && phase === 'teach' && <p className="mb-1 text-center text-xs text-[#ffb3a7]">🔇 የ AI ድምፅ ለጊዜው አልተገኘም{R.current.ttsWhy ? ' (' + R.current.ttsWhy.slice(0, 60) + ')' : ''} — በጽሑፍ (እና በአሳሽ ድምፅ) ይቀጥላል</p>}
           {busy === 'voice' && phase === 'teach' && <p className="mb-1 text-center text-xs text-white/60">🔊 ድምፅ እየተዘጋጀ ነው…</p>}
           {phase === 'loading' && <p className="py-16 text-center text-white/70">✍️ መምህሩ ስላይድ {n}ን እያዘጋጀ ነው…</p>}
@@ -227,6 +252,7 @@ export default function Room() {
               return <div key={i} data-act={cur ? '1' : undefined} onClick={() => replay(i)} className={'my-1 cursor-pointer rounded-md px-2 py-1 leading-relaxed transition-colors ' + (cur ? 'bg-white/10' : 'hover:bg-white/5')}>
                 <p className={st}>{cur ? '👉 ' : l.k === 'bullet' ? '• ' : ''}<Words text={l.t} base={0} cur={cur} wi={wi} ms={ms} done={done && !cur} /></p>
                 {l.am && <p className="text-base text-[#cfe8d6]"><Words text={l.am} base={wc(l.t)} cur={cur} wi={wi} ms={ms} done={done && !cur} /></p>}
+                {(l.img || []).map(x => <BoardImg key={x} id={id} cid={cid} k={n} i={x} cur={cur} />)}
               </div>; }))()}
             {pg.draw && pg.draw.length > 0 && <svg viewBox="0 0 100 56" className="my-3 w-full rounded-lg border border-white/10 bg-black/10">{pg.draw.map((s, i) => <Shape key={i} s={s} i={i} />)}</svg>}
             {(phase === 'wait' || phase === 'end') && <div className="mt-4 text-center">{phase === 'end' ? <p className="text-lg text-[#ffe9a8]">🏁 ትምህርቱ ተጠናቀቀ! ጥያቄ ካለዎት ይጠይቁ።</p> : <button onClick={nextP} className="rounded-full bg-[#ffe9a8] px-8 py-3 text-lg font-bold text-[#2b1d12]">▶️ ቀጣይ ስላይድ</button>}</div>}
@@ -243,10 +269,11 @@ export default function Room() {
           {phase === 'teach' && <button onClick={pause} className="rounded-lg bg-[#ffe9a8] px-4 py-2 font-bold text-[#2b1d12]">{paused ? '▶️ ቀጥል' : '⏸ አቁም'}</button>}
           <button onClick={nextP} className="rounded-lg bg-white/10 px-3 py-2" title="ቀጣይ">⏭ ቀጣይ</button>
           <button onClick={toggleAuto} className="rounded-lg bg-white/10 px-3 py-2 text-sm" title="ቀጣይ ስላይድ በራስ-ሰር ወይስ በእጅ">{auto ? '🔁 ራስ-ሰር' : '✋ በእጅ'}</button>
-          <button onClick={prepAll} disabled={prep.s === 'run' || prep.s === 'done'} className="rounded-lg bg-white/10 px-3 py-2 text-sm" title="ሁሉንም አስቀድሞ አዘጋጅ (ከዳታ ነጻ ለመሆን)">{prep.s === 'run' ? `⬇️ ${prep.k}/${meta ? meta.total : '?'}` : prep.s === 'done' ? '✅ ዝግጁ' : '⬇️'}</button>
+          <button onClick={prepAll} disabled={prep.s === 'run' || prep.s === 'done' || prepOk} className="rounded-lg bg-white/10 px-3 py-2 text-sm" title="ሁሉንም አስቀድሞ አዘጋጅ (ከዳታ ነጻ ለመሆን)">{prep.s === 'run' ? `⬇️ ${prep.k}/${meta ? meta.total : '?'}` : prep.s === 'done' || prepOk ? '✅ ዝግጁ' : '⬇️'}</button>
           <button onClick={() => { stop(); setShowQ(v => !v); }} className="rounded-lg bg-white/10 px-3 py-2">🙋 ጥያቄ</button>
           <button onClick={() => setVoice(v => !v)} className="rounded-lg bg-white/10 px-3 py-2">{voice ? '🔊' : '🔇'}</button>
-          <select value={spd} onChange={e => setSpd(Number(e.target.value))} className="rounded-lg bg-white/10 px-2 py-2 text-sm">{[0.75, 1, 1.25, 1.5].map(v => <option key={v} value={v} className="text-black">{v}×</option>)}</select>
+          <select value={spd} onChange={e => setSpd(Number(e.target.value))} className="rounded-lg bg-white/10 px-2 py-2 text-sm">{SPEEDS.map(v => <option key={v} value={v} className="text-black">{v}×</option>)}</select>
+          <select value={lv} onChange={e => changeLv(e.target.value)} className="rounded-lg bg-white/10 px-2 py-2 text-sm" title="የማብራሪያ ደረጃ">{LEVELS.map(([v, t]) => <option key={v} value={v} className="text-black">{t}</option>)}</select>
         </div>
       </div>}
     </div>

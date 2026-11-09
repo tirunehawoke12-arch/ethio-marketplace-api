@@ -193,12 +193,17 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
 ውጤቱን በዚህ JSON ቅርጸት ብቻ ስጥ (ከJSON ውጪ ምንም ጽሑፍ ወይም \`\`\` አትጨምር)፦
 {"title":"የገጹ ርዕስ","lines":[{"k":"title|text|bullet|formula|note","t":"መስመሩ በገጹ ላይ እንዳለ (የገጹ ቋንቋ፣ አጭር)","am":"ገጹ እንግሊዝኛ ከሆነ የአማርኛ ትርጉሙ (አማርኛ ከሆነ ባዶ)","say":"ይህን መስመር እንደ መምህር የምታብራራበት ሙሉ ንግግር (3-6 አረፍተ ነገሮች፤ ትርጉም፣ ምክንያት፣ ምሳሌ)"}],"draw":[{"k":"rect","x":10,"y":8,"w":30,"h":14},{"k":"circle","x":70,"y":15,"r":8},{"k":"arrow","x1":40,"y1":15,"x2":62,"y2":15},{"k":"label","x":12,"y":18,"t":"ጽሑፍ"}]}
 ህጎች፦ lines እስከ 28፤ በገጹ ቅደም ተከተል፤ say በቀላል ተፈጥሯዊ አማርኛ (የቴክኒክ ቃል እንግሊዝኛው በቅንፍ)፣ ለድምፅ ምቹ ሙሉ አረፍተ ነገሮች፣ ምልክት/ሰንጠረዥ አትጠቀም። draw አማራጭ ነው (ገጹ ሥዕላዊ መግለጫ ሲኖረው ወይም ለማብራራት ሲጠቅም፤ ሸራው 100×56)። ገጹ ባዶ ከሆነ lines: [] ስጥ።`;
-  async function boardPage(title, n, total, src, domain) {
-    const sys = BOARD_SYS + (domain ? ctxText({ domain }) : ''); const head = `ሰነድ፦ «${title}» — ገጽ/ስላይድ ${n}${total ? ' ከ' + total : ''}።`;
+  const LV = {
+    d: '\n\n[የማብራሪያ ደረጃ፦ በጣም ዝርዝር] እያንዳንዱ መስመር say ከ7-12 አረፍተ ነገሮች፤ ትርጉሙን፣ ምክንያቱን፣ እንዴት እንደሚሠራ በደረጃ አብራራ፤ ቢያንስ አንድ ተጨባጭ ምሳሌ (የኢትዮጵያ የዕለት ተዕለት ሕይወት) ስጥ፤ ሒሳብ/ቀመር ከሆነ በቁጥር ተሠርቶ የተፈታ ምሳሌ አሳይ። ተማሪው ሊሳሳትበት የሚችለውን ነገርም ጥቀስ። lines እስከ 22።',
+    s: '\n\n[የማብራሪያ ደረጃ፦ በገረፍ ገረፍ] በገጹ ላይ የተጻፈውን ብቻ በአማርኛ እያነበብክ አስረዳ፤ እያንዳንዱ say 1-2 አጭር አረፍተ ነገር። ተጨማሪ ምሳሌ፣ ታሪክ ወይም ከገጹ ውጪ ያለ ማብራሪያ አትጨምር። ምንም መስመር አትዝለል።'
+  };
+  const IMGS = k => `\n\n[ምስሎች] ይህ ገጽ ${k} ምስል/ሥዕል አለው (ቁጥራቸው 0 እስከ ${k - 1}፣ በገጹ ላይ ከላይ ወደ ታች ባለው ቅደም ተከተል)። እያንዳንዱን ምስል ከሚመለከተው መስመር ጋር "img":[ቁጥር] ብለህ አያይዝ (እያንዳንዱ ምስል በትክክል አንድ ጊዜ)፤ የዚያ መስመር say ውስጥ ምስሉ ምን እንደሚያሳይ፣ ክፍሎቹን እና ምን እንደሚያስተምር በግልጽ አብራራ። ምስል የሌለው መስመር "img" አይኖረውም።`;
+  async function boardPage(title, n, total, src, domain, lv) {
+    const sys = BOARD_SYS + (LV[lv] || '') + (src.imgs && src.imgs.length ? IMGS(src.imgs.length) : '') + (domain ? ctxText({ domain }) : ''); const head = `ሰነድ፦ «${title}» — ገጽ/ስላይድ ${n}${total ? ' ከ' + total : ''}።`;
     let o;
     if (src.pdfBuf) o = { pdf: src.pdfBuf, msgs: [{ role: 'user', content: head + (src.real ? ' ይህ PDF የዚህ አንድ ገጽ ብቻ ነው፤ ሙሉውን አስተምር።' : ` የዚህን PDF ገጽ ${n} ብቻ አስተምር።`) }] };
     else if (src.media) o = { media: src.media, msgs: [{ role: 'user', content: head + ' ይህን ፎቶ/ምስል አስተምር።' }] };
-    else o = { msgs: [{ role: 'user', content: head + '\n\n[የገጹ ጽሑፍ]\n' + String(src.text || '').slice(0, 12000) }] };
+    else { const im = src.imgs && src.imgs[0] && src.imgs[0].buf && src.imgs[0].buf.length < 4e6 ? { mime: src.imgs[0].mime, buf: src.imgs[0].buf } : null; o = { ...(im ? { media: im } : {}), msgs: [{ role: 'user', content: head + '\n\n[የገጹ ጽሑፍ]\n' + String(src.text || '').slice(0, 12000) + (im ? '\n\n(የተያያዘው ምስል ቁጥር 0 ነው።)' : '') }] }; }
     const out = await ask({ system: sys + ACC, max: 8000, ...o }); const a = out.indexOf('{'), z = out.lastIndexOf('}'); if (a < 0 || z < a) throw new Error('board_parse'); return JSON.parse(out.slice(a, z + 1));
   }
   async function boardAsk(title, page, q) {
