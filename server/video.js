@@ -3,7 +3,7 @@
    plan → ትዕይንቶች (ጽሑፍ እነማ + ፎቶ/ቀለም ዳራ + የድምፅ ማብራሪያ + ሙዚቃ) → MP4 (እስከ 180 ሰከንድ)።
    ፎንት፦ server/fonts/amh.ttf (ግዕዝ + ላቲን) — ኢሞጂ/ያልተደገፉ ምልክቶች ይወገዳሉ። */
 const fs = require('fs'), path = require('path'), os = require('os'), { spawn } = require('child_process');
-const { tw, wrap } = require('./docout');
+const { tw, wrap } = require('./docout'), { textPng } = require('./textpng');
 const FM = JSON.parse(fs.readFileSync(path.join(__dirname, 'fonts', 'amh.json'), 'utf8')), FONT = path.join(__dirname, 'fonts', 'amh.ttf');
 const SIZES = { v: [540, 960], s: [720, 720], h: [960, 540] }, FPS = 24, MAXSEC = 180;
 /* [ዳራ ከ, ዳራ እስከ, አጽንኦ ቀለም] — ሁሉም ጥቁር-ተኮር ስለሆኑ ነጭ ጽሑፍ ግልጽ ነው */
@@ -18,7 +18,9 @@ function run(bin, args, { timeout = 600000, keep = false } = {}) {
   });
 }
 async function probe(bin, file) { const e = await run(bin, ['-hide_banner', '-i', file], { keep: true }), m = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(e); return m ? (+m[1]) * 3600 + (+m[2]) * 60 + parseFloat(m[3]) : 0; }
-async function available(bin) { try { const e = await run(bin, ['-hide_banner', '-filters'], { keep: true, timeout: 15000 }); return true; } catch (e) { return false; } }
+const caps = { loaded: false, gradients: true };
+function filterList(bin) { return new Promise(res => { let out = '', p; try { p = spawn(bin, ['-hide_banner', '-filters'], { stdio: ['ignore', 'pipe', 'ignore'] }); } catch (e) { return res(null); } const to = setTimeout(() => { try { p.kill('SIGKILL'); } catch (e) { } }, 15000); p.stdout.on('data', d => { out += d; }); p.on('error', () => { clearTimeout(to); res(null); }); p.on('close', c => { clearTimeout(to); res(c === 0 ? out : null); }); }); }
+async function available(bin) { const e = await filterList(bin); if (!e || !/\boverlay\b/.test(e)) return false; caps.loaded = true; caps.gradients = /\bgradients\b/.test(e); return true; }          // ጽሑፍ በ PNG ስለሚቀመጥ drawtext/freetype አያስፈልግም
 
 /* ዳራ ሙዚቃ (ያለ ፋይል — ffmpeg ራሱ ይሠራል፤ ቀላል የኮርድ ድምፅ ነው) */
 async function makeMusic(bin, dir, style) {
@@ -54,15 +56,20 @@ function buildScene(sc, i, o) {          // → { fc, inputs } ; o: W,H,D,T0,TT,
     const fw = Math.ceil(W * 1.25), fh = Math.ceil(H * 1.25), dirx = i % 2 ? '(in_w-out_w)*(1-t/' + D.toFixed(2) + ')' : '(in_w-out_w)*t/' + D.toFixed(2);
     F.push(`[0:v]scale=${fw}:${fh}:force_original_aspect_ratio=increase,crop=${W}:${H}:x='${dirx}':y='(in_h-out_h)/2',setsar=1,eq=brightness=-0.12:saturation=1.08,drawbox=x=0:y=0:w=${W}:h=${H}:color=black@0.42:t=fill[bg]`);
   } else {
-    inputs.push('-f', 'lavfi', '-i', `gradients=s=${W}x${H}:r=${FPS}:d=${D.toFixed(2)}:c0=0x${th[0]}:c1=0x${th[1]}:x0=0:y0=0:x1=${W}:y1=${H}:speed=0.006:type=linear`);
-    F.push(`[0:v]setsar=1[bg]`);
+    if (caps.gradients) { inputs.push('-f', 'lavfi', '-i', `gradients=s=${W}x${H}:r=${FPS}:d=${D.toFixed(2)}:c0=0x${th[0]}:c1=0x${th[1]}:x0=0:y0=0:x1=${W}:y1=${H}:speed=0.006:type=linear`); F.push(`[0:v]setsar=1[bg]`); }
+    else { inputs.push('-f', 'lavfi', '-i', `color=c=0x${th[0]}:s=${W}x${H}:r=${FPS}:d=${D.toFixed(2)}`); F.push(`[0:v]setsar=1,drawbox=x=0:y=${Math.round(H * 0.5)}:w=${W}:h=${Math.round(H * 0.5)}:color=0x${th[1]}@0.55:t=fill[bg]`); }
   }
   let cur = 'bg', n = 0; const nx = () => 'n' + (n++), ff = esc(font);
-  if (o.brand) { const bf = path.join(tmp, `b${i}.txt`); fs.writeFileSync(bf, o.brand); const s = Math.round(W * 0.035), nm = nx(); F.push(`[${cur}]drawtext=fontfile='${ff}':expansion=none:textfile='${esc(bf)}':fontsize=${s}:fontcolor=white@0.75:x=${Math.round(W * 0.05)}:y=${Math.round(H * 0.035)}:shadowx=1:shadowy=1:shadowcolor=black@0.5[${nm}]`); cur = nm; }
+  let nIn = inputs.filter(x => x === '-i').length;
+  const png = (name, text, size, color, shadow) => { const r = textPng(text, size, { color, shadow }), f = path.join(tmp, name); fs.writeFileSync(f, r.buf); inputs.push('-loop', '1', '-framerate', String(FPS), '-t', D.toFixed(2), '-i', f); return { idx: nIn++, w: r.w, h: r.h, pad: Math.ceil(size * 0.12) + (shadow == null ? Math.max(1, Math.round(size * 0.05)) : shadow) }; };
+  const COL = { white: [255, 255, 255], eeeeee: [238, 238, 238], ink: [26, 26, 26] };
+  if (o.brand) { const r = png(`b${i}.png`, o.brand, Math.round(W * 0.035), [255, 255, 255], 1), nm = nx(); F.push(`[${r.idx}:v]format=rgba,colorchannelmixer=aa=0.78[bt${i}]`, `[${cur}][bt${i}]overlay=x=${Math.round(W * 0.05)}:y=${Math.round(H * 0.03)}[${nm}]`); cur = nm; }
   items.forEach((it, k) => {
-    const nm = nx(), t0 = it.t0.toFixed(2), al = `min(1,max(0,(t-${t0})/0.45))`, rise = `(1-min(1,max(0,(t-${t0})/0.5)))*${Math.round(H * 0.035)}`;
-    if (it.kind === 'text') { const tf = path.join(tmp, `s${i}_${k}.txt`); fs.writeFileSync(tf, it.s); const col = it.color === 'ink' ? '0x1a1a1a' : '0x' + (it.color === 'white' ? 'ffffff' : it.color), x = it.center ? '(w-text_w)/2' : Math.round(it.x);
-      F.push(`[${cur}]drawtext=fontfile='${ff}':expansion=none:textfile='${esc(tf)}':fontsize=${it.size}:fontcolor=${col}:alpha='${al}':x=${x}:y='${Math.round(it.y)}+${rise}':shadowx=${it.color === 'ink' ? 0 : 2}:shadowy=${it.color === 'ink' ? 0 : 2}:shadowcolor=black@0.55[${nm}]`); }
+    const nm = nx(), t0 = it.t0.toFixed(2);
+    if (it.kind === 'text') {
+      const r = png(`s${i}_${k}.png`, it.s, it.size, COL[it.color] || COL.white, it.color === 'ink' ? 0 : null), x = it.center ? '(W-w)/2' : Math.round(it.x - r.pad), y0 = Math.round(it.y - r.pad + it.size * 0.05), rise = `(1-min(1,max(0,(t-${t0})/0.5)))*${Math.round(H * 0.035)}`;
+      F.push(`[${r.idx}:v]format=rgba,fade=t=in:st=${t0}:d=0.45:alpha=1[tx${i}_${k}]`, `[${cur}][tx${i}_${k}]overlay=x='${x}':y='${y0}+${rise}':eval=frame:enable='gte(t,${t0})'[${nm}]`);
+    }
     else if (it.kind === 'dot') F.push(`[${cur}]drawbox=x=${Math.round(it.x)}:y=${Math.round(it.y)}:w=${Math.round(it.size)}:h=${Math.round(it.size)}:color=0x${acc}:t=fill:enable='gte(t,${t0})'[${nm}]`);
     else if (it.kind === 'box') F.push(`[${cur}]drawbox=x=${Math.round(it.x)}:y=${Math.round(it.y)}:w=${Math.round(it.w)}:h=${Math.round(it.h)}:color=0x${acc}@0.95:t=fill:enable='gte(t,${t0})'[${nm}]`);
     cur = nm;
@@ -71,7 +78,7 @@ function buildScene(sc, i, o) {          // → { fc, inputs } ; o: W,H,D,T0,TT,
   F.push(`color=c=0x${acc}:s=${Math.round(W * 0.28)}x6:r=${FPS}:d=${D.toFixed(2)}[acc]`, `color=c=0x${acc}:s=${W}x5:r=${FPS}:d=${D.toFixed(2)}[pg]`);
   F.push(`[${cur}][acc]overlay=x='${Math.round(W * 0.08)}-${Math.round(W * 0.28)}*max(0,1-t/0.6)':y=${Math.round(H * 0.11)}:eval=frame[${bar}]`);
   F.push(`[${bar}][pg]overlay=x='-${W}+${W}*(${T0.toFixed(2)}+t)/${TT.toFixed(2)}':y=${H - 5}:eval=frame,fade=t=in:st=0:d=0.3,fade=t=out:st=${(D - 0.3).toFixed(2)}:d=0.3,format=yuv420p[v]`);
-  return { fc: F.join(';'), inputs };
+  return { fc: F.join(';'), inputs, nIn };
 }
 
 /* plan = { brand, theme, music:'calm'|'energetic'|'none', scenes:[{type,head,sub,bullets,price,phone,addr,narr,dur,img}] }
@@ -79,7 +86,7 @@ function buildScene(sc, i, o) {          // → { fc, inputs } ; o: W,H,D,T0,TT,
 async function render(plan, opt) {
   const bin = opt.bin || 'ffmpeg', [W, H] = SIZES[opt.fmt] || SIZES.v, cap = Math.min(MAXSEC, opt.maxSec || MAXSEC), prog = (p, m) => { try { opt.onProgress && opt.onProgress(p, m); } catch (e) { } };
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vid-')); try {
-    const font = path.join(dir, 'f.ttf'); fs.copyFileSync(FONT, font);
+    const font = FONT; if (!caps.loaded) await available(bin);
     let scenes = (plan.scenes || []).filter(s => s && (s.head || s.sub || (s.bullets || []).length || s.narr)).slice(0, 40); if (!scenes.length) throw new Error('video_empty');
     const photos = []; (opt.photos || []).slice(0, 12).forEach((b, i) => { const f = path.join(dir, `p${i}.jpg`); fs.writeFileSync(f, b); photos.push(f); });
     /* 1) ድምፅ ማብራሪያ (3 በትይዩ) */
@@ -96,7 +103,8 @@ async function render(plan, opt) {
       const sc = scenes[i], D1 = ds[i], img = Number.isInteger(sc.img) && sc.img >= 0 && sc.img < photos.length ? photos[sc.img] : null, b = buildScene(sc, i, { W, H, D: D1, T0, TT: tot, theme, photo: img, font, tmp: dir, brand: clean(plan.brand) });
       const out = path.join(dir, `s${i}.mp4`), args = ['-y', '-hide_banner', '-loglevel', 'error', ...b.inputs];
       if (aud[i]) args.push('-i', aud[i]); else args.push('-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo');
-      args.push('-filter_complex', b.fc + ';' + `[1:a]${aud[i] ? `atempo=${tempo.toFixed(3)},adelay=400|400,` : ''}apad=whole_dur=${D1.toFixed(2)},atrim=0:${D1.toFixed(2)},aresample=44100,aformat=channel_layouts=stereo[a]`, '-map', '[v]', '-map', '[a]', '-t', D1.toFixed(2), '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '27', '-r', String(FPS), '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '96k', '-ar', '44100', '-ac', '2', out);
+      const ai = b.nIn;
+      args.push('-filter_complex', b.fc + ';' + `[${ai}:a]${aud[i] ? `atempo=${tempo.toFixed(3)},adelay=400|400,` : ''}apad=whole_dur=${D1.toFixed(2)},atrim=0:${D1.toFixed(2)},aresample=44100,aformat=channel_layouts=stereo[a]`, '-map', '[v]', '-map', '[a]', '-t', D1.toFixed(2), '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '27', '-r', String(FPS), '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '96k', '-ar', '44100', '-ac', '2', out);
       await run(bin, args); parts.push(out); T0 += D1; prog(0.35 + 0.55 * (i + 1) / scenes.length, 'scene');
     }
     const list = path.join(dir, 'l.txt'); fs.writeFileSync(list, parts.map(p => `file '${p.replace(/'/g, "'\\''")}'`).join('\n')); const joined = path.join(dir, 'j.mp4');

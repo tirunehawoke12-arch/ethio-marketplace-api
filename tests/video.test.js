@@ -38,3 +38,8 @@ test('ቦት፦ ቪድዮ ሰሪ በደረጃ — ዓይነት → ርዝማኔ 
     sent.length = 0; await say('ለቡና ቤቴ ማስታወቂያ ቪድዮ ስራልኝ'); assert.ok(kbs().includes('vd:d:30'), 'የተፈጥሮ ቋንቋ ጥያቄ → ዓይነት ተለይቶ ወደ ርዝማኔ'); await cb('vd:x');
   } finally { global.fetch = realFetch; srv.close(); }
 });
+test('ቪድዮ፦ ffmpeg ያለ drawtext እና gradients (ልክ እንደ ffmpeg-static) ይሠራል', { skip: !hasFF && 'ffmpeg የለም' }, async () => {
+  const w = path.join(os.tmpdir(), 'ff-nodt.sh'); fs.writeFileSync(w, '#!/bin/bash\nfor a in "$@"; do case "$a" in *drawtext*) echo "No such filter: drawtext" >&2; exit 1;; esac; done\nif [ "$1" = "-hide_banner" ] && [ "$2" = "-filters" ]; then ffmpeg "$@" | grep -v -E " (drawtext|gradients) "; else exec ffmpeg "$@"; fi\n', { mode: 0o755 });
+  assert.equal(await V.available(w), true); const r = await V.render({ ...PLAN, music: 'none', scenes: PLAN.scenes.slice(0, 2) }, { bin: w, fmt: 's' }); assert.ok(r.buf.length > 3000 && r.w === 720, 'ያለ drawtext/gradients ቪድዮ ተሠራ');
+  assert.equal(await V.available('/no/such/ffmpeg'), false);
+});

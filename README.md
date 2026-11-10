@@ -392,3 +392,6 @@ npm start                # http://localhost:3000
 - `server/video.js` (ያለ ጥገኛ፤ ffmpeg ብቻ)፦ AI እቅድ (AIDA፦ hook→ጥቅም→ቅናሽ→CTA) → ትዕይንቶች፦ ዳራ (ፎቶ በመንሸራሸር ወይም እነማ ቀለም)፣ ጽሑፍ እነማ (ግዕዝ፣ amh.ttf)፣ ነጥቦች አንድ በአንድ፣ ዋጋ/ስልክ ሳጥን፣ ሂደት መስመር፣ የድምፅ ማብራሪያ (Gemini/ነጻ TTS)፣ ዳራ ሙዚቃ (ffmpeg ራሱ ይሠራል፤ ወይም የተጠቃሚ ፋይል)።
 - ኢንቨ፦ `VIDEO_DAILY_MAX` (በቀን ለአንድ ሰው፣ 4)፣ `VIDEO_MAX_SEC` (ከፍተኛ ሰከንድ፣ 180)፣ `FFMPEG_PATH`። ffmpeg-static (optional) ወይም ስርዓት ffmpeg ያስፈልጋል።
 - AI ያልተሰጠውን ዋጋ/ስልክ/ቅናሽ እንዳይፈጥር ታዝዟል። አንድ ቪድዮ = 1 የውይይት ድርሻ።
+
+### v38.1 — ቪድዮ፦ ያለ drawtext ይሠራል
+- የ Render ffmpeg-static `drawtext` (freetype) የለውም → ጽሑፍ አሁን በ `server/textpng.js` (amh.ttf ን ራሱ አንብቦ ወደ PNG ይሳላል) ተሠርቶ በ ffmpeg `overlay` ይለጠፋል። `gradients` ከሌለ ባለ ሁለት ቃና ጠንካራ ቀለም ዳራ ይጠቀማል። ቴስት፦ ያለ drawtext/gradients የሚመስል ffmpeg።
