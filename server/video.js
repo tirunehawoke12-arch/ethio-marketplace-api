@@ -3,7 +3,7 @@
    plan → ትዕይንቶች (ጽሑፍ እነማ + ፎቶ/ቀለም ዳራ + የድምፅ ማብራሪያ + ሙዚቃ) → MP4 (እስከ 180 ሰከንድ)።
    ፎንት፦ server/fonts/amh.ttf (ግዕዝ + ላቲን) — ኢሞጂ/ያልተደገፉ ምልክቶች ይወገዳሉ። */
 const fs = require('fs'), path = require('path'), os = require('os'), { spawn } = require('child_process');
-const { tw, wrap } = require('./docout'), { textPng } = require('./textpng');
+const { tw, wrap } = require('./docout'), { textPng, pngRGBA } = require('./textpng');
 const FM = JSON.parse(fs.readFileSync(path.join(__dirname, 'fonts', 'amh.json'), 'utf8')), FONT = path.join(__dirname, 'fonts', 'amh.ttf');
 const SIZES = { v: [540, 960], s: [720, 720], h: [960, 540] }, FPS = 24, MAXSEC = 180;
 /* [ዳራ ከ, ዳራ እስከ, አጽንኦ ቀለም] — ሁሉም ጥቁር-ተኮር ስለሆኑ ነጭ ጽሑፍ ግልጽ ነው */
@@ -32,14 +32,14 @@ async function makeMusic(bin, dir, style) {
 }
 
 /* ትዕይንት → ffmpeg ዳራ + ጽሑፍ ግራፍ */
-function layout(sc, W, H, vertical) {
+function layout(sc, W, H, vertical, photo) {
   const base = Math.round(W * (vertical ? 0.088 : 0.062)), m = Math.round(W * 0.08), maxW = W - 2 * m, items = [];
   const head = clean(sc.head), sub = clean(sc.sub), bullets = (sc.bullets || []).map(clean).filter(Boolean).slice(0, 4), price = clean(sc.price), phone = clean(sc.phone), addr = clean(sc.addr);
   const hs = sc.type === 'hook' || sc.type === 'title' ? Math.round(base * 1.25) : base, ss = Math.round(base * 0.56), bs = Math.round(base * 0.6);
   const hl = head ? wrap(head, hs, maxW).slice(0, 4) : [], sl = sub ? wrap(sub, ss, maxW).slice(0, 4) : [], gap = Math.round(base * 0.5);
   let hh = hl.length * hs * 1.25, sh = sl.length * ss * 1.3, bh = bullets.length * bs * 1.9, ph = price ? base * 1.9 : 0, cth = phone ? base * 1.7 : 0, ah = addr ? ss * 1.5 : 0;
   const total = hh + (sh ? gap + sh : 0) + (bh ? gap + bh : 0) + (ph ? gap + ph : 0) + (cth ? gap + cth : 0) + (ah ? gap : 0) + ah;
-  let y = Math.max(H * 0.14, (H - total) / 2), t = 0.25;
+  let y = photo ? Math.max(H * 0.14, H * 0.9 - total - m * 0.4) : Math.max(H * 0.14, (H - total) / 2), t = 0.25;
   const add = (kind, o) => items.push({ kind, ...o });
   hl.forEach((l, i) => { add('text', { s: l, size: hs, y: y + i * hs * 1.25, t0: t + i * 0.12, color: 'white', center: true }); }); y += hh; if (hl.length) t += 0.55;
   if (sl.length) { y += gap; sl.forEach((l, i) => add('text', { s: l, size: ss, y: y + i * ss * 1.3, t0: t + i * 0.1, color: 'eeeeee', center: true })); y += sh; t += 0.45; }
@@ -49,33 +49,33 @@ function layout(sc, W, H, vertical) {
   if (addr) { y += gap; wrap(addr, ss, maxW).slice(0, 2).forEach((l, i) => add('text', { s: l, size: ss, y: y + i * ss * 1.3, t0: t, color: 'eeeeee', center: true })); }
   return items;
 }
-function buildScene(sc, i, o) {          // → { fc, inputs } ; o: W,H,D,T0,TT,theme,dir,photo,font,tmp
-  const { W, H, D, T0, TT, theme, font, tmp } = o, th = THEMES[theme % THEMES.length], acc = th[2], items = layout(sc, W, H, H >= W), F = [], inputs = [];
-  if (o.photo) {
-    inputs.push('-loop', '1', '-framerate', String(FPS), '-t', D.toFixed(2), '-i', o.photo);
-    const fw = Math.ceil(W * 1.25), fh = Math.ceil(H * 1.25), dirx = i % 2 ? '(in_w-out_w)*(1-t/' + D.toFixed(2) + ')' : '(in_w-out_w)*t/' + D.toFixed(2);
-    F.push(`[0:v]scale=${fw}:${fh}:force_original_aspect_ratio=increase,crop=${W}:${H}:x='${dirx}':y='(in_h-out_h)/2',setsar=1,eq=brightness=-0.12:saturation=1.08,drawbox=x=0:y=0:w=${W}:h=${H}:color=black@0.42:t=fill[bg]`);
-  } else {
-    if (caps.gradients) { inputs.push('-f', 'lavfi', '-i', `gradients=s=${W}x${H}:r=${FPS}:d=${D.toFixed(2)}:c0=0x${th[0]}:c1=0x${th[1]}:x0=0:y0=0:x1=${W}:y1=${H}:speed=0.006:type=linear`); F.push(`[0:v]setsar=1[bg]`); }
-    else { inputs.push('-f', 'lavfi', '-i', `color=c=0x${th[0]}:s=${W}x${H}:r=${FPS}:d=${D.toFixed(2)}`); F.push(`[0:v]setsar=1,drawbox=x=0:y=${Math.round(H * 0.5)}:w=${W}:h=${Math.round(H * 0.5)}:color=0x${th[1]}@0.55:t=fill[bg]`); }
-  }
-  let cur = 'bg', n = 0; const nx = () => 'n' + (n++), ff = esc(font);
-  let nIn = inputs.filter(x => x === '-i').length;
-  const png = (name, text, size, color, shadow) => { const r = textPng(text, size, { color, shadow }), f = path.join(tmp, name); fs.writeFileSync(f, r.buf); inputs.push('-loop', '1', '-framerate', String(FPS), '-t', D.toFixed(2), '-i', f); return { idx: nIn++, w: r.w, h: r.h, pad: Math.ceil(size * 0.12) + (shadow == null ? Math.max(1, Math.round(size * 0.05)) : shadow) }; };
+const hex = h => [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+function cached(o, key, make) { if (!o.cache[key]) { const f = path.join(o.tmp, key.replace(/\W/g, '_') + '.png'); fs.writeFileSync(f, make()); o.cache[key] = f; } return o.cache[key]; }
+const gradPng = (w, h, c0, c1) => { const a = hex(c0), z = hex(c1), buf = Buffer.alloc(w * h * 4); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const t = Math.min(1, Math.max(0, (x / w * 0.45 + y / h * 0.75) / 1.2)), dx = x / w - 0.5, dy = y / h - 0.5, v = 1 - 0.38 * Math.min(1, (dx * dx + dy * dy) * 2.2), o = (y * w + x) * 4; buf[o] = (a[0] + (z[0] - a[0]) * t) * v; buf[o + 1] = (a[1] + (z[1] - a[1]) * t) * v; buf[o + 2] = (a[2] + (z[2] - a[2]) * t) * v; buf[o + 3] = 255; } return pngRGBA(w, h, buf); };
+const scrimPng = (w, h) => { const buf = Buffer.alloc(w * h * 4); for (let y = 0; y < h; y++) { const f = y / h, a = Math.round(255 * Math.min(0.86, Math.max(0.16, 0.16 + Math.pow(Math.max(0, f - 0.28) / 0.72, 1.4) * 0.8))); for (let x = 0; x < w; x++) { const o = (y * w + x) * 4; buf[o + 3] = a; } } return pngRGBA(w, h, buf); };
+const glowPng = (sz, c, alpha) => { const buf = Buffer.alloc(sz * sz * 4), r = sz / 2; for (let y = 0; y < sz; y++) for (let x = 0; x < sz; x++) { const d = Math.hypot(x - r, y - r) / r, o = (y * sz + x) * 4; buf[o] = c[0]; buf[o + 1] = c[1]; buf[o + 2] = c[2]; buf[o + 3] = d >= 1 ? 0 : Math.round(255 * alpha * Math.pow(1 - d, 1.6)); } return pngRGBA(sz, sz, buf); };
+function buildScene(sc, i, o) {          // → { fc, inputs, nIn } ; o: W,H,D,T0,TT,theme,photo,tmp,cache,brand
+  const { W, H, D, T0, TT, theme, tmp } = o, th = THEMES[theme % THEMES.length], acc = th[2], hasPhoto = !!o.photo, items = layout(sc, W, H, H >= W, hasPhoto), F = [], inputs = [], Ds = D.toFixed(2); let nIn = 0;
+  const addImg = file => { inputs.push('-loop', '1', '-framerate', String(FPS), '-t', Ds, '-i', file); return nIn++; };
+  const fw = Math.ceil(W * 1.25), fh = Math.ceil(H * 1.25), bgFile = o.photo || cached(o, `bg_${theme}_${fw}x${fh}`, () => gradPng(fw, fh, th[0], th[1])), bi = addImg(bgFile), dirx = i % 2 ? `(in_w-out_w)*(1-t/${Ds})` : `(in_w-out_w)*t/${Ds}`;
+  F.push(`[${bi}:v]scale=${fw}:${fh}:force_original_aspect_ratio=increase,crop=${W}:${H}:x='${dirx}':y='(in_h-out_h)*(0.5+0.3*(t/${Ds}-0.5)*${i % 3 === 1 ? -1 : 1})',setsar=1${hasPhoto ? ',eq=brightness=-0.04:saturation=1.15:contrast=1.06' : ''}[bg]`);
+  let cur = 'bg', n = 0; const nx = () => 'n' + (n++);
+  if (hasPhoto) { const si = addImg(cached(o, `scrim_${W}x${H}`, () => scrimPng(W, H))), nm = nx(); F.push(`[${cur}][${si}:v]overlay=0:0[${nm}]`); cur = nm; }
+  else { const g = cached(o, `glow_${theme}_${W}`, () => glowPng(Math.round(W * 0.9), hex(acc), 0.3)), g2 = cached(o, `glow2_${theme}_${W}`, () => glowPng(Math.round(W * 0.6), [255, 255, 255], 0.16)); for (const [f, k, ph] of [[g, 1, 0], [g2, 2, 2]]) { const gi = addImg(f), nm = nx(); F.push(`[${cur}][${gi}:v]overlay=x='(W-w)*(0.5+0.42*sin(t*${0.35 * k}+${i * 1.7 + ph}))':y='(H-h)*(0.35+0.3*cos(t*${0.28 * k}+${i * 1.3 + ph}))':eval=frame[${nm}]`); cur = nm; } }
+  const png = (name, text, size, color, shadow) => { const r = textPng(text, size, { color, shadow }), f = path.join(tmp, name); fs.writeFileSync(f, r.buf); return { idx: addImg(f), w: r.w, h: r.h, pad: Math.ceil(size * 0.12) + (shadow == null ? Math.max(1, Math.round(size * 0.05)) : shadow) }; };
   const COL = { white: [255, 255, 255], eeeeee: [238, 238, 238], ink: [26, 26, 26] };
-  if (o.brand) { const r = png(`b${i}.png`, o.brand, Math.round(W * 0.035), [255, 255, 255], 1), nm = nx(); F.push(`[${r.idx}:v]format=rgba,colorchannelmixer=aa=0.78[bt${i}]`, `[${cur}][bt${i}]overlay=x=${Math.round(W * 0.05)}:y=${Math.round(H * 0.03)}[${nm}]`); cur = nm; }
+  if (o.brand) { const r = png(`b${i}.png`, o.brand, Math.round(W * 0.036), [255, 255, 255], 1), nm = nx(); F.push(`[${r.idx}:v]format=rgba,colorchannelmixer=aa=0.85[bt${i}]`, `[${cur}][bt${i}]overlay=x=${Math.round(W * 0.05)}:y=${Math.round(H * 0.03)}[${nm}]`); cur = nm; }
   items.forEach((it, k) => {
     const nm = nx(), t0 = it.t0.toFixed(2);
     if (it.kind === 'text') {
-      const r = png(`s${i}_${k}.png`, it.s, it.size, COL[it.color] || COL.white, it.color === 'ink' ? 0 : null), x = it.center ? '(W-w)/2' : Math.round(it.x - r.pad), y0 = Math.round(it.y - r.pad + it.size * 0.05), rise = `(1-min(1,max(0,(t-${t0})/0.5)))*${Math.round(H * 0.035)}`;
+      const r = png(`s${i}_${k}.png`, it.s, it.size, COL[it.color] || COL.white, it.color === 'ink' ? 0 : null), x = it.center ? '(W-w)/2' : Math.round(it.x - r.pad), y0 = Math.round(it.y - r.pad + it.size * 0.05), rise = `(1-min(1,max(0,(t-${t0})/0.5)))*${Math.round(H * 0.04)}`;
       F.push(`[${r.idx}:v]format=rgba,fade=t=in:st=${t0}:d=0.45:alpha=1[tx${i}_${k}]`, `[${cur}][tx${i}_${k}]overlay=x='${x}':y='${y0}+${rise}':eval=frame:enable='gte(t,${t0})'[${nm}]`);
     }
     else if (it.kind === 'dot') F.push(`[${cur}]drawbox=x=${Math.round(it.x)}:y=${Math.round(it.y)}:w=${Math.round(it.size)}:h=${Math.round(it.size)}:color=0x${acc}:t=fill:enable='gte(t,${t0})'[${nm}]`);
     else if (it.kind === 'box') F.push(`[${cur}]drawbox=x=${Math.round(it.x)}:y=${Math.round(it.y)}:w=${Math.round(it.w)}:h=${Math.round(it.h)}:color=0x${acc}@0.95:t=fill:enable='gte(t,${t0})'[${nm}]`);
     cur = nm;
   });
-  const bar = nx(), fin = nx();          // አጽንኦ መስመር (ከላይ ይሰፋል) + አጠቃላይ ሂደት መስመር (ከታች)
-  F.push(`color=c=0x${acc}:s=${Math.round(W * 0.28)}x6:r=${FPS}:d=${D.toFixed(2)}[acc]`, `color=c=0x${acc}:s=${W}x5:r=${FPS}:d=${D.toFixed(2)}[pg]`);
+  const bar = nx(); F.push(`color=c=0x${acc}:s=${Math.round(W * 0.28)}x6:r=${FPS}:d=${Ds}[acc]`, `color=c=0x${acc}:s=${W}x5:r=${FPS}:d=${Ds}[pg]`);
   F.push(`[${cur}][acc]overlay=x='${Math.round(W * 0.08)}-${Math.round(W * 0.28)}*max(0,1-t/0.6)':y=${Math.round(H * 0.11)}:eval=frame[${bar}]`);
   F.push(`[${bar}][pg]overlay=x='-${W}+${W}*(${T0.toFixed(2)}+t)/${TT.toFixed(2)}':y=${H - 5}:eval=frame,fade=t=in:st=0:d=0.3,fade=t=out:st=${(D - 0.3).toFixed(2)}:d=0.3,format=yuv420p[v]`);
   return { fc: F.join(';'), inputs, nIn };
@@ -87,34 +87,40 @@ async function render(plan, opt) {
   const bin = opt.bin || 'ffmpeg', [W, H] = SIZES[opt.fmt] || SIZES.v, cap = Math.min(MAXSEC, opt.maxSec || MAXSEC), prog = (p, m) => { try { opt.onProgress && opt.onProgress(p, m); } catch (e) { } };
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vid-')); try {
     const font = FONT; if (!caps.loaded) await available(bin);
-    let scenes = (plan.scenes || []).filter(s => s && (s.head || s.sub || (s.bullets || []).length || s.narr)).slice(0, 40); if (!scenes.length) throw new Error('video_empty');
+    let scenes = (plan.scenes || []).filter(s => s && (s.head || s.sub || (s.bullets || []).length || s.narr)).slice(0, 40).map(x => ({ ...x })); if (!scenes.length) throw new Error('video_empty');
     const photos = []; (opt.photos || []).slice(0, 12).forEach((b, i) => { const f = path.join(dir, `p${i}.jpg`); fs.writeFileSync(f, b); photos.push(f); });
     /* 1) ድምፅ ማብራሪያ (3 በትይዩ) */
     let narrated = 0; const aud = new Array(scenes.length).fill(null), dur = new Array(scenes.length).fill(0);
     if (opt.tts && plan.voice !== false) { let k = 0, done = 0; const worker = async () => { while (k < scenes.length) { const i = k++, t = clean(scenes[i].narr); if (!t) continue; let w = null; try { w = await opt.tts(t); } catch (e) { } if (w && w.length > 500) { const f = path.join(dir, `a${i}.${/mpeg|mp3/i.test(w.mime || '') ? 'mp3' : 'wav'}`); fs.writeFileSync(f, w); try { const d = await probe(bin, f); if (d > 0.3) { aud[i] = f; dur[i] = d; narrated++; } } catch (e) { } } done++; prog(0.05 + 0.3 * done / scenes.length, 'voice'); } }; await Promise.all([worker(), worker(), worker()]); }
+    /* 1ለ) ከርዕሱ ጋር የሚሄዱ ምስሎች (ከተሰጡት ፎቶዎች ውጪ ላሉ ትዕይንቶች፤ በ 35 ሰከንድ ገደብ፤ ካልተገኘ ንድፍ ዳራ) */
+    let fetched = 0; const musicP = (!opt.musicFile && plan.music !== 'none') ? makeMusic(bin, dir, plan.music === 'energetic' ? 'energetic' : 'calm').catch(() => null) : Promise.resolve(null);
+    if (opt.fetchImg) {
+      const need = scenes.map((sc, i) => (!(Number.isInteger(sc.img) && sc.img >= 0 && sc.img < photos.length) && clean(sc.imgq || '').length > 2 ? i : -1)).filter(i => i >= 0).slice(0, opt.maxImgs || 12), deadline = Date.now() + (opt.imgMs || 35000); let k = 0, done = 0;
+      const w = async () => { while (k < need.length && Date.now() < deadline) { const i = need[k++]; let b = null; try { b = await Promise.race([opt.fetchImg(String(scenes[i].imgq).slice(0, 220), i), new Promise(r => setTimeout(() => r(null), Math.max(1000, deadline - Date.now())))]); } catch (e) { } if (b && b.length > 3000) { const f = path.join(dir, `w${i}.jpg`); fs.writeFileSync(f, b); scenes[i]._photo = f; fetched++; } done++; prog(0.05 + 0.3 * done / Math.max(1, need.length), 'images'); } };
+      await Promise.all([w(), w(), w(), w()]);
+    }
     /* 2) የትዕይንት ርዝማኔ፤ ከ cap በላይ ከሆነ ማፍጠን ከዚያ መቀነስ */
     const want = i => Math.max(2.5, Math.min(14, Number(scenes[i].dur) || 5)), D = () => scenes.map((s, i) => (aud[i] ? Math.max(2.5, dur[i] + 1.0) : want(i)));
     let ds = D(), tot = ds.reduce((a, b) => a + b, 0), tempo = 1;
     if (tot > cap && narrated) { tempo = Math.min(1.3, (tot - 0) / cap); ds = scenes.map((s, i) => (aud[i] ? Math.max(2.5, dur[i] / tempo + 0.8) : want(i))); tot = ds.reduce((a, b) => a + b, 0); }
     while (tot > cap && scenes.length > 2) { let j = Math.floor(scenes.length / 2); for (let q = 1; q < scenes.length - 1; q++) if (scenes[q].type !== 'offer' && scenes[q].type !== 'list') { j = q; break; } tot -= ds[j]; scenes.splice(j, 1); aud.splice(j, 1); dur.splice(j, 1); ds.splice(j, 1); }
     /* 3) እያንዳንዱን ትዕይንት መሥራት */
-    const theme = Number.isInteger(plan.theme) ? plan.theme : 0, parts = []; let T0 = 0;
-    for (let i = 0; i < scenes.length; i++) {
-      const sc = scenes[i], D1 = ds[i], img = Number.isInteger(sc.img) && sc.img >= 0 && sc.img < photos.length ? photos[sc.img] : null, b = buildScene(sc, i, { W, H, D: D1, T0, TT: tot, theme, photo: img, font, tmp: dir, brand: clean(plan.brand) });
-      const out = path.join(dir, `s${i}.mp4`), args = ['-y', '-hide_banner', '-loglevel', 'error', ...b.inputs];
+    const theme = Number.isInteger(plan.theme) ? plan.theme : 0, parts = new Array(scenes.length), cache = {}, offs = []; { let t = 0; for (const d of ds) { offs.push(t); t += d; } }
+    const one = async i => {
+      const sc = scenes[i], D1 = ds[i], img = sc._photo || (Number.isInteger(sc.img) && sc.img >= 0 && sc.img < photos.length ? photos[sc.img] : null), b = buildScene(sc, i, { W, H, D: D1, T0: offs[i], TT: tot, theme, photo: img, tmp: dir, cache, brand: clean(plan.brand) });
+      const out = path.join(dir, `s${i}.mp4`), args = ['-y', '-hide_banner', '-loglevel', 'error', '-threads', '2', ...b.inputs];
       if (aud[i]) args.push('-i', aud[i]); else args.push('-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo');
-      const ai = b.nIn;
-      args.push('-filter_complex', b.fc + ';' + `[${ai}:a]${aud[i] ? `atempo=${tempo.toFixed(3)},adelay=400|400,` : ''}apad=whole_dur=${D1.toFixed(2)},atrim=0:${D1.toFixed(2)},aresample=44100,aformat=channel_layouts=stereo[a]`, '-map', '[v]', '-map', '[a]', '-t', D1.toFixed(2), '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '27', '-r', String(FPS), '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '96k', '-ar', '44100', '-ac', '2', out);
-      await run(bin, args); parts.push(out); T0 += D1; prog(0.35 + 0.55 * (i + 1) / scenes.length, 'scene');
-    }
+      args.push('-filter_complex', b.fc + ';' + `[${b.nIn}:a]${aud[i] ? `atempo=${tempo.toFixed(3)},adelay=400|400,` : ''}apad=whole_dur=${D1.toFixed(2)},atrim=0:${D1.toFixed(2)},aresample=44100,aformat=channel_layouts=stereo[a]`, '-map', '[v]', '-map', '[a]', '-t', D1.toFixed(2), '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-r', String(FPS), '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '96k', '-ar', '44100', '-ac', '2', out);
+      await run(bin, args); parts[i] = out;
+    };
+    { let k = 0, fin = 0; const conc = Math.max(1, Math.min(3, (os.cpus() || []).length || 2)); const w = async () => { while (k < scenes.length) { const i = k++; await one(i); fin++; prog(0.4 + 0.5 * fin / scenes.length, 'scene'); } }; await Promise.all(Array.from({ length: conc }, w)); }
     const list = path.join(dir, 'l.txt'); fs.writeFileSync(list, parts.map(p => `file '${p.replace(/'/g, "'\\''")}'`).join('\n')); const joined = path.join(dir, 'j.mp4');
     await run(bin, ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', joined]);
     /* 4) ሙዚቃ */
-    const final = path.join(dir, 'final.mp4'); let music = opt.musicFile || null, style = plan.music;
-    if (!music && style !== 'none') { try { music = await makeMusic(bin, dir, style === 'energetic' ? 'energetic' : 'calm'); } catch (e) { music = null; } }
+    const final = path.join(dir, 'final.mp4'); let music = opt.musicFile || (await musicP);
     if (music) { const vol = narrated ? 0.11 : 0.4; await run(bin, ['-y', '-hide_banner', '-loglevel', 'error', '-i', joined, '-stream_loop', '-1', '-i', music, '-filter_complex', `[1:a]volume=${vol},afade=t=out:st=${Math.max(0, tot - 2).toFixed(2)}:d=2[m];[0:a][m]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]`, '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '112k', '-movflags', '+faststart', '-shortest', final]); }
     else await run(bin, ['-y', '-hide_banner', '-loglevel', 'error', '-i', joined, '-c', 'copy', '-movflags', '+faststart', final]);
-    prog(1, 'done'); const buf = fs.readFileSync(final); return { buf, dur: tot, w: W, h: H, narrated, scenes: scenes.length, music: !!music };
+    prog(1, 'done'); const buf = fs.readFileSync(final); return { buf, dur: tot, w: W, h: H, narrated, scenes: scenes.length, music: !!music, images: fetched };
   } finally { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { } }
 }
 module.exports = { render, available, makeMusic, SIZES, THEMES, clean, MAXSEC };

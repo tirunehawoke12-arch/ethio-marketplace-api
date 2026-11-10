@@ -395,3 +395,11 @@ npm start                # http://localhost:3000
 
 ### v38.1 — ቪድዮ፦ ያለ drawtext ይሠራል
 - የ Render ffmpeg-static `drawtext` (freetype) የለውም → ጽሑፍ አሁን በ `server/textpng.js` (amh.ttf ን ራሱ አንብቦ ወደ PNG ይሳላል) ተሠርቶ በ ffmpeg `overlay` ይለጠፋል። `gradients` ከሌለ ባለ ሁለት ቃና ጠንካራ ቀለም ዳራ ይጠቀማል። ቴስት፦ ያለ drawtext/gradients የሚመስል ffmpeg።
+
+## v39 — 🎬 ቪድዮ፦ ምስሎች፣ ውበት፣ ቦት ማስተዋወቅ፣ ድምፅ፣ ፍጥነት፣ ጊዜ ገደብ
+- ማውጫ ቁልፍ «🎬 ቪድዮ ሥራ»፤ HELP ላይም ተጠቅሷል። «ይህን bot የሚያስተዋውቅ ቪድዮ ስራልኝ» → ራሱ ማስታወቂያ ተብሎ ይለያል፤ `BOT_FACTS` (የቦቱ እውነተኛ ባህሪዎች ዝርዝር) ለ AI ይሰጣል፤ አዲስ ባህሪ ሲጨመር ይህን ዝርዝር (bot.js) ያዘምኑ።
+- በድምፅ ሀሳብ መስጠት (ቀረጻ → ጽሑፍ፤ GEMINI_API_KEY ያስፈልጋል) እና በድምፅ «ቪድዮ ስራልኝ» ማለት።
+- ምስሎች፦ AI ለእያንዳንዱ ትዕይንት `imgq` (እንግሊዝኛ መግለጫ) ይሰጣል → `server/vidimg.js`፦ Pollinations (ነጻ AI ምስል) ከዚያ Wikimedia Commons፤ በ 35 ሰከንድ ገደብ፤ ካልተገኘ የንድፍ ዳራ። ቁልፍ «🖼 ምስል»።
+- ንድፍ፦ ፎቶ በመንሸራሸር + ጥቁር ተዳፋት ጥላ + ከታች ጽሑፍ፤ ፎቶ ሲጠፋ ለስላሳ ቀለም ዳራ + ተንሳፋፊ ብርሃን፤ ጽሑፍ ከሥር ወደ ላይ እየወጣ፤ ፈጣን ዳራ (PNG) — `gradients` አያስፈልግም።
+- ፍጥነት፦ ትዕይንቶች 3 በትይዩ፣ x264 ultrafast፣ ሙዚቃ ከሌላው ጋር በትይዩ፣ ምስል/ድምፅ በትይዩ።
+- አይቆምም፦ `VIDEO_PLAN_MS` (75 ሰከንድ) AI ካልመለሰ `server/vidplan.js` ከተጠቃሚው ጽሑፍ ያለ AI እቅድ ይሠራል።

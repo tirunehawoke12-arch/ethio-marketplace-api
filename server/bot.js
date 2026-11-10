@@ -12,10 +12,10 @@ const STEP = { placed: '📝 ታዘዘ', payment_submitted: '💳 ክፍያ ተ�
 const APPST = { applied: '📨 ተልኳል', shortlisted: '⭐ በዝርዝር', hired: '🎉 ተቀጥረዋል', rejected: '✖️ አልተመረጡም', withdrawn: '↩️ ተነስቷል', invited: '🤝 ግብዣ' };
 const MENU_KEYS = [['market', 'shops', 'jobs'], ['pages', 'cart', 'orders'], ['me', 'search', 'help'], ['near', 'alerts', 'messages'], ['learn', 'ai', 'vid']];
 const MENU_TX = {                                    // የታች ማውጫ በ4 ቋንቋ (ትርጉሙ በአፍ-መፍቻ ተናጋሪ ቢታይ ይመረጣል)
-  am: [['🛍 ገበያ', '🏪 ሱቆች', '💼 ሥራ'], ['🌐 ገጾች', '🛒 ጋሪ', '📦 ትዕዛዞቼ'], ['👤 ገጾቼ', '🔎 ፈልግ', '❓ እገዛ'], ['📍 በአቅራቢያዬ', '🔔 ማንቂያዎች', '💬 መልእክቶች'], ['🎓 ትምህርት', '🤖 AI ረዳት', '🎬 ቪድዮ']],
+  am: [['🛍 ገበያ', '🏪 ሱቆች', '💼 ሥራ'], ['🌐 ገጾች', '🛒 ጋሪ', '📦 ትዕዛዞቼ'], ['👤 ገጾቼ', '🔎 ፈልግ', '❓ እገዛ'], ['📍 በአቅራቢያዬ', '🔔 ማንቂያዎች', '💬 መልእክቶች'], ['🎓 ትምህርት', '🤖 AI ረዳት', '🎬 ቪድዮ ሥራ']],
   en: [['🛍 Market', '🏪 Shops', '💼 Jobs'], ['🌐 Pages', '🛒 Cart', '📦 My orders'], ['👤 My page', '🔎 Search', '❓ Help'], ['📍 Nearby', '🔔 Alerts', '💬 Messages'], ['🎓 Learn', '🤖 AI assistant', '🎬 Video']],
   om: [['🛍 Gabaa', '🏪 Suuqota', '💼 Hojii'], ['🌐 Fuulota', '🛒 Gaarii', '📦 Ajajoota koo'], ['👤 Fuula koo', '🔎 Barbaadi', '❓ Gargaarsa'], ['📍 Naannoo koo', '🔔 Beeksisa', '💬 Ergaawwan'], ['🎓 Barnoota', '🤖 Gargaaraa AI', '🎬 Viidiyoo']],
-  ti: [['🛍 ዕዳጋ', '🏪 ድኳናት', '💼 ስራሕ'], ['🌐 ገጻት', '🛒 ቅርጫት', '📦 ትዕዛዛተይ'], ['👤 ገጸይ', '🔎 ድለይ', '❓ ሓገዝ'], ['📍 ኣብ ጎረቤተይ', '🔔 መተሓሳሰቢ', '💬 መልእኽታት'], ['🎓 ትምህርቲ', '🤖 ሓጋዚ AI', '🎬 ቪድዮ']],
+  ti: [['🛍 ዕዳጋ', '🏪 ድኳናት', '💼 ስራሕ'], ['🌐 ገጻት', '🛒 ቅርጫት', '📦 ትዕዛዛተይ'], ['👤 ገጸይ', '🔎 ድለይ', '❓ ሓገዝ'], ['📍 ኣብ ጎረቤተይ', '🔔 መተሓሳሰቢ', '💬 መልእኽታት'], ['🎓 ትምህርቲ', '🤖 ሓጋዚ AI', '🎬 ቪድዮ ሥራ']],
 };
 const BOT_LANGS = [['am', 'አማርኛ'], ['en', 'English'], ['om', 'Afaan Oromoo'], ['ti', 'ትግርኛ']];
 const TX = {
@@ -622,7 +622,7 @@ module.exports = function bot(c) {
   FIN.axdeckprice = async (chat, uid, d, x) => { const r = await AD('POST', `/api/learn/decks/${x.id}/settings`, { price: Number(d.price) }); return r.ok ? axDecks(chat) : send(chat, bad(r)); };
 
   /* ================= እገዛ ================= */
-  const HELP = `❓ <b>እገዛ — ቦቱ የሚያደርገው</b>\n\n🛍 <b>ገበያ</b> — ዕቃ ይፈልጉ፣ ጋሪ፣ ይዘዙ፣ ክፍያ ይላኩ፣ ደረሰኝ ያውርዱ፣ ግምገማ ይስጡ\n🏪 <b>ሱቆች</b> — ሱቆችን ይመልከቱ\n💼 <b>ሥራ</b> — ክፍት ሥራ፣ ሠራተኞች፣ ማመልከት፣ መቅጠር\n🌐 <b>ገጾች</b> — የሌሎችን ገጽ ይመልከቱ (👁)፣ ቅጽ ይሙሉ\n👤 <b>ገጾቼ</b> — የራስዎን ገጽ (ሠራተኛ፣ አሰሪ፣ ሱቅ፣ ሆቴል…) ይክፈቱ እና ያስተዳድሩ፤ ዕቃ እና ትዕዛዝ፤ ሥራ ማስታወቅ፤ የግል መረጃ\n\n/menu — ዋና ማውጫ · /cancel — የጀመሩትን ሰርዝ
+  const HELP = `❓ <b>እገዛ — ቦቱ የሚያደርገው</b>\n\n🎬 <b>ቪድዮ ሥራ</b> — «🎬 ቪድዮ ሥራ» ይጫኑ ወይም «ለ… ማስታወቂያ ቪድዮ ስራልኝ» ይጻፉ/ይናገሩ፤ ሀሳብዎን (ጽሑፍ፣ ድምፅ፣ ፎቶ) ይስጡ፤ እስከ 3 ደቂቃ ቪድዮ ራሴ አቀነባብራለሁ።\n\n🛍 <b>ገበያ</b> — ዕቃ ይፈልጉ፣ ጋሪ፣ ይዘዙ፣ ክፍያ ይላኩ፣ ደረሰኝ ያውርዱ፣ ግምገማ ይስጡ\n🏪 <b>ሱቆች</b> — ሱቆችን ይመልከቱ\n💼 <b>ሥራ</b> — ክፍት ሥራ፣ ሠራተኞች፣ ማመልከት፣ መቅጠር\n🌐 <b>ገጾች</b> — የሌሎችን ገጽ ይመልከቱ (👁)፣ ቅጽ ይሙሉ\n👤 <b>ገጾቼ</b> — የራስዎን ገጽ (ሠራተኛ፣ አሰሪ፣ ሱቅ፣ ሆቴል…) ይክፈቱ እና ያስተዳድሩ፤ ዕቃ እና ትዕዛዝ፤ ሥራ ማስታወቅ፤ የግል መረጃ\n\n/menu — ዋና ማውጫ · /cancel — የጀመሩትን ሰርዝ
 
 🤖 <b>AI ረዳት</b> — ማንኛውንም ጥያቄ ይጻፉ፤ PDF/PowerPoint (እንግሊዝኛ) ይላኩ — ገጽ በገጽ ወደ አማርኛ እተረጉማለሁ።`;
 
@@ -742,7 +742,7 @@ module.exports = function bot(c) {
     const dl = /^\/start\s+([sgpwej])_([\w-]{4,40})$/.exec(t); if (dl) s.deep = { t: dl[1], id: dl[2] };       // deep link — ከመግባት በኋላም ይከፈታል
     if (/^\/(video|ቪድዮ)\b/i.test(t)) return vidStart(chat, uid, t.replace(/^\/\S+\s*/, '').trim() || '');
     { const vv = vget(chat); if (vv && vv.collect && !/^\//.test(t) && !LABELS[t]) { if (vv.collect === 'change') return vidGo(chat, uid, t.slice(0, 1500)); if (vv.busy) return send(chat, '⏳ ቪድዮዎ እየተሠራ ነው።'); vv.notes.push(t.slice(0, 1500)); return vidAck(chat, 'ሀሳብ'); } }
-    if (VIDINT.test(t) && VIDVERB.test(t) && t.length < 400 && !HOWQ.test(t) && !/(ፋይል|pdf|pptx|docx|xlsx)/i.test(t)) return vidStart(chat, uid, t);
+    if (!LABELS[t] && VIDINT.test(t) && VIDVERB.test(t) && t.length < 400 && !HOWQ.test(t) && !/(ፋይል|pdf|pptx|docx|xlsx)/i.test(t)) return vidStart(chat, uid, t);
     if (t === '✖️ ተው') { s.await = null; s.flow = null; s.aiproof = null; save(); return home(chat); }
     if (/^\/(search|ፈልግ)\b/i.test(t)) { const q = t.replace(/^\/\S+\s*/, '').trim(); if (!uid && !isAdmin(chat)) return authStart(chat); if (!aiReady()) return send(chat, aiOff); if (!q) { ses(chat).srch = true; return send(chat, '🔎 <b>የድር ፍለጋ (AI Mode)</b>\n\nአሁን ጥያቄዎን ይጻፉ — ከድር ፍለጋ ጋር ተሳስሮ ከምንጭ ጋር እመልሳለሁ። (ወይም በአንድ መልእክት፦ <code>/search የዛሬ የዶላር ምንዛሬ</code>)'); } return aiText(chat, uid, q, false, { ground: true }); }
     if (/^\/(progress|እድገት)\b/i.test(t)) return progShow(chat);
@@ -1198,7 +1198,7 @@ module.exports = function bot(c) {
     try { text = await ai.transcribe(await tgDownload(v.file_id), v.mime_type || 'audio/ogg'); }
     catch (e) { return send(chat, e.message === 'ai_no_audio' ? '🎙 ድምፅ ለመረዳት Gemini (GEMINI_API_KEY) ያስፈልጋል — አሁን በጽሑፍ ይጠይቁ።' : aiErr(e, chat)); }
     if (!text) return send(chat, '🎙 ድምፁ አልተሰማኝም — እንደገና ቀርበው ይናገሩ።');
-    await send(chat, '🎙 <i>' + H(clip(text, 500)) + '</i>'); return aiText(chat, uid, text, true);
+    await send(chat, '🎙 <i>' + H(clip(text, 500)) + '</i>'); if (VIDINT.test(text) && VIDVERB.test(text) && text.length < 500 && !/(ፋይል|pdf|pptx|docx|xlsx)/i.test(text)) return vidStart(chat, uid, text); return aiText(chat, uid, text, true);
   }
 
   /* ===== 🧠 ትውስታ (/new እስኪባል) — ከ RAM ከጠፋ (ዳግም ማስነሳት) ከተቀመጠው ቅጂ ይመለሳል ===== */
@@ -1337,22 +1337,32 @@ module.exports = function bot(c) {
   const vcollect = chat => { const v = vget(chat); return !!(v && v.collect); };
   let vidChain = Promise.resolve(), vidWait = 0, vidOk = null;
   const vidAvail = async () => { if (vidOk === null) vidOk = await VIDEO.available(ffmpegBin()); return vidOk; };
-  const vkGuess = t => (/ማስታወቂያ|\bad\b|promo|ማስተዋወቅ|ማስተዋወቂያ/i.test(t) ? 'ad' : /ምርት|product/i.test(t) ? 'product' : /ትምህርት|ማብራሪያ|lesson|explain/i.test(t) ? 'edu' : /ሰላምታ|በዓል|መልካም|ልደት|ምስጋና|greeting|birthday/i.test(t) ? 'greet' : /ታሪክ|ተረት|story/i.test(t) ? 'story' : '');
+  const vkGuess = t => (/ማስታወቂያ|\bad\b|promo|ማስተዋወቅ|ማስተዋወቂያ|አስተዋውቅ|ያስተዋውቅ|ያስተዋውቃል|አስተዋወቅ/i.test(t) ? 'ad' : /ምርት|product/i.test(t) ? 'product' : /ትምህርት|ማብራሪያ|lesson|explain/i.test(t) ? 'edu' : /ሰላምታ|በዓል|መልካም|ልደት|ምስጋና|greeting|birthday/i.test(t) ? 'greet' : /ታሪክ|ተረት|story/i.test(t) ? 'story' : '');
+  const BOT_FACTS = `ቦቱ፦ «ኢትዮ ዲጂታል ማርኬት» — በቴሌግራም ውስጥ ሁሉንም በአማርኛ የሚያቀርብ ዲጂታል መድረክ።
+• 🛍 ዲጂታል ገበያ፦ ዕቃዎችን መፈለግ፣ ሱቆች፣ ጋሪ እና ትዕዛዝ፣ አስተማማኝ (escrow) ክፍያ፣ ደረሰኝ።
+• 💼 ሥራ፦ ሠራተኞች እና አሰሪዎች የሚገናኙበት፣ ክፍት ሥራዎች።
+• 📍 በአቅራቢያ ያሉ ሱቆችና አገልግሎቶች፣ 🔔 ማንቂያዎች፣ 💬 መልእክቶች።
+• 🎓 ትምህርት፦ የመማሪያ መጻሕፍት ቤተ-መጻሕፍት፣ የራስን ፋይል (PDF/PPT) ጭነው መማር፣ AI መምህር በቀጥታ ክፍል (ሰሌዳ፣ ድምፅ፣ ምስል፣ እየተዘዋወረ ማስረዳት)፣ ጥያቄዎች (quiz)፣ እድገት መከታተል።
+• 🤖 AI ረዳት፦ ማንኛውንም ጥያቄ (ወቅታዊም በድር ፍለጋ) መመለስ፣ በድምፅ መጠየቅ፣ ትርጉም፣ ሰነድ (PDF/PowerPoint/Word/Excel) ማዘጋጀት።
+• 🎬 ቪድዮ ሰሪ፦ ከሀሳብዎ ማስታወቂያና ሌሎች ቪድዮዎችን እስከ 3 ደቂቃ ራሱ ማዘጋጀት።
+ጥቅሙ፦ ሁሉም በአንድ ቦታ፣ በአማርኛ፣ ቀላል፣ በስልክ በቴሌግራም።` + (botUser ? `\nአገናኝ፦ https://t.me/${botUser}` : '');
+  const VPROMO = /(ይህን|ይህ|የዚህ|ስለዚህ)\s*(ቦት|bot)|ኢትዮ ዲጂታል ማርኬት|(ቦቱን|ቦታችንን|መድረኩን)\s*(አስተዋውቅ|ያስተዋውቅ)/i;
+  const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('ai_timeout')), ms))]);
   async function vidStart(chat, uid, firstText) {
     if (!uid && !isAdmin(chat)) return authStart(chat); if (!aiReady()) return send(chat, aiOff);
     if (!(await vidAvail())) return send(chat, '🎬 ቪድዮ ሰሪው በዚህ አገልግሎት ላይ ገና አልነቃም (ffmpeg የለም)።' + (isAdmin(chat) ? '\n\n🛠 አድሚን፦ <code>npm i ffmpeg-static</code> ያድርጉ ወይም ስርዓቱ ላይ ffmpeg ይጫኑ (ወይም FFMPEG_PATH ይስጡ)።' : ' አድሚኑን ያሳውቁ።'));
     const old = vget(chat); if (old && old.busy) return send(chat, '⏳ ቪድዮዎ እየተሠራ ነው — ሲጨርስ እልካለሁ።');
-    const kind = firstText ? vkGuess(firstText) : '', v = { ts: Date.now(), kind, sec: 30, fmt: 'v', voice: true, music: true, notes: firstText ? [String(firstText).slice(0, 1500)] : [], photos: [], musicBuf: null, collect: false, busy: false, plan: null }; VID.set(chat, v);
+    const kind = firstText ? vkGuess(firstText) : '', v = { ts: Date.now(), kind, sec: 30, fmt: 'v', voice: true, music: true, images: true, notes: firstText ? [String(firstText).slice(0, 1500)] : [], photos: [], musicBuf: null, collect: false, busy: false, plan: null }; VID.set(chat, v);
     if (kind) return vidDur(chat);
     const ks = isEdu(chat) ? ['edu', 'story', 'greet', 'other'] : Object.keys(VK); return send(chat, '🎬 <b>ቪድዮ ሰሪ</b>\n\nሀሳቦችዎን ይስጡኝ፤ እኔ አቀነባብሬ (ጽሑፍ + እነማ + የድምፅ ማብራሪያ + ሙዚቃ) እስከ 3 ደቂቃ ቪድዮ እሠራለሁ።\n\n<b>ደረጃ 1/3 — ምን ዓይነት ቪድዮ?</b>', ik([ks.slice(0, 2).map(k => b(VK[k], 'vd:k:' + k)), ks.slice(2, 4).map(k => b(VK[k], 'vd:k:' + k)), ks.slice(4).map(k => b(VK[k], 'vd:k:' + k))]));
   }
   const vidDur = chat => send(chat, '<b>ደረጃ 2/3 — ርዝማኔ?</b>\n(ማስታወቂያ ለማህበራዊ ሚዲያ 15–30 ሰከንድ ይመከራል)', ik([VSEC.slice(0, 3).map(n => b(n < 60 ? n + ' ሰከንድ' : n / 60 + ' ደቂቃ', 'vd:d:' + n)), VSEC.slice(3).map(n => b(n / 60 + ' ደቂቃ', 'vd:d:' + n))]));
   const vidFmtAsk = chat => send(chat, '<b>ደረጃ 3/3 — ቅርጽ?</b>', ik([Object.keys(VFMT).map(k => b(VFMT[k], 'vd:f:' + k))]));
-  const vidKb = v => ik([[b('✅ ቪድዮ ሥራ', 'vd:go')], [b(v.voice ? '🎙 ድምፅ፦ አለ' : '🔇 ድምፅ፦ የለም', 'vd:vo'), b(v.music ? '🎵 ሙዚቃ፦ አለ' : '🔕 ሙዚቃ፦ የለም', 'vd:mu')], [b('❌ ሰርዝ', 'vd:x')]]);
+  const vidKb = v => ik([[b('✅ ቪድዮ ሥራ', 'vd:go')], [b(v.voice ? '🎙 ድምፅ፦ አለ' : '🔇 ድምፅ፦ የለም', 'vd:vo'), b(v.music ? '🎵 ሙዚቃ፦ አለ' : '🔕 ሙዚቃ፦ የለም', 'vd:mu'), b(v.images ? '🖼 ምስል፦ አውቶ' : '🚫 ምስል፦ የለም', 'vd:im')], [b('❌ ሰርዝ', 'vd:x')]]);
   function vidCollectMsg(chat) {
     const v = vget(chat); if (!v) return; v.collect = true; v.ts = Date.now();
     const g = v.kind === 'ad' || v.kind === 'product' ? '• የንግዱ/ምርቱ ስም\n• ምን ይሸጣሉ ወይም ምን አገልግሎት ይሰጣሉ\n• ለማን (ደንበኞች)\n• ዋና ጥቅሞች / ልዩነት\n• ዋጋ ወይም ቅናሽ (ካለ)\n• ስልክ እና አድራሻ\n' : v.kind === 'edu' ? '• ርዕሱ\n• ዋና ዋና ነጥቦች\n• ምሳሌዎች (ካሉ)\n' : v.kind === 'greet' ? '• ለማን/ለምን በዓል\n• የሚፈልጉት መልእክት\n• ስምዎ\n' : '• ዋናው ሀሳብ ወይም ታሪክ\n• የሚፈልጉት ስሜት/ድባብ\n';
-    return send(chat, `✍️ <b>አሁን ሀሳቦችዎን ይላኩ</b> — በተለያዩ መልዕክቶች ይቻላል (ጽሑፍ፣ 🎙 ድምፅ፣ 📷 ፎቶ እስከ 8፣ 🎵 የራስዎ ሙዚቃ)።\n\n${g}\nበቂ ባይሆንም ችግር የለም — ቀሪውን እኔ አቀነባብራለሁ (ያልሰጡኝን ዋጋ/ስልክ አልፈጥርም)። ሲጨርሱ «✅ ቪድዮ ሥራ» ይጫኑ።\n\n<i>${VK[v.kind] || VK.other} · ${v.sec < 60 ? v.sec + ' ሰከንድ' : v.sec / 60 + ' ደቂቃ'} · ${VFMT[v.fmt]}</i>`, vidKb(v));
+    return send(chat, `✍️ <b>አሁን ሀሳቦችዎን ይላኩ</b> — በተለያዩ መልዕክቶች ይቻላል (✍️ ጽሑፍ፣ 🎙 <b>ድምፅ (ቀረጻ ይላኩ — በድምፅ መናገር ይቻላል)</b>፣ 📷 ፎቶ እስከ 8፣ 🎵 የራስዎ ሙዚቃ)።\n\n${g}\nበቂ ባይሆንም ችግር የለም — ቀሪውን እኔ አቀነባብራለሁ (ያልሰጡኝን ዋጋ/ስልክ አልፈጥርም)። ሲጨርሱ «✅ ቪድዮ ሥራ» ይጫኑ።\n\n<i>${VK[v.kind] || VK.other} · ${v.sec < 60 ? v.sec + ' ሰከንድ' : v.sec / 60 + ' ደቂቃ'} · ${VFMT[v.fmt]}</i>`, vidKb(v));
   }
   const vidAck = (chat, what) => { const v = vget(chat); if (!v) return; v.ts = Date.now(); return send(chat, `✅ ${what} ተቀብያለሁ — ጽሑፍ ${v.notes.length} · ፎቶ ${v.photos.length}${v.musicBuf ? ' · 🎵 ሙዚቃ' : ''}\nተጨማሪ ይላኩ ወይም ይጫኑ፦`, vidKb(v)); };
   async function vidMedia(chat, m) {
@@ -1372,16 +1382,20 @@ module.exports = function bot(c) {
     const say = txt => { if (!pm) return; const t = Date.now(); if (t - last < 3500) return; last = t; tg('editMessageText', { chat_id: chat, message_id: pm.message_id, text: txt, parse_mode: 'HTML' }).catch(() => { }); };
     try {
       pm = await tg('sendMessage', { chat_id: chat, text: `🎬 <b>ቪድዮዎን እያቀነባበርኩ ነው…</b>\n1️⃣ ሀሳቦችን በማቀናበር ላይ…\n(${v.sec >= 120 ? 'ረጅም ቪድዮ እስከ ጥቂት ደቂቃ ይወስዳል' : 'ከ1–3 ደቂቃ ያህል'})`, parse_mode: 'HTML' }).catch(() => null);
-      const r = await svc.videoPlan({ uid: uid || 'admin', key: String(chat), admin: isAdmin(chat), args: { kind: v.kind || 'other', sec: v.sec, notes: v.notes.join('\n'), photos: v.photos.map(p => p.cap), voice: v.voice, prev: change != null && v.plan ? JSON.stringify(v.plan) : '', change: change || '' } });
-      if (!r.ok && r.error === 'ai_limit') return paywall(chat, uid, 'limit'); if (!r.ok) return send(chat, r.error === 'ai_disabled' ? '⏸ AI ለጊዜው በአድሚን ተዘግቷል።' : r.error === 'ai_blocked' ? '⛔ የ AI አገልግሎት ለእርስዎ ተዘግቷል።' : aiOff, menuKb(chat)); if (r.paywall) return paywall(chat, uid, r.paywall);
-      const plan = r.plan; plan.voice = v.voice; if (!v.music) plan.music = 'none'; v.plan = plan;
+      const promo = VPROMO.test(v.notes.join('\n')), notesTx = v.notes.join('\n') + (promo ? '\n\n[ስለ ቦቱ የተረጋገጡ እውነታዎች — በደንብ አስተዋውቅ]\n' + BOT_FACTS : ''), kind = promo ? 'ad' : v.kind || 'other'; let plan = null, fb = '';
+      try {
+        const r = await withTimeout(svc.videoPlan({ uid: uid || 'admin', key: String(chat), admin: isAdmin(chat), args: { kind, sec: v.sec, notes: notesTx, photos: v.photos.map(p => p.cap), voice: v.voice, prev: change != null && v.plan && !v.plan.local ? JSON.stringify(v.plan) : '', change: change || '' } }), Number(process.env.VIDEO_PLAN_MS) || 75000);
+        if (!r.ok && r.error === 'ai_limit') return paywall(chat, uid, 'limit'); if (!r.ok) return send(chat, r.error === 'ai_disabled' ? '⏸ AI ለጊዜው በአድሚን ተዘግቷል።' : r.error === 'ai_blocked' ? '⛔ የ AI አገልግሎት ለእርስዎ ተዘግቷል።' : aiOff, menuKb(chat)); if (r.paywall) return paywall(chat, uid, r.paywall);
+        plan = r.plan;
+      } catch (e) { console.warn('videoPlan', e && e.message); plan = require('./vidplan').localPlan({ kind, sec: v.sec, notes: notesTx, nPhotos: v.photos.length }); fb = '\n(AI ለጊዜው ቀርፋፋ ነበር — ከሰጡኝ ሀሳብ በቀላል ቅንብር ሠራሁ፤ «🔁 ሌላ ስሪት» ብለው እንደገና ይሞክሩ።)'; }
+      plan.voice = v.voice; if (!v.music) plan.music = 'none'; v.plan = plan; v.fb = fb;
       if (v.musicBuf) { mf = require('path').join(require('os').tmpdir(), 'vm-' + chat + '-' + Date.now()); require('fs').writeFileSync(mf, v.musicBuf); }
       const ahead = vidWait; vidWait++; if (ahead && pm) say(`🎬 ተራ እየጠበቅሁ ነው (${ahead} ቪድዮ ከእርስዎ በፊት)…`);
-      const out = await (vidChain = vidChain.catch(() => { }).then(() => { vidWait = Math.max(0, vidWait - 1); return VIDEO.render(plan, { bin: ffmpegBin(), fmt: v.fmt, maxSec: Math.min(Number(process.env.VIDEO_MAX_SEC) || 180, Math.round(v.sec * 1.12)), photos: v.photos.map(p => p.buf), musicFile: mf, tts: v.voice && svc.tts ? t => svc.tts(t) : null, onProgress: (p, k) => say(`🎬 <b>ቪድዮዎን እያቀነባበርኩ ነው…</b>\n${k === 'voice' ? '2️⃣ 🎙 የድምፅ ማብራሪያ በማዘጋጀት ላይ…' : '3️⃣ 🎞 ትዕይንቶችን በመሥራት ላይ… ' + Math.round(p * 100) + '%'}`) }); }));
+      const out = await (vidChain = vidChain.catch(() => { }).then(() => { vidWait = Math.max(0, vidWait - 1); return VIDEO.render(plan, { bin: ffmpegBin(), fmt: v.fmt, maxSec: Math.min(Number(process.env.VIDEO_MAX_SEC) || 180, Math.round(v.sec * 1.12)), photos: v.photos.map(p => p.buf), musicFile: mf, tts: v.voice && svc.tts ? t => svc.tts(t) : null, fetchImg: v.images ? (q, i) => require('./vidimg').fetchImage(q, { W: VIDEO.SIZES[v.fmt][0], H: VIDEO.SIZES[v.fmt][1], seed: 7 + i }) : null, onProgress: (p, k) => say(`🎬 <b>ቪድዮዎን እያቀነባበርኩ ነው…</b>\n${k === 'voice' ? '2️⃣ 🎙 የድምፅ ማብራሪያ በማዘጋጀት ላይ…' : k === 'images' ? '2️⃣ 🖼 ምስሎችን በመፈለግ ላይ…' : '3️⃣ 🎞 ትዕይንቶችን በመሥራት ላይ… ' + Math.round(p * 100) + '%'}`) }); }));
       if (out.buf.length > 49 * 1048576) return send(chat, '⚠️ ቪድዮው ከቴሌግራም ገደብ (50MB) በላይ ሆነ — አጠር ያለ ርዝማኔ ይምረጡ።', ik([[b('🎬 አዲስ ቪድዮ', 'vd:new')]]));
       await tgUpload('sendVideo', 'video', chat, out.buf, 'etio-video.mp4', 'video/mp4', { caption: clip((plan.caption || (plan.brand ? plan.brand : '')) + '', 1000), width: out.w, height: out.h, duration: Math.round(out.dur), supports_streaming: 'true' });
       s.vday.n++; save(); if (pm) tg('deleteMessage', { chat_id: chat, message_id: pm.message_id }).catch(() => { });
-      await send(chat, `✅ ቪድዮ ዝግጁ ነው — ${Math.round(out.dur)} ሰከንድ · ${out.scenes} ትዕይንት${out.narrated ? ' · 🎙 ድምፅ' : v.voice ? ' · (የድምፅ ማብራሪያ ጊዜያዊ አልተገኘም — በጽሑፍ ብቻ)' : ''}${out.music ? ' · 🎵' : ''}\n\nየተለየ ስሪት ወይም ለውጥ ይፈልጋሉ?`, ik([[b('🔁 ሌላ ስሪት', 'vd:re'), b('✏️ ለውጥ ጠይቅ', 'vd:ch')], [b('🎬 አዲስ ቪድዮ', 'vd:new')]]));
+      await send(chat, `✅ ቪድዮ ዝግጁ ነው — ${Math.round(out.dur)} ሰከንድ · ${out.scenes} ትዕይንት${out.narrated ? ' · 🎙 ድምፅ' : v.voice ? ' · (የድምፅ ማብራሪያ ጊዜያዊ አልተገኘም — በጽሑፍ ብቻ)' : ''}${out.music ? ' · 🎵' : ''}${out.images ? ' · 🖼 ' + out.images : ''}${v.fb || ''}\n\nየተለየ ስሪት ወይም ለውጥ ይፈልጋሉ?`, ik([[b('🔁 ሌላ ስሪት', 'vd:re'), b('✏️ ለውጥ ጠይቅ', 'vd:ch')], [b('🎬 አዲስ ቪድዮ', 'vd:new')]]));
     } catch (e) { console.warn('video', e && e.message); await send(chat, /^ai_/.test(e && e.message) ? aiErr(e, chat) : '⚠️ ቪድዮውን መሥራት አልተቻለም — እንደገና ይሞክሩ።' + (isAdmin(chat) ? `\n<code>${H(clip(e && e.message, 400))}</code>` : ''), ik([[b('🔁 እንደገና', 'vd:re')]])); }
     finally { clearInterval(tm); v.busy = false; if (mf) try { require('fs').unlinkSync(mf); } catch (e) { } }
   }
@@ -1393,6 +1407,7 @@ module.exports = function bot(c) {
     if (a === 'd') { v.sec = VSEC.includes(Number(x)) ? Number(x) : 30; return vidFmtAsk(chat); }
     if (a === 'f') { v.fmt = VFMT[x] ? x : 'v'; return vidCollectMsg(chat); }
     if (a === 'vo') { v.voice = !v.voice; return send(chat, v.voice ? '🎙 የድምፅ ማብራሪያ ይኖራል።' : '🔇 ያለ ድምፅ (ጽሑፍ + ሙዚቃ ብቻ) ይሆናል።', vidKb(v)); }
+    if (a === 'im') { v.images = !v.images; return send(chat, v.images ? '🖼 ከርዕሱ ጋር የሚሄዱ ምስሎችን እፈልጋለሁ (ሲያገኙ ብቻ፤ ካልተገኘ በንድፍ እሞላለሁ)።' : '🚫 ያለ ተጨማሪ ምስል (የሰጡኝ ፎቶ ብቻ)።', vidKb(v)); }
     if (a === 'mu') { v.music = !v.music; return send(chat, v.music ? '🎵 ሙዚቃ ይኖራል።' : '🔕 ያለ ሙዚቃ ይሆናል።', vidKb(v)); }
     if (a === 'go') return vidGo(chat, uid, undefined); if (a === 're') return vidGo(chat, uid, v.plan ? '' : undefined);
     if (a === 'ch') { v.collect = 'change'; return send(chat, '✏️ ምን ይለወጥ? ይጻፉ (ለምሳሌ «ዋጋውን አጉላ»፣ «አጠር አድርገው»፣ «ሌላ ቀለም»፣ «መጨረሻ ላይ ስልኬን ጨምር»)፦'); }

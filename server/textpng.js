@@ -53,4 +53,4 @@ function textPng(text, size, opt = {}) {
   }
   return { buf: pngRGBA(w, h, out), w, h };
 }
-module.exports = { textPng, contours, UPEM };
+module.exports = { textPng, contours, UPEM, pngRGBA };
