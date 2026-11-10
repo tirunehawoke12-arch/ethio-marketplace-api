@@ -10,12 +10,12 @@ const REGIONS = ['አዲስ አበባ', 'ድሬዳዋ', 'አማራ', 'ኦሮሚ�
 const PAY = ['telebirr', 'CBE Birr', 'ንግድ ባንክ', 'አዋሽ ባንክ', 'ዳሽን ባንክ', 'አቢሲኒያ ባንክ', 'ሌላ'];
 const STEP = { placed: '📝 ታዘዘ', payment_submitted: '💳 ክፍያ ተላከ', paid: '✅ ክፍያ ተረጋገጠ', preparing: '📦 እየተዘጋጀ', shipped: '🚚 ተላከ', delivered: '🤝 ደረሰ', settled: '💰 ለሻጭ ተከፈለ', cancelled: '✕ ተሰርዟል', refund_pending: '↩️ ተመላሽ በመጠባበቅ', refunded: '↩️ ተመላሽ ተደርጓል', disputed: '⚖️ ክርክር ላይ' };
 const APPST = { applied: '📨 ተልኳል', shortlisted: '⭐ በዝርዝር', hired: '🎉 ተቀጥረዋል', rejected: '✖️ አልተመረጡም', withdrawn: '↩️ ተነስቷል', invited: '🤝 ግብዣ' };
-const MENU_KEYS = [['market', 'shops', 'jobs'], ['pages', 'cart', 'orders'], ['me', 'search', 'help'], ['near', 'alerts', 'messages'], ['learn', 'ai']];
+const MENU_KEYS = [['market', 'shops', 'jobs'], ['pages', 'cart', 'orders'], ['me', 'search', 'help'], ['near', 'alerts', 'messages'], ['learn', 'ai', 'vid']];
 const MENU_TX = {                                    // የታች ማውጫ በ4 ቋንቋ (ትርጉሙ በአፍ-መፍቻ ተናጋሪ ቢታይ ይመረጣል)
-  am: [['🛍 ገበያ', '🏪 ሱቆች', '💼 ሥራ'], ['🌐 ገጾች', '🛒 ጋሪ', '📦 ትዕዛዞቼ'], ['👤 ገጾቼ', '🔎 ፈልግ', '❓ እገዛ'], ['📍 በአቅራቢያዬ', '🔔 ማንቂያዎች', '💬 መልእክቶች'], ['🎓 ትምህርት', '🤖 AI ረዳት']],
-  en: [['🛍 Market', '🏪 Shops', '💼 Jobs'], ['🌐 Pages', '🛒 Cart', '📦 My orders'], ['👤 My page', '🔎 Search', '❓ Help'], ['📍 Nearby', '🔔 Alerts', '💬 Messages'], ['🎓 Learn', '🤖 AI assistant']],
-  om: [['🛍 Gabaa', '🏪 Suuqota', '💼 Hojii'], ['🌐 Fuulota', '🛒 Gaarii', '📦 Ajajoota koo'], ['👤 Fuula koo', '🔎 Barbaadi', '❓ Gargaarsa'], ['📍 Naannoo koo', '🔔 Beeksisa', '💬 Ergaawwan'], ['🎓 Barnoota', '🤖 Gargaaraa AI']],
-  ti: [['🛍 ዕዳጋ', '🏪 ድኳናት', '💼 ስራሕ'], ['🌐 ገጻት', '🛒 ቅርጫት', '📦 ትዕዛዛተይ'], ['👤 ገጸይ', '🔎 ድለይ', '❓ ሓገዝ'], ['📍 ኣብ ጎረቤተይ', '🔔 መተሓሳሰቢ', '💬 መልእኽታት'], ['🎓 ትምህርቲ', '🤖 ሓጋዚ AI']],
+  am: [['🛍 ገበያ', '🏪 ሱቆች', '💼 ሥራ'], ['🌐 ገጾች', '🛒 ጋሪ', '📦 ትዕዛዞቼ'], ['👤 ገጾቼ', '🔎 ፈልግ', '❓ እገዛ'], ['📍 በአቅራቢያዬ', '🔔 ማንቂያዎች', '💬 መልእክቶች'], ['🎓 ትምህርት', '🤖 AI ረዳት', '🎬 ቪድዮ']],
+  en: [['🛍 Market', '🏪 Shops', '💼 Jobs'], ['🌐 Pages', '🛒 Cart', '📦 My orders'], ['👤 My page', '🔎 Search', '❓ Help'], ['📍 Nearby', '🔔 Alerts', '💬 Messages'], ['🎓 Learn', '🤖 AI assistant', '🎬 Video']],
+  om: [['🛍 Gabaa', '🏪 Suuqota', '💼 Hojii'], ['🌐 Fuulota', '🛒 Gaarii', '📦 Ajajoota koo'], ['👤 Fuula koo', '🔎 Barbaadi', '❓ Gargaarsa'], ['📍 Naannoo koo', '🔔 Beeksisa', '💬 Ergaawwan'], ['🎓 Barnoota', '🤖 Gargaaraa AI', '🎬 Viidiyoo']],
+  ti: [['🛍 ዕዳጋ', '🏪 ድኳናት', '💼 ስራሕ'], ['🌐 ገጻት', '🛒 ቅርጫት', '📦 ትዕዛዛተይ'], ['👤 ገጸይ', '🔎 ድለይ', '❓ ሓገዝ'], ['📍 ኣብ ጎረቤተይ', '🔔 መተሓሳሰቢ', '💬 መልእኽታት'], ['🎓 ትምህርቲ', '🤖 ሓጋዚ AI', '🎬 ቪድዮ']],
 };
 const BOT_LANGS = [['am', 'አማርኛ'], ['en', 'English'], ['om', 'Afaan Oromoo'], ['ti', 'ትግርኛ']];
 const TX = {
@@ -722,14 +722,14 @@ module.exports = function bot(c) {
     return tg('sendMessage', { chat_id: chat, text: cap, parse_mode: 'HTML', protect_content: true, reply_markup: /^https:/.test(baseUrl) ? { inline_keyboard: [[{ text: '📖 ክፈት', web_app: { url } }]] } : undefined });
   }
   async function action(chat, uid, a) {
-    if (isEdu(chat) && !/^e_/.test(a) && !['learn', 'ai', 'help', 'admin'].includes(a)) return eduHome(chat, uid, true);          // የገበያ ቁልፍ ከድሮ ማውጫ ቢጫን ወደ ትምህርት ይመለሳል
+    if (isEdu(chat) && !/^e_/.test(a) && !['learn', 'ai', 'help', 'admin', 'vid'].includes(a)) return eduHome(chat, uid, true);          // የገበያ ቁልፍ ከድሮ ማውጫ ቢጫን ወደ ትምህርት ይመለሳል
     switch (a) {
       case 'e_books': return bookList(chat, 0, null); case 'e_file': return eduFile(chat); case 'e_ai': return eduAI(chat, uid); case 'e_prog': return progShow(chat); case 'e_mode': return modeAsk(chat);
       case 'market': return marketHome(chat, uid); case 'shops': return listShops(chat, uid); case 'jobs': return jobsMenu(chat); case 'pages': return listPages(chat, uid, 1);
       case 'cart': return showCart(chat); case 'orders': return listOrders(chat, uid); case 'me': return hub(chat, uid); case 'help': return send(chat, HELP, menuKb(chat));
       case 'search': return startFlow(chat, 'search', [{ k: 'q', q: '🔎 የሚፈልጉትን ዕቃ ስም ይጻፉ፦', t: 'text', min: 2, max: 60 }]);
       case 'admin': return isAdmin(chat) ? adminHub(chat) : send(chat, '⛔ አድሚን ብቻ');
-      case 'ai': return isEdu(chat) ? eduAI(chat, uid) : aiIntro(chat, uid); case 'learn': return eduHome(chat, uid);
+      case 'ai': return isEdu(chat) ? eduAI(chat, uid) : aiIntro(chat, uid); case 'learn': return eduHome(chat, uid); case 'vid': return vidStart(chat, uid);
       case 'near': return nearStart(chat); case 'alerts': return alertsMenu(chat, uid); case 'messages': return msgList(chat, uid);
     }
   }
@@ -740,6 +740,9 @@ module.exports = function bot(c) {
     if (/^\/myid\b/.test(t)) return send(chat, `🆔 Chat ID፦ <code>${chat}</code>`);
     const ld = /^\/start\s+d_([\w-]{4,40})$/.exec(t); if (ld) return learnStart(chat, ld[1]);
     const dl = /^\/start\s+([sgpwej])_([\w-]{4,40})$/.exec(t); if (dl) s.deep = { t: dl[1], id: dl[2] };       // deep link — ከመግባት በኋላም ይከፈታል
+    if (/^\/(video|ቪድዮ)\b/i.test(t)) return vidStart(chat, uid, t.replace(/^\/\S+\s*/, '').trim() || '');
+    { const vv = vget(chat); if (vv && vv.collect && !/^\//.test(t) && !LABELS[t]) { if (vv.collect === 'change') return vidGo(chat, uid, t.slice(0, 1500)); if (vv.busy) return send(chat, '⏳ ቪድዮዎ እየተሠራ ነው።'); vv.notes.push(t.slice(0, 1500)); return vidAck(chat, 'ሀሳብ'); } }
+    if (VIDINT.test(t) && VIDVERB.test(t) && t.length < 400 && !HOWQ.test(t) && !/(ፋይል|pdf|pptx|docx|xlsx)/i.test(t)) return vidStart(chat, uid, t);
     if (t === '✖️ ተው') { s.await = null; s.flow = null; s.aiproof = null; save(); return home(chat); }
     if (/^\/(search|ፈልግ)\b/i.test(t)) { const q = t.replace(/^\/\S+\s*/, '').trim(); if (!uid && !isAdmin(chat)) return authStart(chat); if (!aiReady()) return send(chat, aiOff); if (!q) { ses(chat).srch = true; return send(chat, '🔎 <b>የድር ፍለጋ (AI Mode)</b>\n\nአሁን ጥያቄዎን ይጻፉ — ከድር ፍለጋ ጋር ተሳስሮ ከምንጭ ጋር እመልሳለሁ። (ወይም በአንድ መልእክት፦ <code>/search የዛሬ የዶላር ምንዛሬ</code>)'); } return aiText(chat, uid, q, false, { ground: true }); }
     if (/^\/(progress|እድገት)\b/i.test(t)) return progShow(chat);
@@ -763,6 +766,7 @@ module.exports = function bot(c) {
     if (k === 'noop') return;
     if (isEdu(chat) && k === 'm') return eduHome(chat, uid);
     if (k === 'ed') return a === 'b' ? bookList(chat, 0, null) : a === 'f' ? eduFile(chat) : a === 's' ? (ses(chat).srch = true, save(), send(chat, '🔎 አሁን ጥያቄዎን ይጻፉ — ከድር ፍለጋ ጋር ተሳስሮ ከምንጭ ጋር እመልሳለሁ።')) : eduAI(chat, uid);
+    if (k === 'vd') return vidRoute(chat, uid, a, x);
     if (k === 'login') return authStart(chat);
     if (k === 'ob') { const s0 = ses(chat); s0.mode = { e: 'edu', m: 'market', b: 'both' }[a] || 'both'; save(); if (uid) return s0.mode === 'both' ? home(chat, '✨ እንኳን ደህና መጡ — ከታች ይምረጡ።') : landing(chat, uid); return authAsk(chat, a === 'e'); }
     if (k === 'pw') return a === 'up' ? payMenu(chat, uid) : send(chat, '🌅 እሺ! ነገ ነጻ ድርሻዎ ይታደሳል፤ ተመልሰው ይቀጥሉ — በዚህ ጊዜ ትምህርቱን ወይም ገበያውን ያስሱ።', menuKb(chat));
@@ -1325,6 +1329,74 @@ module.exports = function bot(c) {
       return send(chat, `ገጽ ${d.next - done}–${d.next - 1} ተተርጉሟል።`, ik([[b(`▶️ ቀጥል (ገጽ ${d.next}…)`, 'adn'), b('📥 እስከ አሁን ፋይል', 'adf')], [b('🔤 ፎንት/መጠን', 'adfo'), b('✖️ አቁም', 'adx')]]));
     } finally { clearInterval(tm); d.busy = false; }
   }
+  /* ===== 🎬 ቪድዮ ሰሪ — ሀሳቦችን ተቀብሎ ራሱ አቀነባብሮ እስከ 3 ደቂቃ ቪድዮ (ማስታወቂያ ላይ ትኩረት) ===== */
+  const VIDEO = require('./video'), VID = new Map(), VID_TTL = 3 * 3600e3;
+  const VK = { ad: '📢 ማስታወቂያ', product: '🛍 የምርት ማሳያ', edu: '🎓 ትምህርታዊ', greet: '🎉 ሰላምታ/በዓል', story: '📖 ታሪክ', other: '🎞 ሌላ' }, VSEC = [15, 30, 60, 120, 180], VFMT = { v: '📱 ቁመት 9:16', s: '⬜ ካሬ 1:1', h: '🖥 ሰፊ 16:9' };
+  const VIDINT = /(ቪድዮ|ቪዲዮ|\bvideo\b)/i, VIDVERB = /(ስራ|ሥራ|አዘጋጅ|ይስራ|ሰርተህ|ስሪ|አድርግ|ፍጠር|make|create|produce|generate)/i;
+  const vget = chat => { const v = VID.get(chat); if (v && Date.now() - v.ts > VID_TTL) { VID.delete(chat); return null; } return v || null; };
+  const vcollect = chat => { const v = vget(chat); return !!(v && v.collect); };
+  let vidChain = Promise.resolve(), vidWait = 0, vidOk = null;
+  const vidAvail = async () => { if (vidOk === null) vidOk = await VIDEO.available(ffmpegBin()); return vidOk; };
+  const vkGuess = t => (/ማስታወቂያ|\bad\b|promo|ማስተዋወቅ|ማስተዋወቂያ/i.test(t) ? 'ad' : /ምርት|product/i.test(t) ? 'product' : /ትምህርት|ማብራሪያ|lesson|explain/i.test(t) ? 'edu' : /ሰላምታ|በዓል|መልካም|ልደት|ምስጋና|greeting|birthday/i.test(t) ? 'greet' : /ታሪክ|ተረት|story/i.test(t) ? 'story' : '');
+  async function vidStart(chat, uid, firstText) {
+    if (!uid && !isAdmin(chat)) return authStart(chat); if (!aiReady()) return send(chat, aiOff);
+    if (!(await vidAvail())) return send(chat, '🎬 ቪድዮ ሰሪው በዚህ አገልግሎት ላይ ገና አልነቃም (ffmpeg የለም)።' + (isAdmin(chat) ? '\n\n🛠 አድሚን፦ <code>npm i ffmpeg-static</code> ያድርጉ ወይም ስርዓቱ ላይ ffmpeg ይጫኑ (ወይም FFMPEG_PATH ይስጡ)።' : ' አድሚኑን ያሳውቁ።'));
+    const old = vget(chat); if (old && old.busy) return send(chat, '⏳ ቪድዮዎ እየተሠራ ነው — ሲጨርስ እልካለሁ።');
+    const kind = firstText ? vkGuess(firstText) : '', v = { ts: Date.now(), kind, sec: 30, fmt: 'v', voice: true, music: true, notes: firstText ? [String(firstText).slice(0, 1500)] : [], photos: [], musicBuf: null, collect: false, busy: false, plan: null }; VID.set(chat, v);
+    if (kind) return vidDur(chat);
+    const ks = isEdu(chat) ? ['edu', 'story', 'greet', 'other'] : Object.keys(VK); return send(chat, '🎬 <b>ቪድዮ ሰሪ</b>\n\nሀሳቦችዎን ይስጡኝ፤ እኔ አቀነባብሬ (ጽሑፍ + እነማ + የድምፅ ማብራሪያ + ሙዚቃ) እስከ 3 ደቂቃ ቪድዮ እሠራለሁ።\n\n<b>ደረጃ 1/3 — ምን ዓይነት ቪድዮ?</b>', ik([ks.slice(0, 2).map(k => b(VK[k], 'vd:k:' + k)), ks.slice(2, 4).map(k => b(VK[k], 'vd:k:' + k)), ks.slice(4).map(k => b(VK[k], 'vd:k:' + k))]));
+  }
+  const vidDur = chat => send(chat, '<b>ደረጃ 2/3 — ርዝማኔ?</b>\n(ማስታወቂያ ለማህበራዊ ሚዲያ 15–30 ሰከንድ ይመከራል)', ik([VSEC.slice(0, 3).map(n => b(n < 60 ? n + ' ሰከንድ' : n / 60 + ' ደቂቃ', 'vd:d:' + n)), VSEC.slice(3).map(n => b(n / 60 + ' ደቂቃ', 'vd:d:' + n))]));
+  const vidFmtAsk = chat => send(chat, '<b>ደረጃ 3/3 — ቅርጽ?</b>', ik([Object.keys(VFMT).map(k => b(VFMT[k], 'vd:f:' + k))]));
+  const vidKb = v => ik([[b('✅ ቪድዮ ሥራ', 'vd:go')], [b(v.voice ? '🎙 ድምፅ፦ አለ' : '🔇 ድምፅ፦ የለም', 'vd:vo'), b(v.music ? '🎵 ሙዚቃ፦ አለ' : '🔕 ሙዚቃ፦ የለም', 'vd:mu')], [b('❌ ሰርዝ', 'vd:x')]]);
+  function vidCollectMsg(chat) {
+    const v = vget(chat); if (!v) return; v.collect = true; v.ts = Date.now();
+    const g = v.kind === 'ad' || v.kind === 'product' ? '• የንግዱ/ምርቱ ስም\n• ምን ይሸጣሉ ወይም ምን አገልግሎት ይሰጣሉ\n• ለማን (ደንበኞች)\n• ዋና ጥቅሞች / ልዩነት\n• ዋጋ ወይም ቅናሽ (ካለ)\n• ስልክ እና አድራሻ\n' : v.kind === 'edu' ? '• ርዕሱ\n• ዋና ዋና ነጥቦች\n• ምሳሌዎች (ካሉ)\n' : v.kind === 'greet' ? '• ለማን/ለምን በዓል\n• የሚፈልጉት መልእክት\n• ስምዎ\n' : '• ዋናው ሀሳብ ወይም ታሪክ\n• የሚፈልጉት ስሜት/ድባብ\n';
+    return send(chat, `✍️ <b>አሁን ሀሳቦችዎን ይላኩ</b> — በተለያዩ መልዕክቶች ይቻላል (ጽሑፍ፣ 🎙 ድምፅ፣ 📷 ፎቶ እስከ 8፣ 🎵 የራስዎ ሙዚቃ)።\n\n${g}\nበቂ ባይሆንም ችግር የለም — ቀሪውን እኔ አቀነባብራለሁ (ያልሰጡኝን ዋጋ/ስልክ አልፈጥርም)። ሲጨርሱ «✅ ቪድዮ ሥራ» ይጫኑ።\n\n<i>${VK[v.kind] || VK.other} · ${v.sec < 60 ? v.sec + ' ሰከንድ' : v.sec / 60 + ' ደቂቃ'} · ${VFMT[v.fmt]}</i>`, vidKb(v));
+  }
+  const vidAck = (chat, what) => { const v = vget(chat); if (!v) return; v.ts = Date.now(); return send(chat, `✅ ${what} ተቀብያለሁ — ጽሑፍ ${v.notes.length} · ፎቶ ${v.photos.length}${v.musicBuf ? ' · 🎵 ሙዚቃ' : ''}\nተጨማሪ ይላኩ ወይም ይጫኑ፦`, vidKb(v)); };
+  async function vidMedia(chat, m) {
+    const v = vget(chat); if (!v) return;
+    try {
+      if (m.photo) { if (v.photos.length >= 8) return send(chat, '⚠️ እስከ 8 ፎቶ ብቻ።'); const p = (m.photo || []).filter(x => (x.file_size || 0) <= 5 * 1048576).sort((a, b2) => (b2.width || 0) - (a.width || 0))[0] || m.photo[0]; v.photos.push({ buf: await tgDownload(p.file_id), cap: clip(m.caption || '', 200) }); if (m.caption) v.notes.push(clip(m.caption, 600)); return vidAck(chat, 'ፎቶ'); }
+      if (m.voice) { if (!aiReady()) return send(chat, aiOff); const t = await ai.transcribe(await tgDownload(m.voice.file_id), m.voice.mime_type || 'audio/ogg'); if (!t) return send(chat, '🎙 ድምፁ አልተሰማኝም — እንደገና ይሞክሩ ወይም ይጻፉ።'); v.notes.push(clip(t, 1500)); return vidAck(chat, '🎙 ድምፅ'); }
+      const a = m.audio || m.document; if ((a.file_size || 0) > 15 * 1048576) return send(chat, '⚠️ ሙዚቃው ከ15MB በላይ ነው።'); v.musicBuf = await tgDownload(a.file_id); v.music = true; return vidAck(chat, '🎵 ሙዚቃ');
+    } catch (e) { return send(chat, e && e.message === 'ai_no_audio' ? '🎙 ድምፅ ለመረዳት GEMINI_API_KEY ያስፈልጋል — በጽሑፍ ይላኩ።' : '⚠️ ፋይሉን መቀበል አልተቻለም — እንደገና ይሞክሩ።'); }
+  }
+  async function vidGo(chat, uid, change) {
+    const v = vget(chat); if (!v) return send(chat, '⌛ ጊዜው አልፏል — እንደገና 🎬 ቪድዮ ይጀምሩ።', menuKb(chat)); if (v.busy) return send(chat, '⏳ ቪድዮዎ እየተሠራ ነው — ሲጨርስ እልካለሁ።');
+    if (!v.notes.length && !v.photos.length) return send(chat, '✍️ መጀመሪያ ቢያንስ አንድ ሀሳብ (ጽሑፍ ወይም ፎቶ) ይላኩ።', vidKb(v));
+    if (!(await vidAvail())) return send(chat, '🎬 ቪድዮ ሰሪው ገና አልነቃም (ffmpeg የለም)።'); const s = ses(chat), day = new Date().toISOString().slice(0, 10); if (!s.vday || s.vday.d !== day) s.vday = { d: day, n: 0 };
+    if (!isAdmin(chat) && s.vday.n >= (Number(process.env.VIDEO_DAILY_MAX) || 4)) return send(chat, '🌅 ዛሬ የቪድዮ ድርሻዎ አልቋል — ነገ ይታደሳል፤ ተመልሰው ይቀጥሉ።', menuKb(chat));
+    v.busy = true; v.collect = false; v.ts = Date.now(); const tm = setInterval(() => { tg('sendChatAction', { chat_id: chat, action: 'upload_video' }).catch(() => { }); }, 4500); let pm = null, mf = null, last = 0;
+    const say = txt => { if (!pm) return; const t = Date.now(); if (t - last < 3500) return; last = t; tg('editMessageText', { chat_id: chat, message_id: pm.message_id, text: txt, parse_mode: 'HTML' }).catch(() => { }); };
+    try {
+      pm = await tg('sendMessage', { chat_id: chat, text: `🎬 <b>ቪድዮዎን እያቀነባበርኩ ነው…</b>\n1️⃣ ሀሳቦችን በማቀናበር ላይ…\n(${v.sec >= 120 ? 'ረጅም ቪድዮ እስከ ጥቂት ደቂቃ ይወስዳል' : 'ከ1–3 ደቂቃ ያህል'})`, parse_mode: 'HTML' }).catch(() => null);
+      const r = await svc.videoPlan({ uid: uid || 'admin', key: String(chat), admin: isAdmin(chat), args: { kind: v.kind || 'other', sec: v.sec, notes: v.notes.join('\n'), photos: v.photos.map(p => p.cap), voice: v.voice, prev: change != null && v.plan ? JSON.stringify(v.plan) : '', change: change || '' } });
+      if (!r.ok && r.error === 'ai_limit') return paywall(chat, uid, 'limit'); if (!r.ok) return send(chat, r.error === 'ai_disabled' ? '⏸ AI ለጊዜው በአድሚን ተዘግቷል።' : r.error === 'ai_blocked' ? '⛔ የ AI አገልግሎት ለእርስዎ ተዘግቷል።' : aiOff, menuKb(chat)); if (r.paywall) return paywall(chat, uid, r.paywall);
+      const plan = r.plan; plan.voice = v.voice; if (!v.music) plan.music = 'none'; v.plan = plan;
+      if (v.musicBuf) { mf = require('path').join(require('os').tmpdir(), 'vm-' + chat + '-' + Date.now()); require('fs').writeFileSync(mf, v.musicBuf); }
+      const ahead = vidWait; vidWait++; if (ahead && pm) say(`🎬 ተራ እየጠበቅሁ ነው (${ahead} ቪድዮ ከእርስዎ በፊት)…`);
+      const out = await (vidChain = vidChain.catch(() => { }).then(() => { vidWait = Math.max(0, vidWait - 1); return VIDEO.render(plan, { bin: ffmpegBin(), fmt: v.fmt, maxSec: Math.min(Number(process.env.VIDEO_MAX_SEC) || 180, Math.round(v.sec * 1.12)), photos: v.photos.map(p => p.buf), musicFile: mf, tts: v.voice && svc.tts ? t => svc.tts(t) : null, onProgress: (p, k) => say(`🎬 <b>ቪድዮዎን እያቀነባበርኩ ነው…</b>\n${k === 'voice' ? '2️⃣ 🎙 የድምፅ ማብራሪያ በማዘጋጀት ላይ…' : '3️⃣ 🎞 ትዕይንቶችን በመሥራት ላይ… ' + Math.round(p * 100) + '%'}`) }); }));
+      if (out.buf.length > 49 * 1048576) return send(chat, '⚠️ ቪድዮው ከቴሌግራም ገደብ (50MB) በላይ ሆነ — አጠር ያለ ርዝማኔ ይምረጡ።', ik([[b('🎬 አዲስ ቪድዮ', 'vd:new')]]));
+      await tgUpload('sendVideo', 'video', chat, out.buf, 'etio-video.mp4', 'video/mp4', { caption: clip((plan.caption || (plan.brand ? plan.brand : '')) + '', 1000), width: out.w, height: out.h, duration: Math.round(out.dur), supports_streaming: 'true' });
+      s.vday.n++; save(); if (pm) tg('deleteMessage', { chat_id: chat, message_id: pm.message_id }).catch(() => { });
+      await send(chat, `✅ ቪድዮ ዝግጁ ነው — ${Math.round(out.dur)} ሰከንድ · ${out.scenes} ትዕይንት${out.narrated ? ' · 🎙 ድምፅ' : v.voice ? ' · (የድምፅ ማብራሪያ ጊዜያዊ አልተገኘም — በጽሑፍ ብቻ)' : ''}${out.music ? ' · 🎵' : ''}\n\nየተለየ ስሪት ወይም ለውጥ ይፈልጋሉ?`, ik([[b('🔁 ሌላ ስሪት', 'vd:re'), b('✏️ ለውጥ ጠይቅ', 'vd:ch')], [b('🎬 አዲስ ቪድዮ', 'vd:new')]]));
+    } catch (e) { console.warn('video', e && e.message); await send(chat, /^ai_/.test(e && e.message) ? aiErr(e, chat) : '⚠️ ቪድዮውን መሥራት አልተቻለም — እንደገና ይሞክሩ።' + (isAdmin(chat) ? `\n<code>${H(clip(e && e.message, 400))}</code>` : ''), ik([[b('🔁 እንደገና', 'vd:re')]])); }
+    finally { clearInterval(tm); v.busy = false; if (mf) try { require('fs').unlinkSync(mf); } catch (e) { } }
+  }
+  async function vidRoute(chat, uid, a, x) {
+    let v = vget(chat);
+    if (a === 'new') return vidStart(chat, uid); if (!v) return send(chat, '⌛ ጊዜው አልፏል — 🎬 ቪድዮ ይጀምሩ።', ik([[b('🎬 አዲስ ቪድዮ', 'vd:new')]]));
+    if (a === 'x') { VID.delete(chat); return send(chat, '✖️ ተሰርዟል።', menuKb(chat)); }
+    if (a === 'k') { v.kind = VK[x] ? x : 'other'; return vidDur(chat); }
+    if (a === 'd') { v.sec = VSEC.includes(Number(x)) ? Number(x) : 30; return vidFmtAsk(chat); }
+    if (a === 'f') { v.fmt = VFMT[x] ? x : 'v'; return vidCollectMsg(chat); }
+    if (a === 'vo') { v.voice = !v.voice; return send(chat, v.voice ? '🎙 የድምፅ ማብራሪያ ይኖራል።' : '🔇 ያለ ድምፅ (ጽሑፍ + ሙዚቃ ብቻ) ይሆናል።', vidKb(v)); }
+    if (a === 'mu') { v.music = !v.music; return send(chat, v.music ? '🎵 ሙዚቃ ይኖራል።' : '🔕 ያለ ሙዚቃ ይሆናል።', vidKb(v)); }
+    if (a === 'go') return vidGo(chat, uid, undefined); if (a === 're') return vidGo(chat, uid, v.plan ? '' : undefined);
+    if (a === 'ch') { v.collect = 'change'; return send(chat, '✏️ ምን ይለወጥ? ይጻፉ (ለምሳሌ «ዋጋውን አጉላ»፣ «አጠር አድርገው»፣ «ሌላ ቀለም»፣ «መጨረሻ ላይ ስልኬን ጨምር»)፦'); }
+  }
   async function handle(upd) {
     try {
       if (upd.callback_query) { const cq = upd.callback_query; tg('answerCallbackQuery', { callback_query_id: cq.id }).catch(() => { }); if (!cq.message) return; if (cq.message.chat.type === 'private') { track(cq.message.chat.id, cq.from, 'cb'); const gt = gate(cq.message.chat.id); if (gt) return send(cq.message.chat.id, gt); } return await route(cq.message.chat.id, String(cq.data || '')); }
@@ -1332,6 +1404,7 @@ module.exports = function bot(c) {
       if (upd.inline_query) return await inline(upd.inline_query);
       const m = upd.message; if (!m || !m.chat || m.chat.type !== 'private') return; const chat = m.chat.id;
       track(chat, m.from, 'msg'); { const gt = gate(chat); if (gt) return send(chat, gt); }
+      if (vcollect(chat) && ses(chat) && (m.photo || m.voice || m.audio || (m.document && /^audio\//i.test(m.document.mime_type || '')))) return await vidMedia(chat, m);
       if (m.voice || m.audio) return await onVoice(chat, m);
       if (m.location) return await onLocation(chat, m);
       if (m.contact) return await authContact(chat, m);

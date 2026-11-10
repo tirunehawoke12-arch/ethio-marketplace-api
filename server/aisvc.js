@@ -106,6 +106,13 @@ module.exports = function aisvc(ctx) {
       return { ok: true, file: f, spec };
     } catch (e) { ai.refund(String(uid), 'chat', 1); throw e; }
   }
+  /* 🎬 ቪድዮ እቅድ፦ 1 የውይይት መልእክት ይቆጠራል → { ok, plan } */
+  async function videoPlan({ uid, key, admin, args }) {
+    const c = cfg(); if (!ai.enabled) return { ok: false, error: 'ai_off' }; const owner = admin || isOwner(uid); if (!c.enabled && !owner) return { ok: false, error: 'ai_disabled' };
+    const a = acc(uid); if (a.blocked && !owner) return { ok: false, error: 'ai_blocked' }; const paid = owner || a.paid, q = ai.take(String(uid), 'chat', 1, owner, paid ? c.paidChatDay : c.freeChatDay);
+    if (!q.ok) return !paid && c.paywall ? { ok: true, paywall: 'limit' } : { ok: false, error: 'ai_limit' };
+    try { const plan = await ai.videoPlan(args); ai.note(String(key || uid), `[ቪድዮ እቅድ አዘጋጅቼ ሠራሁ፦ ${(plan.scenes || []).length} ትዕይንቶች]`); return { ok: true, plan }; } catch (e) { ai.refund(String(uid), 'chat', 1); throw e; }
+  }
   /* የሰነድ ትርጉም ገጾች ገደብ */
   function takePages(uid, admin) {
     const c = cfg(), owner = admin || isOwner(uid); if (!c.enabled && !owner) return { ok: false, error: 'ai_disabled' }; const a = acc(uid); if (a.blocked && !owner) return { ok: false, error: 'ai_blocked' }; const paid = owner || a.paid;
@@ -274,6 +281,6 @@ module.exports = function aisvc(ctx) {
     if (ch.length) await saveMany(ch).catch(() => { }); return ch.length;
   }
   const timer = setInterval(() => { tick().catch(() => { }); }, 3600e3); timer.unref && timer.unref(); setTimeout(() => tick().catch(() => { }), 60e3).unref();
-  return { genDoc, resetChat: key => ai.reset(String(key)), boardPut, newsDiag, clockInfo, ethDate, newsInfo, tbOnly, autoVerify, cfg, acc, info, converse, takePages, buy, decide, tick, stats, ai, isOwner };
+  return { genDoc, videoPlan, tts: text => synth(text), resetChat: key => ai.reset(String(key)), boardPut, newsDiag, clockInfo, ethDate, newsInfo, tbOnly, autoVerify, cfg, acc, info, converse, takePages, buy, decide, tick, stats, ai, isOwner };
 };
 module.exports.DEFAULTS = DEFAULTS;

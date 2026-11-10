@@ -187,6 +187,30 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
     const msg = `የሚፈለገው ፋይል አይነት፦ ${String(fmt).toUpperCase()}\n\n` + (ctx ? `[የቅርብ ውይይት — አስፈላጊ ከሆነ ተጠቀም]\n${ctx}\n\n` : '') + (prev ? `[ቀድሞ ያዘጋጀኸው ሰነድ JSON — ተጠቃሚው ለውጥ ይጠይቃል፤ ሙሉውን የተሻሻለ JSON ስጥ]\n${String(prev).slice(0, 30000)}\n\n` : '') + (source ? `[ምንጭ ፋይል ጽሑፍ]\n${String(source).slice(0, 30000)}\n\n` : '') + `የተጠቃሚው ጥያቄ፦ ${String(request).slice(0, 2500)}`;
     let last; for (let tr = 0; tr < 2; tr++) { try { const out = await ask({ system: GEN_SYS + ACC, max: 8000, ...(media ? { media } : {}), msgs: [{ role: 'user', content: msg }] }), a = out.indexOf('{'), z = out.lastIndexOf('}'); if (a < 0 || z < a) throw new Error('gen_parse'); return JSON.parse(out.slice(a, z + 1)); } catch (e) { last = e; if (/^ai_(busy|timeout|network)$/.test(e.message)) await sleep(3000); } } throw last;
   }
+  /* 🎬 ቪድዮ፦ ከተጠቃሚ ሀሳቦች → ትዕይንት እቅድ (JSON) */
+  const VID_KIND = {
+    ad: 'ማስታወቂያ (ዋናው ትኩረት)። AIDA መዋቅር ተከተል፦ 1) hook — የመጀመሪያ 3 ሰከንድ ትኩረት የሚስብ ጥያቄ ወይም ድፍረት ያለው ዓረፍተ ነገር፤ 2) የደንበኛው ፍላጎት/ችግር፤ 3) ምርቱ/አገልግሎቱ እንደ መፍትሄ፤ 4) list — 3 ዋና ጥቅሞች (አጫጭር)፤ 5) offer — ዋጋ/ቅናሽ/ልዩ ሁኔታ (ተጠቃሚው ከሰጠ ብቻ)፤ 6) cta — ስም፣ ስልክ፣ አድራሻ፣ «አሁኑኑ ይደውሉ/ይምጡ» ጥሪ። ቃላት አጭር፣ ሕያው፣ አሳማኝ፣ ስሜት የሚነካ፤ ድግግሞሽ የለም።',
+    product: 'የምርት ማሳያ — ምርቱን ባህሪ በባህሪ አሳይ፣ ጥቅም፣ ዋጋ፣ ለመግዛት ጥሪ።',
+    edu: 'ትምህርታዊ/ማብራሪያ ቪድዮ — ርዕስ፣ ትርጉም፣ ደረጃ በደረጃ ማብራሪያ፣ ምሳሌ፣ ማጠቃለያ። ከገበያ/ክፍያ ጋር አታገናኝ።',
+    greet: 'የምስጋና/የሰላምታ/የበዓል ቪድዮ — ሞቅ ያለ፣ አጭር፣ ልብ የሚነካ፤ ከላኪው ስም ጋር።',
+    story: 'ታሪክ/ተረት — መግቢያ፣ ሂደት፣ ጫፍ፣ ፍጻሜ፤ በአጭር ትዕይንቶች።',
+    other: 'ተጠቃሚው እንደገለጸው።'
+  };
+  const VID_SYS = `አንተ ልምድ ያለህ የኢትዮጵያ ቪድዮ ማስታወቂያ ጸሐፊና ዳይሬክተር ነህ። ተጠቃሚው የሰጠህን የተበታተኑ ሀሳቦች (ጽሑፍ፣ ፎቶ መግለጫ) ሰብስበህ ራስህ አቀነባብረህ አጭር ቪድዮ የሚሆን እቅድ ትሠራለህ።
+ውጤት JSON ብቻ (ከJSON ውጪ ምንም ጽሑፍ ወይም \`\`\` የለም)፦
+{"brand":"የንግዱ/ላኪው ስም (ካለ፤ አለበለዚያ '')","theme":0-6,"music":"calm|energetic|none","caption":"ለቴሌግራም የሚለጠፍ አጭር መግለጫ + 3-5 ሃሽታግ","scenes":[{"type":"hook|title|text|list|offer|cta","head":"ዋና ርዕስ (እስከ 38 ፊደል)","sub":"ንዑስ መስመር (እስከ 70 ፊደል፤ ባዶ ሊሆን ይችላል)","bullets":["እስከ 4 አጫጭር ነጥቦች (እስከ 28 ፊደል) — list ላይ ብቻ"],"price":"ዋጋ/ቅናሽ ጽሑፍ (offer ላይ፣ ተጠቃሚው ከሰጠ ብቻ)","phone":"ስልክ (cta ላይ፣ ከተሰጠ ብቻ)","addr":"አድራሻ (cta ላይ፣ ከተሰጠ ብቻ)","narr":"የዚህ ትዕይንት የድምፅ ማብራሪያ ንግግር፤ ተፈጥሯዊ ሕያው አማርኛ","dur":ሰከንድ,"img":የፎቶ ቁጥር ወይም -1}]}
+ህጎች፦
+- ተጠቃሚው ያልሰጠውን እውነታ (ዋጋ፣ ቅናሽ መቶኛ፣ ስልክ፣ አድራሻ፣ ሽልማት፣ ደንበኞች ብዛት፣ ሕክምናዊ/የተጋነነ ተስፋ) በጭራሽ አትፍጠር። ከሌለ ያንን መስክ ባዶ ተው።
+- የትዕይንት ብዛት እና ርዝማኔ በጠየቀው ጠቅላላ ሰከንድ ልክ፦ በአማካይ ከ4–8 ሰከንድ በትዕይንት፤ ድምር dur ≈ ጠቅላላ ሰከንድ (አይበልጥ)። hook 3–5 ሰከንድ።
+- narr ርዝመት ≈ dur × 13 ፊደል (ለምሳሌ 6 ሰከንድ ≈ 80 ፊደል)፤ ቁጥሮችን በፊደል ወይም በነጠላ አሃዝ ክፍተት ጻፍ (ስልክ፦ «ዜሮ ዘጠኝ አንድ አንድ…»)። narr ውስጥ ኢሞጂ/ምልክት አትጠቀም።
+- head/sub/bullets በገጹ ላይ የሚታይ አጭር ጽሑፍ ነው — ከ narr ጋር ተመሳሳይ ቃል በቃል ሳይሆን አጭር ማጠቃለያ። ኢሞጂ አትጠቀም።
+- ፎቶዎች ካሉ ከትዕይንቱ ጋር የሚሄዱትን በ img ቁጥር (0 ጀምሮ) መድብ፤ ሁሉንም ፎቶ ቢያንስ አንድ ጊዜ ተጠቀም፤ ፎቶ የሌለው ትዕይንት img:-1። ፎቶ ከሌለ ሁሉም -1።
+- ሁልጊዜ የመጨረሻው ትዕይንት cta ይሁን (ማስታወቂያ/ምርት ከሆነ) ወይም ማጠቃለያ።
+- theme፦ 0 ሰማያዊ-ወይንጠጅ፣ 1 አረንጓዴ፣ 2 ቀይ-ብርቱካን፣ 3 ጥቁር-ወርቅ (የቅንጦት)፣ 4 ሮዝ-ወይንጠጅ፣ 5 የኢትዮጵያ ባንዲራ ቀለም (በዓል/ሀገራዊ)፣ 6 ሰማያዊ-ሰማያዊ አረንጓዴ — ለይዘቱ የሚስማማውን ምረጥ። music፦ ማስታወቂያ/ምርት → energetic፣ ትምህርት/ታሪክ → calm።`;
+  async function videoPlan({ kind, sec, notes, photos, voice, prev, change }) {
+    const msg = `የቪድዮ አይነት፦ ${VID_KIND[kind] || VID_KIND.other}\nጠቅላላ ርዝማኔ፦ ~${sec} ሰከንድ\nድምፅ ማብራሪያ፦ ${voice === false ? 'የለም (ጽሑፍ ብቻ፤ narr ባዶ ይሁን)' : 'አለ'}\nፎቶዎች፦ ${photos && photos.length ? photos.length + ' (ቁጥር 0 እስከ ' + (photos.length - 1) + ')' + photos.map((c, i) => c ? ` [${i}] መግለጫ፦ ${c}` : '').join('') : 'የሉም'}\n\n[የተጠቃሚው ሀሳቦች]\n${String(notes || '').slice(0, 6000)}` + (prev ? `\n\n[ቀድሞ የሠራኸው እቅድ]\n${String(prev).slice(0, 12000)}\n\n[አሁን የሚፈልገው ለውጥ]\n${String(change || 'የተለየ አዲስ ስሪት ሥራ').slice(0, 1500)}` : '');
+    let last; for (let tr = 0; tr < 2; tr++) { try { const out = await ask({ system: VID_SYS + ACC, max: 8000, msgs: [{ role: 'user', content: msg }] }), a = out.indexOf('{'), z = out.lastIndexOf('}'); if (a < 0 || z < a) throw new Error('gen_parse'); const j = JSON.parse(out.slice(a, z + 1)); if (!Array.isArray(j.scenes) || !j.scenes.length) throw new Error('gen_parse'); return j; } catch (e) { last = e; if (/^ai_(busy|timeout|network)$/.test(e.message)) await sleep(3000); } } throw last;
+  }
   /* 🧑‍🏫 ሰሌዳ፦ የአንድ ገጽ/ስላይድ ሙሉ ይዘት (ምንም ሳይዘለል) መስመር በመስመር + የእያንዳንዱ መስመር የመምህር ማብራሪያ — JSON */
   const BOARD_SYS = `አንተ ትዕግሥተኛ፣ ብቁ የኢትዮጵያ መምህር ነህ። ለተማሪዎች አንድን የፋይል ገጽ/ስላይድ በሰሌዳ ላይ ልትለጥፍና መስመር በመስመር ልታስረዳ ነው።
 ከገጹ ሙሉ ይዘት (ርዕስ፣ እያንዳንዱ ነጥብ/መስመር፣ ሠንጠረዥ ረድፍ፣ ቀመር፣ የሥዕል ጽሑፍ) ምንም ሳትዘልና ሳታሳጥር ሁሉንም አካትት።
@@ -242,7 +266,7 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
     }
     return null;
   }
-  return { speakFree, ttsLast: () => lastTts, extras: extras.map(x => x.n), enabled: !!prov, provider: prov, model, lim, chat, reset, take, refund, usage, pdfPage, slideTr, domainBrief, boardPage, boardAsk, genDocSpec, snap, has, restore, note, transcribe, speak };
+  return { speakFree, ttsLast: () => lastTts, extras: extras.map(x => x.n), enabled: !!prov, provider: prov, model, lim, chat, reset, take, refund, usage, pdfPage, slideTr, domainBrief, boardPage, boardAsk, genDocSpec, videoPlan, snap, has, restore, note, transcribe, speak };
 }
 let inst = null; const shared = () => inst || (inst = create());
 module.exports = { nowInfo, create, shared, countPdfPages, chunkText, slideText, SYS, TR };
