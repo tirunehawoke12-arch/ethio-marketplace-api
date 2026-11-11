@@ -31,3 +31,18 @@ test('ቦት፦ «ይህን ቦት አስተዋውቅ» → ሙሉ ባህሪ ለ
     aiFail = true; sent.length = 0; await cb('vd:re'); assert.equal(vids.length, 2, 'AI ቢወድቅም ቪድዮ ተላከ'); assert.ok(msgs().some(m => /በቀላል ቅንብር/.test(m.text)), 'ተጠቃሚው ይነገረዋል');
   } finally { global.fetch = realFetch; srv.close(); }
 });
+test('ቪድዮ፦ ድምፅ አገልግሎት ቢሰቀል ቪድዮው አይቆምም (ያለ ድምፅ ይቀጥላል)', { skip: !hasFF && 'ffmpeg የለም' }, async () => {
+  const t0 = Date.now(); const r = await V.render({ brand: 'x', theme: 1, music: 'none', scenes: [{ type: 'hook', head: 'ሰላም', narr: 'ሰላም ለሁሉም', dur: 3 }, { type: 'cta', head: 'ደውሉ', narr: 'ደውሉልን', dur: 3 }] }, { bin: 'ffmpeg', fmt: 's', ttsMs: 1500, tts: () => new Promise(() => { }) });
+  assert.equal(r.narrated, 0); assert.ok(r.buf.length > 3000); assert.ok(Date.now() - t0 < 30000, 'በጊዜ ተጠናቀቀ');
+});
+test('ቪድዮ ቁልፍ በሁሉም ክፍል (ትምህርት ብቻ ክፍልም) ይታያል፤ በትምህርት ክፍል የገበያ (ማስታወቂያ) ዓይነት አይታይም', async () => {
+  process.env.ANTHROPIC_API_KEY = 'k'; const srv = http.createServer((q, r) => { r.setHeader('content-type', 'application/json'); r.end(JSON.stringify({ ok: true, items: [] })); }); await new Promise(r => srv.listen(0, r)); const port = srv.address().port;
+  const sent = [], tg = async (m, p) => { sent.push([m, p]); return { ok: true, message_id: 1 }; };
+  const svc = require('../server/aisvc')({ app: { get() { }, post() { } }, col: (() => { const d = {}; return p => d[p] || (d[p] = {}); })(), who: () => null, adminOnly: () => false, saveMany: async () => { }, bad() { }, S: (x, n) => String(x == null ? '' : x).slice(0, n || 1e9), N: Number, nid: () => 'x' + Math.random(), limit: () => true, ai: require('../server/ai').shared() });
+  const bot = require('../server/bot')({ aisvc: svc, tg, tokFor: () => 't', port, baseUrl: 'https://x.et', adminChat: '999', bindAdmin() { }, adminPhone: '', token: 'T', getDb: () => ({ accounts: { k: { chatId: 7 } } }), getStore: () => ({ docs: { 'data/users/U1': { acct: { name: 'ተ' } } } }), accKey: () => 'k', findUid: () => 'U1', normPhoneET: x => x, authApi: {}, pool: null, pgUpsert: async () => { }, isSusp: () => false });
+  const C = 7, say = t => bot.handle({ message: { chat: { id: C, type: 'private' }, from: { id: C }, text: t, message_id: 1 } }), cb = d => bot.handle({ callback_query: { id: 'q' + Math.random(), data: d, message: { chat: { id: C, type: 'private' } } } }), all = () => JSON.stringify(sent);
+  try {
+    for (const m of ['b', 'e']) { sent.length = 0; await cb('ob:' + m); assert.ok(all().includes('🎬 ቪድዮ ሥራ'), 'ቁልፍ አለ — ክፍል ' + m); }
+    sent.length = 0; await say('🎬 ቪድዮ ሥራ'); assert.ok(all().includes('vd:k:edu') && !all().includes('vd:k:ad') && !all().includes('vd:k:product'), 'በትምህርት ክፍል የገበያ ዓይነት የለም');
+  } finally { srv.close(); }
+});

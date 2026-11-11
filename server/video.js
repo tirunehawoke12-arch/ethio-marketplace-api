@@ -91,7 +91,11 @@ async function render(plan, opt) {
     const photos = []; (opt.photos || []).slice(0, 12).forEach((b, i) => { const f = path.join(dir, `p${i}.jpg`); fs.writeFileSync(f, b); photos.push(f); });
     /* 1) ድምፅ ማብራሪያ (3 በትይዩ) */
     let narrated = 0; const aud = new Array(scenes.length).fill(null), dur = new Array(scenes.length).fill(0);
-    if (opt.tts && plan.voice !== false) { let k = 0, done = 0; const worker = async () => { while (k < scenes.length) { const i = k++, t = clean(scenes[i].narr); if (!t) continue; let w = null; try { w = await opt.tts(t); } catch (e) { } if (w && w.length > 500) { const f = path.join(dir, `a${i}.${/mpeg|mp3/i.test(w.mime || '') ? 'mp3' : 'wav'}`); fs.writeFileSync(f, w); try { const d = await probe(bin, f); if (d > 0.3) { aud[i] = f; dur[i] = d; narrated++; } } catch (e) { } } done++; prog(0.05 + 0.3 * done / scenes.length, 'voice'); } }; await Promise.all([worker(), worker(), worker()]); }
+    if (opt.tts && plan.voice !== false) {          // ድምፅ በጊዜ ገደብ፦ አገልግሎቱ ካልመለሰ ቪድዮው ያለ ድምፅ ይቀጥላል (መቼም አይቆምም)
+      let k = 0, done = 0, fails = 0; const deadline = Date.now() + (opt.ttsMs || 50000), late = ms => new Promise(r => { setTimeout(() => r(null), Math.max(300, ms)); });
+      const worker = async () => { while (k < scenes.length && Date.now() < deadline && !(fails >= 3 && !narrated)) { const i = k++, t = clean(scenes[i].narr); if (!t) continue; let w = null; try { w = await Promise.race([opt.tts(t), late(Math.min(25000, deadline - Date.now()))]); } catch (e) { } let ok = false; if (w && w.length > 500 && Date.now() < deadline + 5000) { const f = path.join(dir, `a${i}.${/mpeg|mp3/i.test(w.mime || '') ? 'mp3' : 'wav'}`); fs.writeFileSync(f, w); try { const d = await probe(bin, f); if (d > 0.3) { aud[i] = f; dur[i] = d; narrated++; ok = true; } } catch (e) { } } if (!ok) fails++; done++; prog(0.05 + 0.3 * done / scenes.length, 'voice'); } };
+      await Promise.race([Promise.all([worker(), worker(), worker()]), late(deadline - Date.now() + 6000)]);
+    }
     /* 1ለ) ከርዕሱ ጋር የሚሄዱ ምስሎች (ከተሰጡት ፎቶዎች ውጪ ላሉ ትዕይንቶች፤ በ 35 ሰከንድ ገደብ፤ ካልተገኘ ንድፍ ዳራ) */
     let fetched = 0; const musicP = (!opt.musicFile && plan.music !== 'none') ? makeMusic(bin, dir, plan.music === 'energetic' ? 'energetic' : 'calm').catch(() => null) : Promise.resolve(null);
     if (opt.fetchImg) {

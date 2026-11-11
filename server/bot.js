@@ -52,7 +52,7 @@ module.exports = function bot(c) {
   }
   const lang = chat => (S[chat] && S[chat].lang) || 'am', tx = (chat, k) => (TX[k] && (TX[k][lang(chat)] || TX[k].am)) || '';
   const isEdu = chat => !!(S[chat] && S[chat].mode === 'edu');          // 🎓 ትምህርት የመረጠ ሰው የገበያ ነገር በፍጹም አያይም
-  const EDU_MENU = [['📚 መጻሕፍት', '📎 የራሴ ፋይል'], ['🤖 AI ጠይቅ', '📊 እድገቴ'], ['⚙️ ክፍል ቀይር']];
+  const EDU_MENU = [['📚 መጻሕፍት', '📎 የራሴ ፋይል'], ['🤖 AI ጠይቅ', '📊 እድገቴ'], ['🎬 ቪድዮ ሥራ', '⚙️ ክፍል ቀይር']];
   const menuKb = chat => { if (isEdu(chat)) return { keyboard: isAdmin(chat) ? [...EDU_MENU, ['🛡 አድሚን']] : EDU_MENU, resize_keyboard: true, is_persistent: true }; const m = MENU_TX[lang(chat)] || MENU_TX.am; return { keyboard: isAdmin(chat) ? [...m, ['🛡 አድሚን']] : m, resize_keyboard: true, is_persistent: true }; };
   const home = async (chat, text) => {
     await send(chat, text || tx(chat, 'home'), menuKb(chat));
@@ -1347,12 +1347,12 @@ module.exports = function bot(c) {
 • 🎬 ቪድዮ ሰሪ፦ ከሀሳብዎ ማስታወቂያና ሌሎች ቪድዮዎችን እስከ 3 ደቂቃ ራሱ ማዘጋጀት።
 ጥቅሙ፦ ሁሉም በአንድ ቦታ፣ በአማርኛ፣ ቀላል፣ በስልክ በቴሌግራም።` + (botUser ? `\nአገናኝ፦ https://t.me/${botUser}` : '');
   const VPROMO = /(ይህን|ይህ|የዚህ|ስለዚህ)\s*(ቦት|bot)|ኢትዮ ዲጂታል ማርኬት|(ቦቱን|ቦታችንን|መድረኩን)\s*(አስተዋውቅ|ያስተዋውቅ)/i;
-  const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('ai_timeout')), ms))]);
+  const withTimeout = (p, ms, msg = 'ai_timeout') => { let t; return Promise.race([p, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(msg)), ms); if (t.unref) t.unref(); })]).finally(() => clearTimeout(t)); };
   async function vidStart(chat, uid, firstText) {
     if (!uid && !isAdmin(chat)) return authStart(chat); if (!aiReady()) return send(chat, aiOff);
     if (!(await vidAvail())) return send(chat, '🎬 ቪድዮ ሰሪው በዚህ አገልግሎት ላይ ገና አልነቃም (ffmpeg የለም)።' + (isAdmin(chat) ? '\n\n🛠 አድሚን፦ <code>npm i ffmpeg-static</code> ያድርጉ ወይም ስርዓቱ ላይ ffmpeg ይጫኑ (ወይም FFMPEG_PATH ይስጡ)።' : ' አድሚኑን ያሳውቁ።'));
     const old = vget(chat); if (old && old.busy) return send(chat, '⏳ ቪድዮዎ እየተሠራ ነው — ሲጨርስ እልካለሁ።');
-    const kind = firstText ? vkGuess(firstText) : '', v = { ts: Date.now(), kind, sec: 30, fmt: 'v', voice: true, music: true, images: true, notes: firstText ? [String(firstText).slice(0, 1500)] : [], photos: [], musicBuf: null, collect: false, busy: false, plan: null }; VID.set(chat, v);
+    let kind = firstText ? vkGuess(firstText) : ''; if (isEdu(chat) && (kind === 'ad' || kind === 'product')) kind = ''; const v = { ts: Date.now(), kind, sec: 30, fmt: 'v', voice: true, music: true, images: true, notes: firstText ? [String(firstText).slice(0, 1500)] : [], photos: [], musicBuf: null, collect: false, busy: false, plan: null }; VID.set(chat, v);
     if (kind) return vidDur(chat);
     const ks = isEdu(chat) ? ['edu', 'story', 'greet', 'other'] : Object.keys(VK); return send(chat, '🎬 <b>ቪድዮ ሰሪ</b>\n\nሀሳቦችዎን ይስጡኝ፤ እኔ አቀነባብሬ (ጽሑፍ + እነማ + የድምፅ ማብራሪያ + ሙዚቃ) እስከ 3 ደቂቃ ቪድዮ እሠራለሁ።\n\n<b>ደረጃ 1/3 — ምን ዓይነት ቪድዮ?</b>', ik([ks.slice(0, 2).map(k => b(VK[k], 'vd:k:' + k)), ks.slice(2, 4).map(k => b(VK[k], 'vd:k:' + k)), ks.slice(4).map(k => b(VK[k], 'vd:k:' + k))]));
   }
@@ -1391,12 +1391,13 @@ module.exports = function bot(c) {
       plan.voice = v.voice; if (!v.music) plan.music = 'none'; v.plan = plan; v.fb = fb;
       if (v.musicBuf) { mf = require('path').join(require('os').tmpdir(), 'vm-' + chat + '-' + Date.now()); require('fs').writeFileSync(mf, v.musicBuf); }
       const ahead = vidWait; vidWait++; if (ahead && pm) say(`🎬 ተራ እየጠበቅሁ ነው (${ahead} ቪድዮ ከእርስዎ በፊት)…`);
-      const out = await (vidChain = vidChain.catch(() => { }).then(() => { vidWait = Math.max(0, vidWait - 1); return VIDEO.render(plan, { bin: ffmpegBin(), fmt: v.fmt, maxSec: Math.min(Number(process.env.VIDEO_MAX_SEC) || 180, Math.round(v.sec * 1.12)), photos: v.photos.map(p => p.buf), musicFile: mf, tts: v.voice && svc.tts ? t => svc.tts(t) : null, fetchImg: v.images ? (q, i) => require('./vidimg').fetchImage(q, { W: VIDEO.SIZES[v.fmt][0], H: VIDEO.SIZES[v.fmt][1], seed: 7 + i }) : null, onProgress: (p, k) => say(`🎬 <b>ቪድዮዎን እያቀነባበርኩ ነው…</b>\n${k === 'voice' ? '2️⃣ 🎙 የድምፅ ማብራሪያ በማዘጋጀት ላይ…' : k === 'images' ? '2️⃣ 🖼 ምስሎችን በመፈለግ ላይ…' : '3️⃣ 🎞 ትዕይንቶችን በመሥራት ላይ… ' + Math.round(p * 100) + '%'}`) }); }));
+      const out = await (vidChain = vidChain.catch(() => { }).then(() => { vidWait = Math.max(0, vidWait - 1); return withTimeout(VIDEO.render(plan, { bin: ffmpegBin(), fmt: v.fmt, maxSec: Math.min(Number(process.env.VIDEO_MAX_SEC) || 180, Math.round(v.sec * 1.12)), photos: v.photos.map(p => p.buf), musicFile: mf, tts: v.voice && svc.tts ? t => svc.tts(t) : null, fetchImg: v.images ? (q, i) => require('./vidimg').fetchImage(q, { W: VIDEO.SIZES[v.fmt][0], H: VIDEO.SIZES[v.fmt][1], seed: 7 + i }) : null, onProgress: (p, k) => say(`🎬 <b>ቪድዮዎን እያቀነባበርኩ ነው…</b>\n${k === 'voice' ? '2️⃣ 🎙 የድምፅ ማብራሪያ በማዘጋጀት ላይ…' : k === 'images' ? '2️⃣ 🖼 ምስሎችን በመፈለግ ላይ…' : '3️⃣ 🎞 ትዕይንቶችን በመሥራት ላይ… ' + Math.round(p * 100) + '%'}`) }), Number(process.env.VIDEO_RENDER_MS) || 540000, 'video_timeout'); }));
       if (out.buf.length > 49 * 1048576) return send(chat, '⚠️ ቪድዮው ከቴሌግራም ገደብ (50MB) በላይ ሆነ — አጠር ያለ ርዝማኔ ይምረጡ።', ik([[b('🎬 አዲስ ቪድዮ', 'vd:new')]]));
       await tgUpload('sendVideo', 'video', chat, out.buf, 'etio-video.mp4', 'video/mp4', { caption: clip((plan.caption || (plan.brand ? plan.brand : '')) + '', 1000), width: out.w, height: out.h, duration: Math.round(out.dur), supports_streaming: 'true' });
       s.vday.n++; save(); if (pm) tg('deleteMessage', { chat_id: chat, message_id: pm.message_id }).catch(() => { });
       await send(chat, `✅ ቪድዮ ዝግጁ ነው — ${Math.round(out.dur)} ሰከንድ · ${out.scenes} ትዕይንት${out.narrated ? ' · 🎙 ድምፅ' : v.voice ? ' · (የድምፅ ማብራሪያ ጊዜያዊ አልተገኘም — በጽሑፍ ብቻ)' : ''}${out.music ? ' · 🎵' : ''}${out.images ? ' · 🖼 ' + out.images : ''}${v.fb || ''}\n\nየተለየ ስሪት ወይም ለውጥ ይፈልጋሉ?`, ik([[b('🔁 ሌላ ስሪት', 'vd:re'), b('✏️ ለውጥ ጠይቅ', 'vd:ch')], [b('🎬 አዲስ ቪድዮ', 'vd:new')]]));
-    } catch (e) { console.warn('video', e && e.message); await send(chat, /^ai_/.test(e && e.message) ? aiErr(e, chat) : '⚠️ ቪድዮውን መሥራት አልተቻለም — እንደገና ይሞክሩ።' + (isAdmin(chat) ? `\n<code>${H(clip(e && e.message, 400))}</code>` : ''), ik([[b('🔁 እንደገና', 'vd:re')]])); }
+    } catch (e) { console.warn('video', e && e.message); if (e && e.message === 'video_timeout') { v.voice = false; await send(chat, '⌛ ቪድዮው ከተጠበቀው በላይ ወሰደ (አገልጋዩ ተጨናንቋል)። ለፍጥነት ድምፅን አጥፍቼ «🔁 እንደገና» ይሞክሩ — ወይም አጠር ያለ ርዝማኔ ይምረጡ።', ik([[b('🔁 እንደገና (ያለ ድምፅ)', 'vd:re')], [b('🎬 አዲስ ቪድዮ', 'vd:new')]])); return; }
+      await send(chat, /^ai_/.test(e && e.message) ? aiErr(e, chat) : '⚠️ ቪድዮውን መሥራት አልተቻለም — እንደገና ይሞክሩ።' + (isAdmin(chat) ? `\n<code>${H(clip(e && e.message, 400))}</code>` : ''), ik([[b('🔁 እንደገና', 'vd:re')]])); }
     finally { clearInterval(tm); v.busy = false; if (mf) try { require('fs').unlinkSync(mf); } catch (e) { } }
   }
   async function vidRoute(chat, uid, a, x) {
