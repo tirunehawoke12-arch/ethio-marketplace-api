@@ -5,7 +5,7 @@
 const fs = require('fs'), path = require('path'), os = require('os'), { spawn } = require('child_process');
 const { tw, wrap } = require('./docout'), { textPng, pngRGBA } = require('./textpng');
 const FM = JSON.parse(fs.readFileSync(path.join(__dirname, 'fonts', 'amh.json'), 'utf8')), FONT = path.join(__dirname, 'fonts', 'amh.ttf');
-const SIZES = { v: [540, 960], s: [720, 720], h: [960, 540] }, FPS = 24, MAXSEC = 180;
+const SIZES = { v: [540, 960], s: [720, 720], h: [960, 540] }, FPS = 15, MAXSEC = 180;
 /* [ዳራ ከ, ዳራ እስከ, አጽንኦ ቀለም] — ሁሉም ጥቁር-ተኮር ስለሆኑ ነጭ ጽሑፍ ግልጽ ነው */
 const THEMES = [['1b2a6b', '6a1b9a', 'ffc107'], ['0b5d3b', '0f766e', 'ffeb3b'], ['b71c1c', 'e65100', 'fff59d'], ['111111', '3a3a3a', 'd4af37'], ['880e4f', '4a148c', 'ffd54f'], ['078930', 'da121a', 'fcdd09'], ['0d47a1', '006064', '80deea']];
 const clean = s => [...String(s == null ? '' : s)].filter(ch => { const c = ch.codePointAt(0); return c === 32 || FM.m[c]; }).join('').replace(/\s+/g, ' ').trim();
@@ -54,26 +54,33 @@ function cached(o, key, make) { if (!o.cache[key]) { const f = path.join(o.tmp, 
 const gradPng = (w, h, c0, c1) => { const a = hex(c0), z = hex(c1), buf = Buffer.alloc(w * h * 4); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const t = Math.min(1, Math.max(0, (x / w * 0.45 + y / h * 0.75) / 1.2)), dx = x / w - 0.5, dy = y / h - 0.5, v = 1 - 0.38 * Math.min(1, (dx * dx + dy * dy) * 2.2), o = (y * w + x) * 4; buf[o] = (a[0] + (z[0] - a[0]) * t) * v; buf[o + 1] = (a[1] + (z[1] - a[1]) * t) * v; buf[o + 2] = (a[2] + (z[2] - a[2]) * t) * v; buf[o + 3] = 255; } return pngRGBA(w, h, buf); };
 const scrimPng = (w, h) => { const buf = Buffer.alloc(w * h * 4); for (let y = 0; y < h; y++) { const f = y / h, a = Math.round(255 * Math.min(0.86, Math.max(0.16, 0.16 + Math.pow(Math.max(0, f - 0.28) / 0.72, 1.4) * 0.8))); for (let x = 0; x < w; x++) { const o = (y * w + x) * 4; buf[o + 3] = a; } } return pngRGBA(w, h, buf); };
 const glowPng = (sz, c, alpha) => { const buf = Buffer.alloc(sz * sz * 4), r = sz / 2; for (let y = 0; y < sz; y++) for (let x = 0; x < sz; x++) { const d = Math.hypot(x - r, y - r) / r, o = (y * sz + x) * 4; buf[o] = c[0]; buf[o + 1] = c[1]; buf[o + 2] = c[2]; buf[o + 3] = d >= 1 ? 0 : Math.round(255 * alpha * Math.pow(1 - d, 1.6)); } return pngRGBA(sz, sz, buf); };
+function composeLayer(items, W, acc) {          // በአንድ ቡድን ያሉ ጽሑፎች፣ ሳጥኖች፣ ነጥቦች → አንድ ግልጽ ንብርብር (PNG) — በአንድ overlay ብቻ ይለጠፋል
+  const COL = { white: [255, 255, 255], eeeeee: [238, 238, 238], ink: [26, 26, 26] }, parts = []; let y0 = 1e9, y1 = 0;
+  for (const it of items) {
+    if (it.kind === 'text') { const r = textPng(it.s, it.size, { color: COL[it.color] || COL.white, shadow: it.color === 'ink' ? 0 : null, raw: true }), x = Math.round(it.center ? (W - r.w) / 2 : it.x - r.pad), y = Math.round(it.y - r.pad + it.size * 0.05); parts.push({ k: 't', x, y, r }); y0 = Math.min(y0, y); y1 = Math.max(y1, y + r.h); }
+    else { const w = it.kind === 'dot' ? it.size : it.w, h = it.kind === 'dot' ? it.size : it.h, x = Math.round(it.x), y = Math.round(it.y); parts.push({ k: 'b', x, y, w: Math.round(w), h: Math.round(h) }); y0 = Math.min(y0, y); y1 = Math.max(y1, y + Math.round(h)); }
+  }
+  y0 = Math.max(0, Math.floor(y0)); const H = Math.max(2, Math.ceil(y1 - y0)), buf = Buffer.alloc(W * H * 4), ac = hex(acc);
+  for (const p of parts) {
+    if (p.k === 'b') { for (let yy = Math.max(0, p.y - y0); yy < Math.min(H, p.y - y0 + p.h); yy++) for (let xx = Math.max(0, p.x); xx < Math.min(W, p.x + p.w); xx++) { const o = (yy * W + xx) * 4; buf[o] = ac[0]; buf[o + 1] = ac[1]; buf[o + 2] = ac[2]; buf[o + 3] = 242; } continue; }
+    const { r } = p; for (let yy = 0; yy < r.h; yy++) { const Y = p.y - y0 + yy; if (Y < 0 || Y >= H) continue; for (let xx = 0; xx < r.w; xx++) { const X = p.x + xx; if (X < 0 || X >= W) continue; const so = (yy * r.w + xx) * 4, sa = r.rgba[so + 3]; if (!sa) continue; const o = (Y * W + X) * 4, da = buf[o + 3], a = sa / 255, oa = a + (da / 255) * (1 - a); if (oa <= 0) continue; for (let c = 0; c < 3; c++) buf[o + c] = Math.round((r.rgba[so + c] * a + buf[o + c] * (da / 255) * (1 - a)) / oa); buf[o + 3] = Math.round(oa * 255); } }
+  }
+  return { png: pngRGBA(W, H, buf), y: y0, h: H };
+}
 function buildScene(sc, i, o) {          // → { fc, inputs, nIn } ; o: W,H,D,T0,TT,theme,photo,tmp,cache,brand
   const { W, H, D, T0, TT, theme, tmp } = o, th = THEMES[theme % THEMES.length], acc = th[2], hasPhoto = !!o.photo, items = layout(sc, W, H, H >= W, hasPhoto), F = [], inputs = [], Ds = D.toFixed(2); let nIn = 0;
-  const addImg = file => { inputs.push('-loop', '1', '-framerate', String(FPS), '-t', Ds, '-i', file); return nIn++; };
+  const addImg = file => { inputs.push('-i', file); return nIn++; };
+  const still = (idx, pre, post) => `[${idx}:v]${pre ? pre + ',' : ''}loop=loop=-1:size=1:start=0,setpts=N/(${FPS}*TB),trim=duration=${Ds}${post ? ',' + post : ''}`;          // አንድ ጊዜ ብቻ ይነበባል፣ ፍሬሞች ይደገማሉ (በየፍሬሙ ዳግም ማንበብ የለም)
   const fw = Math.ceil(W * 1.25), fh = Math.ceil(H * 1.25), bgFile = o.photo || cached(o, `bg_${theme}_${fw}x${fh}`, () => gradPng(fw, fh, th[0], th[1])), bi = addImg(bgFile), dirx = i % 2 ? `(in_w-out_w)*(1-t/${Ds})` : `(in_w-out_w)*t/${Ds}`;
-  F.push(`[${bi}:v]scale=${fw}:${fh}:force_original_aspect_ratio=increase,crop=${W}:${H}:x='${dirx}':y='(in_h-out_h)*(0.5+0.3*(t/${Ds}-0.5)*${i % 3 === 1 ? -1 : 1})',setsar=1${hasPhoto ? ',eq=brightness=-0.04:saturation=1.15:contrast=1.06' : ''}[bg]`);
+  F.push(`${still(bi, `scale=${fw}:${fh}:force_original_aspect_ratio=increase,crop=${fw}:${fh}`)},crop=${W}:${H}:x='${dirx}':y='(in_h-out_h)*(0.5+0.3*(t/${Ds}-0.5)*${i % 3 === 1 ? -1 : 1})',setsar=1${hasPhoto ? ',eq=brightness=-0.04:saturation=1.15:contrast=1.06' : ''}[bg]`);
   let cur = 'bg', n = 0; const nx = () => 'n' + (n++);
-  if (hasPhoto) { const si = addImg(cached(o, `scrim_${W}x${H}`, () => scrimPng(W, H))), nm = nx(); F.push(`[${cur}][${si}:v]overlay=0:0[${nm}]`); cur = nm; }
-  else { const g = cached(o, `glow_${theme}_${W}`, () => glowPng(Math.round(W * 0.9), hex(acc), 0.3)), g2 = cached(o, `glow2_${theme}_${W}`, () => glowPng(Math.round(W * 0.6), [255, 255, 255], 0.16)); for (const [f, k, ph] of [[g, 1, 0], [g2, 2, 2]]) { const gi = addImg(f), nm = nx(); F.push(`[${cur}][${gi}:v]overlay=x='(W-w)*(0.5+0.42*sin(t*${0.35 * k}+${i * 1.7 + ph}))':y='(H-h)*(0.35+0.3*cos(t*${0.28 * k}+${i * 1.3 + ph}))':eval=frame[${nm}]`); cur = nm; } }
-  const png = (name, text, size, color, shadow) => { const r = textPng(text, size, { color, shadow }), f = path.join(tmp, name); fs.writeFileSync(f, r.buf); return { idx: addImg(f), w: r.w, h: r.h, pad: Math.ceil(size * 0.12) + (shadow == null ? Math.max(1, Math.round(size * 0.05)) : shadow) }; };
-  const COL = { white: [255, 255, 255], eeeeee: [238, 238, 238], ink: [26, 26, 26] };
-  if (o.brand) { const r = png(`b${i}.png`, o.brand, Math.round(W * 0.036), [255, 255, 255], 1), nm = nx(); F.push(`[${r.idx}:v]format=rgba,colorchannelmixer=aa=0.85[bt${i}]`, `[${cur}][bt${i}]overlay=x=${Math.round(W * 0.05)}:y=${Math.round(H * 0.03)}[${nm}]`); cur = nm; }
-  items.forEach((it, k) => {
-    const nm = nx(), t0 = it.t0.toFixed(2);
-    if (it.kind === 'text') {
-      const r = png(`s${i}_${k}.png`, it.s, it.size, COL[it.color] || COL.white, it.color === 'ink' ? 0 : null), x = it.center ? '(W-w)/2' : Math.round(it.x - r.pad), y0 = Math.round(it.y - r.pad + it.size * 0.05), rise = `(1-min(1,max(0,(t-${t0})/0.5)))*${Math.round(H * 0.04)}`;
-      F.push(`[${r.idx}:v]format=rgba,fade=t=in:st=${t0}:d=0.45:alpha=1[tx${i}_${k}]`, `[${cur}][tx${i}_${k}]overlay=x='${x}':y='${y0}+${rise}':eval=frame:enable='gte(t,${t0})'[${nm}]`);
-    }
-    else if (it.kind === 'dot') F.push(`[${cur}]drawbox=x=${Math.round(it.x)}:y=${Math.round(it.y)}:w=${Math.round(it.size)}:h=${Math.round(it.size)}:color=0x${acc}:t=fill:enable='gte(t,${t0})'[${nm}]`);
-    else if (it.kind === 'box') F.push(`[${cur}]drawbox=x=${Math.round(it.x)}:y=${Math.round(it.y)}:w=${Math.round(it.w)}:h=${Math.round(it.h)}:color=0x${acc}@0.95:t=fill:enable='gte(t,${t0})'[${nm}]`);
-    cur = nm;
+  if (hasPhoto) { const si = addImg(cached(o, `scrim_${W}x${H}`, () => scrimPng(W, H))), nm = nx(); F.push(`${still(si, 'format=rgba')}[sc${i}]`, `[${cur}][sc${i}]overlay=0:0[${nm}]`); cur = nm; }
+  else { const g = cached(o, `glow_${theme}_${W}`, () => glowPng(Math.round(W * 0.9), hex(acc), 0.3)), g2 = cached(o, `glow2_${theme}_${W}`, () => glowPng(Math.round(W * 0.6), [255, 255, 255], 0.16)); for (const [f, k, ph] of [[g, 1, 0], [g2, 2, 2]]) { const gi = addImg(f), nm = nx(); F.push(`${still(gi, 'format=rgba')}[gl${i}_${k}]`, `[${cur}][gl${i}_${k}]overlay=x='(W-w)*(0.5+0.42*sin(t*${0.35 * k}+${i * 1.7 + ph}))':y='(H-h)*(0.35+0.3*cos(t*${0.28 * k}+${i * 1.3 + ph}))':eval=frame[${nm}]`); cur = nm; } }
+  if (o.brand) { const r = textPng(o.brand, Math.round(W * 0.036), { color: [255, 255, 255], shadow: 1 }), f = path.join(tmp, `b${i}.png`); fs.writeFileSync(f, r.buf); const bi2 = addImg(f), nm = nx(); F.push(`${still(bi2, 'format=rgba,colorchannelmixer=aa=0.85')}[bt${i}]`, `[${cur}][bt${i}]overlay=x=${Math.round(W * 0.05)}:y=${Math.round(H * 0.03)}[${nm}]`); cur = nm; }
+  const g1 = items.filter(x => x.t0 < 0.95), g2 = items.filter(x => x.t0 >= 0.95);          // 2 ንብርብር ብቻ (ርዕስ + ዝርዝር)፤ በየፍሬሙ ሁለት overlay
+  [g1, g2].forEach((g, gi) => {
+    if (!g.length) return; const L = composeLayer(g, W, acc), f = path.join(tmp, `L${i}_${gi}.png`); fs.writeFileSync(f, L.png); const li = addImg(f), t0 = Math.min(...g.map(x => x.t0)).toFixed(2), nm = nx(), rise = `(1-min(1,max(0,(t-${t0})/0.5)))*${Math.round(H * 0.04)}`;
+    F.push(`${still(li, 'format=rgba', `fade=t=in:st=${t0}:d=0.5:alpha=1`)}[ly${i}_${gi}]`, `[${cur}][ly${i}_${gi}]overlay=x=0:y='${L.y}+${rise}':eval=frame:enable='gte(t,${t0})'[${nm}]`); cur = nm;
   });
   const bar = nx(); F.push(`color=c=0x${acc}:s=${Math.round(W * 0.28)}x6:r=${FPS}:d=${Ds}[acc]`, `color=c=0x${acc}:s=${W}x5:r=${FPS}:d=${Ds}[pg]`);
   F.push(`[${cur}][acc]overlay=x='${Math.round(W * 0.08)}-${Math.round(W * 0.28)}*max(0,1-t/0.6)':y=${Math.round(H * 0.11)}:eval=frame[${bar}]`);
@@ -99,7 +106,7 @@ async function render(plan, opt) {
     /* 1ለ) ከርዕሱ ጋር የሚሄዱ ምስሎች (ከተሰጡት ፎቶዎች ውጪ ላሉ ትዕይንቶች፤ በ 35 ሰከንድ ገደብ፤ ካልተገኘ ንድፍ ዳራ) */
     let fetched = 0; const musicP = (!opt.musicFile && plan.music !== 'none') ? makeMusic(bin, dir, plan.music === 'energetic' ? 'energetic' : 'calm').catch(() => null) : Promise.resolve(null);
     if (opt.fetchImg) {
-      const need = scenes.map((sc, i) => (!(Number.isInteger(sc.img) && sc.img >= 0 && sc.img < photos.length) && clean(sc.imgq || '').length > 2 ? i : -1)).filter(i => i >= 0).slice(0, opt.maxImgs || 12), deadline = Date.now() + (opt.imgMs || 35000); let k = 0, done = 0;
+      const need = scenes.map((sc, i) => (!(Number.isInteger(sc.img) && sc.img >= 0 && sc.img < photos.length) && clean(sc.imgq || '').length > 2 ? i : -1)).filter(i => i >= 0).slice(0, opt.maxImgs || 12), deadline = Date.now() + (opt.imgMs || 28000); let k = 0, done = 0;
       const w = async () => { while (k < need.length && Date.now() < deadline) { const i = need[k++]; let b = null; try { b = await Promise.race([opt.fetchImg(String(scenes[i].imgq).slice(0, 220), i), new Promise(r => setTimeout(() => r(null), Math.max(1000, deadline - Date.now())))]); } catch (e) { } if (b && b.length > 3000) { const f = path.join(dir, `w${i}.jpg`); fs.writeFileSync(f, b); scenes[i]._photo = f; fetched++; } done++; prog(0.05 + 0.3 * done / Math.max(1, need.length), 'images'); } };
       await Promise.all([w(), w(), w(), w()]);
     }

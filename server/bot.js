@@ -1378,8 +1378,10 @@ module.exports = function bot(c) {
     if (!v.notes.length && !v.photos.length) return send(chat, '✍️ መጀመሪያ ቢያንስ አንድ ሀሳብ (ጽሑፍ ወይም ፎቶ) ይላኩ።', vidKb(v));
     if (!(await vidAvail())) return send(chat, '🎬 ቪድዮ ሰሪው ገና አልነቃም (ffmpeg የለም)።'); const s = ses(chat), day = new Date().toISOString().slice(0, 10); if (!s.vday || s.vday.d !== day) s.vday = { d: day, n: 0 };
     if (!isAdmin(chat) && s.vday.n >= (Number(process.env.VIDEO_DAILY_MAX) || 4)) return send(chat, '🌅 ዛሬ የቪድዮ ድርሻዎ አልቋል — ነገ ይታደሳል፤ ተመልሰው ይቀጥሉ።', menuKb(chat));
-    v.busy = true; v.collect = false; v.ts = Date.now(); const tm = setInterval(() => { tg('sendChatAction', { chat_id: chat, action: 'upload_video' }).catch(() => { }); }, 4500); let pm = null, mf = null, last = 0;
+    v.busy = true; v.collect = false; v.ts = Date.now(); const tm = setInterval(() => { tg('sendChatAction', { chat_id: chat, action: 'upload_video' }).catch(() => { }); }, 4500); let pm = null, mf = null, last = 0, phase = 'plan', pct = 0; const t00 = Date.now();
     const say = txt => { if (!pm) return; const t = Date.now(); if (t - last < 3500) return; last = t; tg('editMessageText', { chat_id: chat, message_id: pm.message_id, text: txt, parse_mode: 'HTML' }).catch(() => { }); };
+    const PH = () => phase === 'plan' ? '1️⃣ ሀሳቦችን በማቀናበር ላይ…' : phase === 'voice' ? '2️⃣ 🎙 የድምፅ ማብራሪያ በማዘጋጀት ላይ…' : phase === 'images' ? '2️⃣ 🖼 ምስሎችን በመፈለግ ላይ…' : '3️⃣ 🎞 ትዕይንቶችን በመሥራት ላይ… ' + Math.round(pct * 100) + '%', el = () => { const sec = Math.round((Date.now() - t00) / 1000); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); };
+    const tk = setInterval(() => say(`🎬 <b>ቪድዮዎን እያቀነባበርኩ ነው…</b>\n${PH()}\n⏱ ${el()} (አገልጋዩ ከተጨናነቀ ጥቂት ደቂቃ ሊወስድ ይችላል)`), 5000);
     try {
       pm = await tg('sendMessage', { chat_id: chat, text: `🎬 <b>ቪድዮዎን እያቀነባበርኩ ነው…</b>\n1️⃣ ሀሳቦችን በማቀናበር ላይ…\n(${v.sec >= 120 ? 'ረጅም ቪድዮ እስከ ጥቂት ደቂቃ ይወስዳል' : 'ከ1–3 ደቂቃ ያህል'})`, parse_mode: 'HTML' }).catch(() => null);
       const promo = VPROMO.test(v.notes.join('\n')), notesTx = v.notes.join('\n') + (promo ? '\n\n[ስለ ቦቱ የተረጋገጡ እውነታዎች — በደንብ አስተዋውቅ]\n' + BOT_FACTS : ''), kind = promo ? 'ad' : v.kind || 'other'; let plan = null, fb = '';
@@ -1388,17 +1390,17 @@ module.exports = function bot(c) {
         if (!r.ok && r.error === 'ai_limit') return paywall(chat, uid, 'limit'); if (!r.ok) return send(chat, r.error === 'ai_disabled' ? '⏸ AI ለጊዜው በአድሚን ተዘግቷል።' : r.error === 'ai_blocked' ? '⛔ የ AI አገልግሎት ለእርስዎ ተዘግቷል።' : aiOff, menuKb(chat)); if (r.paywall) return paywall(chat, uid, r.paywall);
         plan = r.plan;
       } catch (e) { console.warn('videoPlan', e && e.message); plan = require('./vidplan').localPlan({ kind, sec: v.sec, notes: notesTx, nPhotos: v.photos.length }); fb = '\n(AI ለጊዜው ቀርፋፋ ነበር — ከሰጡኝ ሀሳብ በቀላል ቅንብር ሠራሁ፤ «🔁 ሌላ ስሪት» ብለው እንደገና ይሞክሩ።)'; }
-      plan.voice = v.voice; if (!v.music) plan.music = 'none'; v.plan = plan; v.fb = fb;
+      plan.voice = v.voice; if (!v.music) plan.music = 'none'; v.plan = plan; v.fb = fb; phase = 'voice';
       if (v.musicBuf) { mf = require('path').join(require('os').tmpdir(), 'vm-' + chat + '-' + Date.now()); require('fs').writeFileSync(mf, v.musicBuf); }
       const ahead = vidWait; vidWait++; if (ahead && pm) say(`🎬 ተራ እየጠበቅሁ ነው (${ahead} ቪድዮ ከእርስዎ በፊት)…`);
-      const out = await (vidChain = vidChain.catch(() => { }).then(() => { vidWait = Math.max(0, vidWait - 1); return withTimeout(VIDEO.render(plan, { bin: ffmpegBin(), fmt: v.fmt, maxSec: Math.min(Number(process.env.VIDEO_MAX_SEC) || 180, Math.round(v.sec * 1.12)), photos: v.photos.map(p => p.buf), musicFile: mf, tts: v.voice && svc.tts ? t => svc.tts(t) : null, fetchImg: v.images ? (q, i) => require('./vidimg').fetchImage(q, { W: VIDEO.SIZES[v.fmt][0], H: VIDEO.SIZES[v.fmt][1], seed: 7 + i }) : null, onProgress: (p, k) => say(`🎬 <b>ቪድዮዎን እያቀነባበርኩ ነው…</b>\n${k === 'voice' ? '2️⃣ 🎙 የድምፅ ማብራሪያ በማዘጋጀት ላይ…' : k === 'images' ? '2️⃣ 🖼 ምስሎችን በመፈለግ ላይ…' : '3️⃣ 🎞 ትዕይንቶችን በመሥራት ላይ… ' + Math.round(p * 100) + '%'}`) }), Number(process.env.VIDEO_RENDER_MS) || 540000, 'video_timeout'); }));
+      const out = await (vidChain = vidChain.catch(() => { }).then(() => { vidWait = Math.max(0, vidWait - 1); return withTimeout(VIDEO.render(plan, { bin: ffmpegBin(), fmt: v.fmt, maxSec: Math.min(Number(process.env.VIDEO_MAX_SEC) || 180, Math.round(v.sec * 1.12)), photos: v.photos.map(p => p.buf), musicFile: mf, tts: v.voice && svc.tts ? t => svc.tts(t) : null, fetchImg: v.images ? (q, i) => require('./vidimg').fetchImage(q, { W: VIDEO.SIZES[v.fmt][0], H: VIDEO.SIZES[v.fmt][1], seed: 7 + i }) : null, onProgress: (p, k) => { phase = k; pct = p; } }), Number(process.env.VIDEO_RENDER_MS) || 540000, 'video_timeout'); }));
       if (out.buf.length > 49 * 1048576) return send(chat, '⚠️ ቪድዮው ከቴሌግራም ገደብ (50MB) በላይ ሆነ — አጠር ያለ ርዝማኔ ይምረጡ።', ik([[b('🎬 አዲስ ቪድዮ', 'vd:new')]]));
       await tgUpload('sendVideo', 'video', chat, out.buf, 'etio-video.mp4', 'video/mp4', { caption: clip((plan.caption || (plan.brand ? plan.brand : '')) + '', 1000), width: out.w, height: out.h, duration: Math.round(out.dur), supports_streaming: 'true' });
       s.vday.n++; save(); if (pm) tg('deleteMessage', { chat_id: chat, message_id: pm.message_id }).catch(() => { });
       await send(chat, `✅ ቪድዮ ዝግጁ ነው — ${Math.round(out.dur)} ሰከንድ · ${out.scenes} ትዕይንት${out.narrated ? ' · 🎙 ድምፅ' : v.voice ? ' · (የድምፅ ማብራሪያ ጊዜያዊ አልተገኘም — በጽሑፍ ብቻ)' : ''}${out.music ? ' · 🎵' : ''}${out.images ? ' · 🖼 ' + out.images : ''}${v.fb || ''}\n\nየተለየ ስሪት ወይም ለውጥ ይፈልጋሉ?`, ik([[b('🔁 ሌላ ስሪት', 'vd:re'), b('✏️ ለውጥ ጠይቅ', 'vd:ch')], [b('🎬 አዲስ ቪድዮ', 'vd:new')]]));
     } catch (e) { console.warn('video', e && e.message); if (e && e.message === 'video_timeout') { v.voice = false; await send(chat, '⌛ ቪድዮው ከተጠበቀው በላይ ወሰደ (አገልጋዩ ተጨናንቋል)። ለፍጥነት ድምፅን አጥፍቼ «🔁 እንደገና» ይሞክሩ — ወይም አጠር ያለ ርዝማኔ ይምረጡ።', ik([[b('🔁 እንደገና (ያለ ድምፅ)', 'vd:re')], [b('🎬 አዲስ ቪድዮ', 'vd:new')]])); return; }
       await send(chat, /^ai_/.test(e && e.message) ? aiErr(e, chat) : '⚠️ ቪድዮውን መሥራት አልተቻለም — እንደገና ይሞክሩ።' + (isAdmin(chat) ? `\n<code>${H(clip(e && e.message, 400))}</code>` : ''), ik([[b('🔁 እንደገና', 'vd:re')]])); }
-    finally { clearInterval(tm); v.busy = false; if (mf) try { require('fs').unlinkSync(mf); } catch (e) { } }
+    finally { clearInterval(tm); clearInterval(tk); v.busy = false; if (mf) try { require('fs').unlinkSync(mf); } catch (e) { } }
   }
   async function vidRoute(chat, uid, a, x) {
     let v = vget(chat);

@@ -51,6 +51,6 @@ function textPng(text, size, opt = {}) {
     const a = Math.min(1, cov[y * w + x]), s = sh && x >= sh && y >= sh ? Math.min(1, cov[(y - sh) * w + (x - sh)]) * 0.55 : 0, o = (y * w + x) * 4;
     const ta = a, sa = s * (1 - ta), oa = ta + sa; if (oa <= 0) continue; out[o] = Math.round((col[0] * ta) / oa); out[o + 1] = Math.round((col[1] * ta) / oa); out[o + 2] = Math.round((col[2] * ta) / oa); out[o + 3] = Math.round(oa * 255);
   }
-  return { buf: pngRGBA(w, h, out), w, h };
+  return { buf: opt.raw ? null : pngRGBA(w, h, out), w, h, rgba: out, pad };
 }
 module.exports = { textPng, contours, UPEM, pngRGBA };
