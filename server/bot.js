@@ -759,6 +759,8 @@ module.exports = function bot(c) {
     if (LABELS[t]) { s.flow = null; return action(chat, uid, LABELS[t]); }
     if (/^\//.test(t)) return home(chat);
     if (s.flow) return flowText(chat, t, msg);
+    { const nl = MEDIA.get(chat), ns = ses(chat); if (ns.ntrg && !/^\//.test(t) && !LABELS[t] && nl && Date.now() - nl.ts < MEDIA_TTL) { const lv0 = ns.ntrg.lv; if (Date.now() - ns.ntrg.ts > 15 * 60e3) { ns.ntrg = null; save(); } else { const src0 = await noteSrc(nl).catch(() => ({ total: 0 })), pg = /(ሁሉ|all)/i.test(t) ? null : parsePages(t, src0.total); if (!pg && !/(ሁሉ|all)/i.test(t)) return send(chat, `⚠️ ገጹን በቁጥር ይጻፉ (1–${src0.total || '…'})፤ ምሳሌ <code>5-12</code> ወይም <code>3, 7, 10-12</code>`); ns.ntrg = null; save(); return noteRun(chat, uid, nl, pg, lv0); } }
+      if (nl && Date.now() - nl.ts < MEDIA_TTL && NOTEINT.test(t) && t.length < 300 && aiReady() && !LABELS[t]) return noteFromText(chat, uid, nl, t); }
     if (aiReady()) { const sr = !!ses(chat).srch; if (sr) { delete ses(chat).srch; } return aiText(chat, uid, t, false, sr ? { ground: true } : undefined); }          // ሌላ ማንኛውም ጽሑፍ → AI ረዳት
     return send(chat, '👇 ከታች ካለው ማውጫ ይምረጡ ወይም ዕቃ ለመፈለግ «🔎 ፈልግ» ይጫኑ።', menuKb(chat));
   }
@@ -769,6 +771,7 @@ module.exports = function bot(c) {
     if (k === 'ed') return a === 'b' ? bookList(chat, 0, null) : a === 'f' ? eduFile(chat) : a === 's' ? (ses(chat).srch = true, save(), send(chat, '🔎 አሁን ጥያቄዎን ይጻፉ — ከድር ፍለጋ ጋር ተሳስሮ ከምንጭ ጋር እመልሳለሁ።')) : eduAI(chat, uid);
     if (k === 'vd') return vidRoute(chat, uid, a, x);
     if (k === 'sd') return sdRoute(chat, a, x);
+    if (k === 'nt') return noteRoute(chat, uid, a, x);
     if (k === 'login') return authStart(chat);
     if (k === 'ob') { const s0 = ses(chat); s0.mode = { e: 'edu', m: 'market', b: 'both' }[a] || 'both'; save(); if (uid) return s0.mode === 'both' ? home(chat, '✨ እንኳን ደህና መጡ — ከታች ይምረጡ።') : landing(chat, uid); return authAsk(chat, a === 'e'); }
     if (k === 'pw') return a === 'up' ? payMenu(chat, uid) : send(chat, '🌅 እሺ! ነገ ነጻ ድርሻዎ ይታደሳል፤ ተመልሰው ይቀጥሉ — በዚህ ጊዜ ትምህርቱን ወይም ገበያውን ያስሱ።', menuKb(chat));
@@ -955,8 +958,72 @@ module.exports = function bot(c) {
     if (act === 'tc') return teachStart(chat, uid);
     if (act === 'qa') return send(chat, '❓ ስለ ፋይሉ ጥያቄዎን ይጻፉ (ወይም በድምፅ ይጠይቁ) — /new እስኪሉ ፋይሉን አስታውሳለሁ።');
     if (act === 'tr' && (lm.isPdf || lm.isPpt)) { if (!aiReady()) return send(chat, aiOff); return startDoc(chat, uid, lm.buf, lm.name, lm.isPdf); }
+    if (act === 'nt') return noteAsk(chat, lm);
     const q = act === 'tr' ? FKP.trx : FKP[act]; if (!q) return;
     await runMedia(chat, uid, lm.m, lm.t ? q + '\n\n[የፋይሉ ጽሑፍ — ' + lm.name + ']\n' + lm.t : q, true);
+  }
+
+  /* ===== 🗒 አጭር ማስታወሻ (v42)፦ ሁሉንም ገጽ ወይም የተመረጠ ክልል በትይዩ ይዳስሳል፤ በገጽ ቅደም ተከተል ያቀርባል ===== */
+  const NOTEINT = /(short\s*note|አጭር\s*ማስታወሻ|ማስታወሻ\s*(አዘጋጅ|ሥራ|ስራ|ስጠኝ|ይሥራ)|ኖት\s*(አዘጋጅ|ሥራ|ስራ))/i, NLV = { s: '⚡ በጣም አጭር', m: '📋 መካከለኛ', d: '📚 ዝርዝር' }, NOTE_PAR = 3, NOTE_MAXP = 150;
+  const lvOf = t => (/ዝርዝር|detail|በደንብ/i.test(t) ? 'd' : /በጣም\s*አጭር|ባጭሩ|ባጭር|brief/i.test(t) ? 's' : 'm');
+  function parsePages(t, total) {          // «5-12»፣ «3,7,10-12»፣ «ከገጽ 3 እስከ 8»፣ «ገጽ 5» → [5..12]፤ ምንም ቁጥር ከሌለ null
+    const set = new Set(), s0 = String(t).replace(/[፩-፼]/g, ''), add = (a, z) => { if (a > z) [a, z] = [z, a]; for (let i = Math.max(1, a); i <= Math.min(z, total || 9999); i++) set.add(i); };
+    const rest = s0.replace(/(\d{1,4})\s*(?:-|–|—|እስከ|to|ወደ)\s*(\d{1,4})/gi, (_, a, z) => { add(+a, +z); return ' '; });
+    for (const x of rest.match(/\d{1,4}/g) || []) add(+x, +x); return set.size ? [...set].sort((a, b2) => a - b2) : null;
+  }
+  async function noteSrc(lm) {
+    if (lm.isPdf && lm.buf) { if (lm.sp === undefined) lm.sp = await pdfSplit(lm.buf).catch(() => null); if (lm.sp && lm.sp.n > 0) return { kind: 'pdf', total: lm.sp.n, sp: lm.sp }; return { kind: 'pdfwhole', total: AIM.countPdfPages(lm.buf) || 0 }; }
+    if (lm.isPpt && lm.buf) { if (!lm.slTx) { const { parsePptx } = require('../src/lib/pptx'), r = await parsePptx(lm.buf); lm.slTx = r.slides.map((x, i) => AIM.slideText({ title: x.title, blocks: x.blocks }, i)); } return { kind: 'ppt', total: lm.slTx.length, tx: lm.slTx }; }
+    if (lm.t) return { kind: 'text', total: 0 }; return { kind: 'img', total: 1 };
+  }
+  function noteJobs(src, lm, pages, lvl) {
+    const jobs = [], per = lvl === 'd' ? 2 : lvl === 's' ? 5 : 3;
+    if (src.kind === 'pdf' || src.kind === 'ppt') {
+      const sel = (pages || Array.from({ length: src.total }, (_, i) => i + 1)).slice(0, NOTE_MAXP), runs = []; for (const p of sel) { const r = runs[runs.length - 1]; if (r && p === r[1] + 1) r[1] = p; else runs.push([p, p]); }
+      for (const [a, z] of runs) for (let st = a; st <= z; st += per) { const e = Math.min(z, st + per - 1); jobs.push({ a: st, z: e, label: (src.kind === 'ppt' ? 'ስላይድ ' : 'ገጽ ') + (st === e ? st : st + '–' + e) }); }
+    } else if (src.kind === 'pdfwhole') jobs.push({ whole: true, label: pages ? 'ገጽ ' + pages.join(', ') : 'ሁሉም ገጽ', restrict: pages ? `ከዚህ PDF የገጽ ${pages.join(', ')} ብቻ ማስታወሻ አዘጋጅ፤ ሌሎችን ገጾች አትንካ።` : '' });
+    else if (src.kind === 'text') AIM.chunkText(lm.t, 7000).slice(0, 30).forEach((t, i) => jobs.push({ text: t, label: 'ክፍል ' + (i + 1) })); else jobs.push({ img: true, label: 'ምስል' });
+    return jobs;
+  }
+  async function noteAsk(chat, lm) {
+    let src; try { src = await noteSrc(lm); } catch (e) { return send(chat, '⚠️ ፋይሉ መነበብ አልቻለም።'); }
+    if (src.total > 1) return send(chat, `🗒 <b>አጭር ማስታወሻ</b> — ፋይሉ <b>${src.total} ${src.kind === 'ppt' ? 'ስላይዶች' : 'ገጾች'}</b> አለው።\nየትኛውን ይሥራልዎ?`, ik([[b('📚 ሁሉንም ገጽ (መካከለኛ)', 'nt:all:m')], [b('⚡ ሁሉም — በጣም አጭር', 'nt:all:s'), b('📖 ሁሉም — ዝርዝር', 'nt:all:d')], [b('🔢 የተወሰነ ገጽ ክልል ልምረጥ', 'nt:rg:m')]]));
+    const uid = uidOf(chat); return noteRun(chat, uid, lm, null, 'm');
+  }
+  async function noteRoute(chat, uid, a, x) {
+    const lm = MEDIA.get(chat); if (!lm || Date.now() - lm.ts > MEDIA_TTL) return send(chat, '⌛ ፋይሉ ጊዜው አልፏል — እንደገና ይላኩ።'); const lv = NLV[x] ? x : 'm';
+    if (a === 'all') return noteRun(chat, uid, lm, null, lv);
+    if (a === 'rg') { let src; try { src = await noteSrc(lm); } catch (e) { src = { total: 0 }; } const s = ses(chat); s.ntrg = { lv, ts: Date.now() }; save(); return send(chat, `🔢 የትኞቹን ${src.kind === 'ppt' ? 'ስላይዶች' : 'ገጾች'} ይሥራልዎ? ይጻፉ (1–${src.total || '…'})፦\n<code>5-12</code> ወይም <code>3, 7, 10-12</code> ወይም «ከገጽ 3 እስከ 8»`); }
+  }
+  async function noteFromText(chat, uid, lm, t) {
+    let src; try { src = await noteSrc(lm); } catch (e) { return send(chat, '⚠️ ፋይሉ መነበብ አልቻለም።'); } const all = /(ሁሉን|ሁሉም|በሙሉ|ጠቅላላ|all pages)/i.test(t), pages = all || !src.total ? null : parsePages(t.replace(/(short\s*note|ማስታወሻ|ኖት)/gi, ' '), src.total);
+    if (!all && src.total > 1 && !pages && /\d/.test(t)) return send(chat, `⚠️ ገጹ ከ1 እስከ ${src.total} ባለው ውስጥ መሆን አለበት።`);
+    if (!all && src.total > 1 && !pages) return noteAsk(chat, lm); return noteRun(chat, uid, lm, pages, lvOf(t));
+  }
+  async function noteRun(chat, uid, lm, pages, lvl) {
+    let src; try { src = await noteSrc(lm); } catch (e) { return send(chat, '⚠️ ፋይሉ መነበብ አልቻለም።'); }
+    if (lm.noteBusy) return send(chat, '⏳ ማስታወሻው እየተዘጋጀ ነው — ትንሽ ይታገሱ።'); const jobs = noteJobs(src, lm, pages, lvl); if (!jobs.length) return send(chat, '⚠️ የሚዘጋጅ ገጽ አልተገኘም።');
+    lm.noteBusy = true; const scope = pages ? (pages.length > 1 ? `ገጽ ${pages[0]}–${pages[pages.length - 1]}` : `ገጽ ${pages[0]}`) + ` (${pages.length})` : src.total > 1 ? `ሁሉም ${src.total}` : '';
+    await send(chat, `🗒 <b>አጭር ማስታወሻ</b> ${scope ? '— ' + H(scope) : ''} · ${NLV[lvl]}\n⏳ ${jobs.length > 1 ? jobs.length + ' ክፍሎች በትይዩ እየተዘጋጁ ነው — እንደጨረሱ በቅደም ተከተል እልካለሁ…' : 'እያዘጋጀሁ ነው…'}${pages && pages.length > NOTE_MAXP ? `\n(ከ${NOTE_MAXP} ገጽ በላይ ስለሆነ የመጀመሪያዎቹ ${NOTE_MAXP} ብቻ)` : ''}`);
+    const tm = setInterval(() => typing(chat), 4500), res = new Array(jobs.length); let next = 0, limitHit = null, done = 0, sentN = 0, ok = 0;
+    const one = async j => {
+      const q = svc.takePages(uid || 'admin', isAdmin(chat)); if (!q.ok) { limitHit = limitHit || q; return { limit: true }; }
+      for (let tr = 0; ; tr++) {
+        try {
+          const o = { label: j.label, lvl, restrict: j.restrict };
+          if (src.kind === 'pdf') o.pdf = await src.sp.range(j.a - 1, j.z - 1); else if (src.kind === 'pdfwhole') o.pdf = lm.buf; else if (src.kind === 'ppt') o.text = src.tx.slice(j.a - 1, j.z).join('\n\n'); else if (j.text) o.text = j.text; else o.media = lm.m;
+          return { text: await withTimeout(ai.noteChunk(o), 120000) };
+        } catch (e) { const busy = /^ai_(busy|timeout|network)$/.test(e.message); if (tr >= 1 || !busy && tr >= 1) { ai.refund(String(uid || 'admin'), 'pages', 1); return { err: e }; } await new Promise(r => setTimeout(r, busy ? 3000 : 400)); }
+      }
+    };
+    const worker = async () => { while (next < jobs.length && !limitHit) { const i = next++; res[i] = await one(jobs[i]); done++; await flush(); } };
+    let flushing = Promise.resolve(); const flush = () => (flushing = flushing.then(async () => { while (res[sentN] && sentN < jobs.length) { const r = res[sentN]; if (r.text) { ok++; await sendLong(chat, '', r.text.replace(/\*\*/g, '').replace(/^#+\s*/gm, '')); } sentN++; } }));
+    try { await Promise.all(Array.from({ length: Math.min(NOTE_PAR, jobs.length) }, worker)); await flush(); }
+    catch (e) { await send(chat, aiErr(e, chat)); } finally { clearInterval(tm); lm.noteBusy = false; }
+    const failed = res.filter(r => r && r.err).length, skipped = jobs.length - res.filter(r => r && (r.text || r.err)).length;
+    if (limitHit) { await paywall(chat, uid, 'limit'); }
+    if (!ok) return send(chat, '⚠️ ማስታወሻውን ማዘጋጀት አልተቻለም — እንደገና ይሞክሩ።', ik([[b('🔁 እንደገና', 'fk:nt')]]));
+    memSave(chat); await send(chat, `✅ ተጠናቀቀ — ${ok}/${jobs.length} ክፍሎች` + (failed ? `\n⚠️ ${failed} ክፍሎች አልተዘጋጁም (እንደገና ይሞክሩ)` : '') + (skipped && limitHit ? `\n⏸ የቀን ድርሻ ስላለቀ ${skipped} ክፍሎች ቀርተዋል` : '') + '\n\nሌላ ክልል ወይም ደረጃ ይፈልጋሉ?', ik([[b('🔢 ሌላ ገጽ ክልል', 'nt:rg:m'), b('📚 ሁሉንም', 'nt:all:m')], [b(FK.qs, 'fk:qs'), b(FK.ex, 'fk:ex')]]));
   }
   async function runMedia(chat, uid, media, text, again) {
     const tm = setInterval(() => typing(chat), 4500); typing(chat);

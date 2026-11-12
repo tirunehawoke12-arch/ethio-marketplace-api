@@ -13,12 +13,13 @@ const ACC = `\n\n[ትክክለኛ የንባብ ህግ] ሠንጠረዥ ካለ �
 const SYS = `አንተ «ኢትዮ ዲጂታል ማርኬት» የተባለው የኢትዮጵያ የመስመር ላይ ገበያ እና የተማሪዎች መማሪያ ቦት ውስጥ ያለህ ወዳጃዊ AI ረዳት ነህ።
 - ተጠቃሚው በጻፈበት ቋንቋ መልስ ይስጡ፤ ቋንቋው ካልተለየ በአማርኛ።
 - አጭር፣ ግልጽ እና ትክክለኛ ሁን፤ ትምህርት፣ ትርጉም፣ ጽሑፍ፣ ሒሳብ፣ ንግድ፣ ሥራ ማመልከቻ እና አጠቃላይ ጥያቄዎችን መርዳት ትችላለህ።
+- የእንግሊዝኛ ቃል/ጽሑፍ ሲተረጉሙ ወይም ትርጉሙ ሲጠየቅ፦ ቃሉን በአማርኛ ፊደል ብቻ አትጻፍ (ለምሳሌ «ትራኪዮስቶሚ» ብቻ ክልክል)፤ «ትራኪዮስቶሚ (tracheostomy) ማለት በአንገት ላይ ቀዳዳ ከፍቶ ለመተንፈስ የሚያስችል የቀዶ ሕክምና ነው» እንደሚባለው ምን ማለት እንደሆነ በቀላል አማርኛ ንገር። እርግጠኛ ካልሆንክ አትገምት።
 - ስለ ገበያው ልዩ መረጃ (ዋጋ፣ ትዕዛዝ፣ ሱቅ) ከሌለህ አትፍጠር፤ ተጠቃሚውን ከታች ካለው ማውጫ እንዲጠቀም አመልክት።
 - ለእውነታዊ መልሶች (ሳይንስ፣ ሕክምና፣ ሕግ፣ ታሪክ፣ ቁጥሮች፣ ዜና) መጨረሻ ላይ «📚 ምንጭ፦» ብለህ እውነተኛ ምንጮችን ጥቀስ (የመማሪያ መጽሐፍ፣ መመሪያ፣ ድርጅት ወይም ድረ-ገጽ ስም/አገናኝ)። የማታውቀውን ምንጭ ወይም አገናኝ በጭራሽ አትፍጠር፤ እርግጠኛ ካልሆንክ «ምንጭ፦ አጠቃላይ እውቀት — በታማኝ ምንጭ ያረጋግጡ» ብለህ ጻፍ። ከድረ-ገጹ ዕቃ/ሱቅ መረጃ ከሆነ የድረ-ገጹን አገናኝ ጥቀስ።
 - ማንኛውንም ጥያቄ (አጠቃላይ እውቀት፣ ወቅታዊ/የዛሬ ጉዳይ ጨምሮ) ለመመለስ ሞክር። የዛሬ ወይም ወቅታዊ ጉዳይ (ዜና፣ ዋጋ፣ የአየር ሁኔታ፣ ውጤት፣ ሹመት) ከሆነ በፍለጋ ውጤት ብቻ መልስ፤ ፍለጋ ካልቻልክ በእርግጠኝነት እንደማታውቅ ተናገር እንጂ አትገምት፤ የቀን/ሰዓት ጥያቄ ከታች ካለው «አሁን» መረጃ መልስ።
 - Telegram ውስጥ ነው የምትመልሰው፤ markdown ሰንጠረዥ ወይም ከባድ ቅርጸት አትጠቀም፤ አጫጭር አንቀጾች እና ቀላል ዝርዝር ብቻ።`;
 const TR = `አንተ ባለሙያ የእንግሊዝኛ→አማርኛ ተርጓሚ ነህ። ሰነዱን ትርጉም በትርጉም (አውዳዊ) ወደ ተፈጥሯዊ፣ ግልጽ አማርኛ ተርጉም፤ ቃል በቃል አይደለም።
-ህጎች፦ (1) ትርጉሙን ብቻ ስጥ፤ መግቢያ ወይም ማብራሪያ አትጨምር። (2) የርዕስ፣ የነጥብ እና የአንቀጽ አወቃቀርን ጠብቅ። (3) ቁጥሮች፣ ቀመሮች፣ የሰዎች/ድርጅት ስሞች እና አህጽሮተ ቃላት እንዳሉ ይቀሩ፤ የቴክኒክ ቃል ሲተረጎም ለመጀመሪያ ጊዜ እንግሊዝኛውን በቅንፍ አብረህ ጻፍ፣ ለምሳሌ «የሕዋስ ሽፋን (cell membrane)»። (4) ሠንጠረዥ ከሆነ ረድፍ በረድፍ በቀላል መስመሮች (ዓምዶች በ « | »)። (5) ምስል/ሥዕላዊ መግለጫ ካለ በአጭሩ «[ምስል፦ …]» ብለህ ግለጽ፤ በውስጡ ጽሑፍ ካለ ተርጉመው። (6) ገጹ ቀድሞውኑ በአማርኛ ከሆነ እንዳለ ጻፈው። (7) ሠንጠረዦችን ረድፍ በረድፍ ሁሉንም ሕዋስ በትክክል ተርጉም፤ ቁጥሮች፣ አሃዶች፣ ምልክቶች (± ≤ ≥ × ÷ √ ∑ π α β Δ °)፣ ቀመሮች እና ንዑስ/ላዕላይ ጽሑፍ ፈጽሞ አይለወጡ። (8) ገጹ ባዶ ከሆነ «[ባዶ ገጽ]» ብቻ ጻፍ።`;
+ህጎች፦ (1) ትርጉሙን ብቻ ስጥ፤ መግቢያ ወይም ማብራሪያ አትጨምር። (2) የርዕስ፣ የነጥብ እና የአንቀጽ አወቃቀርን ጠብቅ። (3) ቁጥሮች፣ ቀመሮች፣ የሰዎች/ድርጅት ስሞች እና አህጽሮተ ቃላት እንዳሉ ይቀሩ። የቴክኒክ/ሕክምና/ሳይንስ ቃል ሲገጥምህ እንግሊዝኛውን በአማርኛ ፊደል በድምፅ ብቻ አትጻፍ (ለምሳሌ «ትራኪዮስቶሚ» ብቻ ማለት ክልክል ነው)፤ ይልቁንም ትርጉሙን (ምን እንደሆነ) በአማርኛ ንገር። ለምሳሌ «tracheostomy» → «ትራኪዮስቶሚ (tracheostomy) ማለት በአንገት ፊት በኩል ወደ ንፋስ ቧንቧ ቀዳዳ ከፍቶ ለመተንፈስ የሚያስችል የቀዶ ሕክምና ነው»። ለመጀመሪያ ጊዜ ሲገኝ ትርጉሙን በአንድ አጭር ሐረግ ጨምር፤ ከዚያ በኋላ በአማርኛ ገላጭ ስም (ወይም አጭር ትርጉም) ተጠቀም። ትርጉሙን በእርግጠኝነት የማታውቀው ቃል ከሆነ «[የቃሉ ትርጉም አልተረጋገጠም]» ብለህ እንግሊዝኛውን በቅንፍ ብቻ ጻፍ፤ አትገምት። የታወቀ የአማርኛ አቻ ያለው ቃል (ምሳሌ cell membrane = የሕዋስ ሽፋን) በአቻው ተርጉምና እንግሊዝኛውን በቅንፍ ጻፍ። (4) ሠንጠረዥ ከሆነ ረድፍ በረድፍ በቀላል መስመሮች (ዓምዶች በ « | »)። (5) ምስል/ሥዕላዊ መግለጫ ካለ በአጭሩ «[ምስል፦ …]» ብለህ ግለጽ፤ በውስጡ ጽሑፍ ካለ ተርጉመው። (6) ገጹ ቀድሞውኑ በአማርኛ ከሆነ እንዳለ ጻፈው። (7) ሠንጠረዦችን ረድፍ በረድፍ ሁሉንም ሕዋስ በትክክል ተርጉም፤ ቁጥሮች፣ አሃዶች፣ ምልክቶች (± ≤ ≥ × ÷ √ ∑ π α β Δ °)፣ ቀመሮች እና ንዑስ/ላዕላይ ጽሑፍ ፈጽሞ አይለወጡ። (8) ገጹ ባዶ ከሆነ «[ባዶ ገጽ]» ብቻ ጻፍ።`;
 const HIST_TURNS = Number(process.env.AI_HIST_TURNS) || 40, HIST_TTL = (Number(process.env.AI_HIST_DAYS) || 7) * 86400e3, API_VER = '2023-06-01';
 const WD = ['እሑድ', 'ሰኞ', 'ማክሰኞ', 'ረቡዕ', 'ሐሙስ', 'ዓርብ', 'ቅዳሜ'], EM = ['መስከረም', 'ጥቅምት', 'ኅዳር', 'ታኅሣሥ', 'ጥር', 'የካቲት', 'መጋቢት', 'ሚያዝያ', 'ግንቦት', 'ሰኔ', 'ሐምሌ', 'ነሐሴ', 'ጳጉሜ'];
 function nowInfo(t) {          // አሁን፦ ዓ.ም (ኢትዮጵያ) + ግሪጎሪያን + ሰዓት (ኢትዮጵያ ሰዓት፣ UTC+3)
@@ -26,6 +27,9 @@ function nowInfo(t) {          // አሁን፦ ዓ.ም (ኢትዮጵያ) + ግ�
   return `${WD[d.getUTCDay()]} ${EM[mo]} ${dy} ቀን ${yr} ዓ.ም (ግሪጎሪያን ${d.toISOString().slice(0, 10)}) ሰዓት ${d.toISOString().slice(11, 16)} (የኢትዮጵያ ሰዓት)`;
 }
 const TIMELY = /ዛሬ|አሁን|መቼ|ሊግ|ተጫዋች|ተመረጠ|ተሾመ|ሞተ|ተቀጠረ|ተከፈተ|ጦርነት|ምርጫ|ማን አሸነፈ|ምን አዲስ|\b(when|who won|match|fixture|election|died|stock|bitcoin)\b|ዘንድሮ|ትናንት|ነገ|ወቅታዊ|ዜና|የአየር|ዋጋ|ምንዛሬ|ዶላር|ውጤት|ጨዋታ|አዲስ|ማን ነው|\b(today|tonight|now|current|currently|latest|recent|news|price|weather|score|rate|exchange|who is|202\d)\b/i;
+/* 🌐 እውነታ-ጠያቂ ጥያቄ (ማን፣ ምንድን፣ ስንት፣ የት፣ መቼ…) → Google ፍለጋ ይጠቀማል፤ ጽሑፍ ማዘጋጀት/ትርጉም/ሒሳብ/ሰላምታ/የገበያ ጉዳይ አይፈልግም። AI_WEB_FACTS=0 ያጠፋል */
+const WEBQ = /[?፧]|\b(what|who|whom|when|where|why|how|which|is it|are there|does|did|can|define|meaning|capital|population|history|price)\b|ማን\b|ማነው|ምንድን|ምንድነው|ምን ማለት|ስንት|ስንተኛ|የት\b|የትኛው|መቼ|እንዴት|ለምን|ማለት ነው|ይባላል|ታሪክ|ዋና ከተማ|የህዝብ ብዛት|ብዛት|ርቀት|ርዝመት|ቁመት|ዕድሜ|የተወለደ|ተመሠረተ/i, NOWEB = /ጻፍልኝ|ጽፈህ|ግጥም|ታሪክ ጻፍ|ተርጉም|ትርጉም ስጠኝ|አብራራልኝ ከፋይሉ|ሒሳብ|አስላ|ኮድ|code|translate|write me|essay|poem|ሰላም\b|እንዴት ነህ|አመሰግናለሁ|ሱቅ|ዕቃ|ትዕዛዝ|ክፍያ|ጋሪ|ቪድዮ|ሰነድ/i;
+const needsWeb = t => { t = String(t || '').trim(); return t.length >= 8 && t.length <= 500 && !/^\//.test(t) && WEBQ.test(t) && !NOWEB.test(t); };
 const dayKey = (t) => new Date(t + 3 * 3600e3).toISOString().slice(0, 10);
 
 function countPdfPages(buf) {          // ያልተጨመቀ የገጽ ዕቃዎችን ይቆጥራል፤ 0 = አልታወቀም
@@ -158,7 +162,7 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
     const h = hist.get(id) || { ts: now(), m: [] }; if (now() - h.ts > HIST_TTL) h.m = [];
     h.m.push({ role: 'user', content: String(text).slice(0, 6000) }); const msgs = h.m.slice(-HIST_TURNS * 2).map((x, i, a) => (i < a.length - 12 && x.content.length > 900 ? { ...x, content: x.content.slice(0, 900) + ' …' } : x));          // የቆዩ መልእክቶች ይጠረዛሉ (ወጪ)፤ የቅርብ 12 ሙሉ
     while (msgs.length && msgs[0].role !== 'user') msgs.shift();
-    const out = await ask({ system: (system || SYS) + (media ? ACC : '') + '\n\nአሁን፦ ' + nowInfo(now()), msgs, max: media ? 4000 : 1500, media, ground: !media && env.AI_GROUNDING !== '0' && (env.AI_GROUNDING === '1' || (opt && opt.ground) || TIMELY.test(String(text)))}); if (media) h.m[h.m.length - 1].content = '[📎 ' + (media.mime === 'application/pdf' ? 'PDF' : 'ፎቶ') + '] ' + h.m[h.m.length - 1].content; h.m.push({ role: 'assistant', content: String(out || '…').replace(/\n\n(?:⚠️ የድር ፍለጋ|🔎 ምንጮች|📰 ምንጮች|📚 ምንጮች)[\s\S]*$/, '') || '…' }); h.m = h.m.slice(-HIST_TURNS * 2); h.ts = now(); hist.set(id, h); return out;
+    const out = await ask({ system: (system || SYS) + (media ? ACC : '') + '\n\nአሁን፦ ' + nowInfo(now()), msgs, max: media ? 4000 : 1500, media, ground: !media && env.AI_GROUNDING !== '0' && (env.AI_GROUNDING === '1' || (opt && opt.ground) || TIMELY.test(String(text)) || (env.AI_WEB_FACTS !== '0' && needsWeb(text)))}); if (media) h.m[h.m.length - 1].content = '[📎 ' + (media.mime === 'application/pdf' ? 'PDF' : 'ፎቶ') + '] ' + h.m[h.m.length - 1].content; h.m.push({ role: 'assistant', content: String(out || '…').replace(/\n\n(?:⚠️ የድር ፍለጋ|🔎 ምንጮች|📰 ምንጮች|📚 ምንጮች)[\s\S]*$/, '') || '…' }); h.m = h.m.slice(-HIST_TURNS * 2); h.ts = now(); hist.set(id, h); return out;
   }
   const snap = id => { const h = hist.get(id); return h ? h.m.slice(-12).map(x => ({ role: x.role, content: String(x.content).slice(0, 500) })) : []; }, has = id => !!(hist.get(id) && hist.get(id).m.length), restore = (id, arr) => { if (!has(id) && Array.isArray(arr) && arr.length) hist.set(id, { ts: now(), m: arr.filter(x => x && (x.role === 'user' || x.role === 'assistant') && x.content).map(x => ({ role: x.role, content: String(x.content).slice(0, 700) })) }); }, note = (id, content) => { const h = hist.get(id) || { ts: now(), m: [] }; h.m.push({ role: 'assistant', content: String(content).slice(0, 700) }); h.ts = now(); hist.set(id, h); };
   const reset = id => hist.delete(id), usage = uid => { const u = used.get(uid); return u && u.d === dayKey(now()) ? { chat: u.chat, pages: u.pages } : { chat: 0, pages: 0 }; };
@@ -226,11 +230,20 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
     const out = await ask({ system: 'አንተ ልምድ ያለህ የ Node.js መሐንዲስ ነህ። የኢትዮ ዲጂታል ማርኬት ቦት ኮድ ላይ የተጠየቀውን ለውጥ አድርግ። JSON ብቻ (ያለ ``` ):\n{"summary":"ምን እንደተለወጠ በአማርኛ (2-4 መስመር)","files":[{"path":"…","edits":[{"old":"ከፋይሉ ላይ በትክክል አንድ ጊዜ ብቻ የሚገኝ ቃል-በቃል ቅንጣቢ","new":"መተኪያ"}]},{"path":"tests/x.test.js","create":"ሙሉ የአዲስ ፋይል ይዘት"}]}\n' + SELF_RULES + '\n«old» ከሰጠሁህ ጽሑፍ ላይ ቃል በቃል (ክፍተት ጭምር) መቅዳት አለበት እና በፋይሉ ውስጥ አንድ ጊዜ ብቻ መገኘት አለበት — በቂ አውድ ጨምር። ' + ACC, max: 12000, msgs: [{ role: 'user', content: `ጥያቄ፦ ${request}\n\n${errors && errors.length ? '[ያለፈው ሙከራ ስህተቶች — አርም]\n' + errors.join('\n') + '\n\n' : ''}[ፋይሎች]\n${body}` }] });
     return jsonOf(out);
   }
+
+  /* 🗒 አጭር ማስታወሻ (v42)፦ የአንድ ገጽ-ቡድን/ስላይዶች/ጽሑፍ → አጭር የጥናት ማስታወሻ (አማርኛ)። lvl: s በጣም አጭር · m መካከለኛ · d ዝርዝር */
+  const NOTE_LV = { s: 'በእያንዳንዱ ገጽ 2-4 ነጥብ ብቻ — ዋናውን ሐሳብ ብቻ።', m: 'በእያንዳንዱ ገጽ 4-7 ነጥብ — ዋና ሐሳብ፣ ትርጓሜ፣ አስፈላጊ ቁጥር/ቀመር።', d: 'በእያንዳንዱ ገጽ 6-12 ነጥብ — ትርጓሜዎች፣ ቀመሮች፣ ምሳሌዎች፣ ንጽጽሮች፣ ዝርዝሮች ሳይዘለሉ።' };
+  async function noteChunk({ pdf, media, text, label, lvl, restrict }) {
+    const sys = `አንተ ብቁ የኢትዮጵያ መምህር ነህ። ተማሪው ለፈተና የሚያጠናበት አጭር ማስታወሻ (short note) በአማርኛ አዘጋጅ።\nደንቦች፦ ${NOTE_LV[lvl] || NOTE_LV.m}\n• ከተሰጠው ይዘት ብቻ ተመርኩዘህ፤ ምንም አዲስ እውነታ አትጨምር፤ ምንም ገጽ/ስላይድ አትዝለል።\n• ለእያንዳንዱ ገጽ/ስላይድ «ገጽ N» (ወይም «ስላይድ N») የሚል አጭር ርዕስ መስመር ጻፍና ከስር ነጥቦችን በ «•» ጀምር። ገጹ ባዶ/ሥዕል ብቻ ከሆነ አንድ መስመር ብቻ።\n• የቴክኒክ ቃል ሲኖር አማርኛውን እና እንግሊዝኛውን በቅንፍ፤ ቀመር፣ ቁጥር፣ አሃድ እንዳሉ ጠብቅ።\n• ምልክት ሰንጠረዥ (|) ወይም markdown (** ##) አትጠቀም፤ ቀላል ጽሑፍ ብቻ። መግቢያ ወይም መደምደሚያ አትጻፍ።` + ACC;
+    const head = `ክፍል፦ ${label}።` + (restrict ? ' ' + restrict : '');
+    const o = pdf ? { pdf, msgs: [{ role: 'user', content: head + ' ይህ PDF ያለው ገጾች ብቻ ማስታወሻ ይሁኑ።' }] } : media ? { media, msgs: [{ role: 'user', content: head + ' ይህን ፎቶ/ምስል አንብበህ ማስታወሻ አዘጋጅ።' }] } : { msgs: [{ role: 'user', content: head + '\n\n[ይዘት]\n' + String(text || '').slice(0, 14000) }] };
+    return (await ask({ system: sys, max: lvl === 'd' ? 3500 : 2200, ...o })).trim();
+  }
   /* 🧑‍🏫 ሰሌዳ፦ የአንድ ገጽ/ስላይድ ሙሉ ይዘት (ምንም ሳይዘለል) መስመር በመስመር + የእያንዳንዱ መስመር የመምህር ማብራሪያ — JSON */
   const BOARD_SYS = `አንተ ትዕግሥተኛ፣ ብቁ የኢትዮጵያ መምህር ነህ። ለተማሪዎች አንድን የፋይል ገጽ/ስላይድ በሰሌዳ ላይ ልትለጥፍና መስመር በመስመር ልታስረዳ ነው።
 ከገጹ ሙሉ ይዘት (ርዕስ፣ እያንዳንዱ ነጥብ/መስመር፣ ሠንጠረዥ ረድፍ፣ ቀመር፣ የሥዕል ጽሑፍ) ምንም ሳትዘልና ሳታሳጥር ሁሉንም አካትት።
 ውጤቱን በዚህ JSON ቅርጸት ብቻ ስጥ (ከJSON ውጪ ምንም ጽሑፍ ወይም \`\`\` አትጨምር)፦
-{"title":"የገጹ ርዕስ","lines":[{"k":"title|text|bullet|formula|note","t":"መስመሩ በገጹ ላይ እንዳለ (የገጹ ቋንቋ፣ አጭር)","am":"ገጹ እንግሊዝኛ ከሆነ የአማርኛ ትርጉሙ (አማርኛ ከሆነ ባዶ)","say":"ይህን መስመር እንደ መምህር የምታብራራበት ሙሉ ንግግር (3-6 አረፍተ ነገሮች፤ ትርጉም፣ ምክንያት፣ ምሳሌ)"}],"draw":[{"k":"rect","x":10,"y":8,"w":30,"h":14},{"k":"circle","x":70,"y":15,"r":8},{"k":"arrow","x1":40,"y1":15,"x2":62,"y2":15},{"k":"label","x":12,"y":18,"t":"ጽሑፍ"}]}
+{"title":"የገጹ ርዕስ","lines":[{"k":"title|text|bullet|formula|note","t":"መስመሩ በገጹ ላይ እንዳለ (የገጹ ቋንቋ፣ አጭር)","am":"ገጹ እንግሊዝኛ ከሆነ የአማርኛ ትርጉሙ (የቴክኒክ ቃልን በድምፅ ብቻ አትጻፍ — ትርጉሙን በአጭሩ አብራራ) (አማርኛ ከሆነ ባዶ)","say":"ይህን መስመር እንደ መምህር የምታብራራበት ሙሉ ንግግር (3-6 አረፍተ ነገሮች፤ ትርጉም፣ ምክንያት፣ ምሳሌ)"}],"draw":[{"k":"rect","x":10,"y":8,"w":30,"h":14},{"k":"circle","x":70,"y":15,"r":8},{"k":"arrow","x1":40,"y1":15,"x2":62,"y2":15},{"k":"label","x":12,"y":18,"t":"ጽሑፍ"}]}
 ህጎች፦ lines እስከ 28፤ በገጹ ቅደም ተከተል፤ say በቀላል ተፈጥሯዊ አማርኛ (የቴክኒክ ቃል እንግሊዝኛው በቅንፍ)፣ ለድምፅ ምቹ ሙሉ አረፍተ ነገሮች፣ ምልክት/ሰንጠረዥ አትጠቀም። draw አማራጭ ነው (ገጹ ሥዕላዊ መግለጫ ሲኖረው ወይም ለማብራራት ሲጠቅም፤ ሸራው 100×56)። ገጹ ባዶ ከሆነ lines: [] ስጥ።`;
   const LV = {
     d: '\n\n[የማብራሪያ ደረጃ፦ በጣም ዝርዝር] እያንዳንዱ መስመር say ከ7-12 አረፍተ ነገሮች፤ ትርጉሙን፣ ምክንያቱን፣ እንዴት እንደሚሠራ በደረጃ አብራራ፤ ቢያንስ አንድ ተጨባጭ ምሳሌ (የኢትዮጵያ የዕለት ተዕለት ሕይወት) ስጥ፤ ሒሳብ/ቀመር ከሆነ በቁጥር ተሠርቶ የተፈታ ምሳሌ አሳይ። ተማሪው ሊሳሳትበት የሚችለውን ነገርም ጥቀስ። lines እስከ 22።',
@@ -281,7 +294,7 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
     }
     return null;
   }
-  return { speakFree, ttsLast: () => lastTts, extras: extras.map(x => x.n), enabled: !!prov, provider: prov, model, lim, chat, reset, take, refund, usage, pdfPage, slideTr, domainBrief, boardPage, boardAsk, genDocSpec, videoPlan, selfPick, selfPatch, snap, has, restore, note, transcribe, speak };
+  return { speakFree, ttsLast: () => lastTts, extras: extras.map(x => x.n), enabled: !!prov, provider: prov, model, lim, chat, reset, take, refund, usage, pdfPage, slideTr, domainBrief, boardPage, boardAsk, genDocSpec, videoPlan, selfPick, selfPatch, noteChunk, snap, has, restore, note, transcribe, speak };
 }
 let inst = null; const shared = () => inst || (inst = create());
-module.exports = { nowInfo, create, shared, countPdfPages, chunkText, slideText, SYS, TR };
+module.exports = { nowInfo, create, shared, countPdfPages, chunkText, slideText, needsWeb, SYS, TR };
