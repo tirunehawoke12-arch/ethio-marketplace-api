@@ -41,7 +41,7 @@ module.exports = function bot(c) {
   /* ---------- ክፍለ-ጊዜ (ንግግር፣ ጋሪ) ---------- */
   const ai = AIM.shared(), DOCS = new Map(), svc = aisvc || null, aiReady = () => !!(svc && ai.enabled);          // ንግግር + የሰነድ ትርጉም ሥራዎች (በ RAM፤ 60 ደቂቃ)
   const S = {}; const ses = chat => S[chat] || (S[chat] = { cart: [] });
-  let saveT; const save = () => { if (!pool) return; clearTimeout(saveT); saveT = setTimeout(() => pgUpsert('_sys', 'botdb', S).catch(e => console.warn('bot save', e.message)), 600); };
+  let saveT, saveH = '', saveWarn = 0; const save = () => { if (!pool) return; clearTimeout(saveT); saveT = setTimeout(() => { let j; try { j = JSON.stringify(S); } catch (e) { return; } if (j === saveH) return; if (j.length > 1.5e6 && Date.now() - saveWarn > 36e5) { saveWarn = Date.now(); console.warn('⚠️ botdb ትልቅ ነው:', (j.length / 1e6).toFixed(1), 'MB — እያንዳንዱ ቁጠባ ይህን ሁሉ ይልካል'); } saveH = j; pgUpsert('_sys', 'botdb', S).catch(e => { saveH = ''; console.warn('bot save', e.message); }); }, Number(process.env.BOT_SAVE_MS) || 5000); };          // v45፦ 5 ሰከንድ ማዘግየት + ያልተቀየረ ከሆነ አይጻፍም (የዳታቤዝ ዝውውር ቁጠባ)
   const restore = d => { if (d && typeof d === 'object') Object.assign(S, d); };
 
   /* ---------- መላኪያ ---------- */
@@ -740,6 +740,7 @@ module.exports = function bot(c) {
     if (/^\/myid\b/.test(t)) return send(chat, `🆔 Chat ID፦ <code>${chat}</code>`);
     const ld = /^\/start\s+d_([\w-]{4,40})$/.exec(t); if (ld) return learnStart(chat, ld[1]);
     const dl = /^\/start\s+([sgpwej])_([\w-]{4,40})$/.exec(t); if (dl) s.deep = { t: dl[1], id: dl[2] };       // deep link — ከመግባት በኋላም ይከፈታል
+    if (isAdmin(chat) && /^\/dbsize\b/i.test(t)) { if (!pool) return send(chat, 'ℹ️ ዳታቤዝ የለም (ፋይል ማከማቻ)።'); try { const r = await pool.query('SELECT path, count(*)::int n, sum(pg_column_size(data))::bigint b FROM kv GROUP BY path ORDER BY b DESC LIMIT 12'), tot = await pool.query('SELECT pg_database_size(current_database())::bigint b'), mb = x => (Number(x) / 1048576).toFixed(2) + ' MB'; return send(chat, `🗄 <b>ዳታቤዝ</b> — ጠቅላላ ${mb(tot.rows[0].b)}\n(Neon ነፃ ገደብ ~0.5 GB ማከማቻ)\n\n` + r.rows.map(x => `• <code>${H(x.path)}</code> — ${x.n} ረድፍ · ${mb(x.b)}`).join('\n') + `\n\nbotdb (አሁን በማስታወሻ)፦ ${mb(JSON.stringify(S).length)}`); } catch (e) { return send(chat, '⚠️ <code>' + H(clip(e.message, 300)) + '</code>'); } }
     if (/^\/(upgrade|አሻሽል)\b/i.test(t)) return sdStart(chat, t.replace(/^\/\S+\s*/, '').trim());
     if (/^\/(video|ቪድዮ)\b/i.test(t)) return vidStart(chat, uid, t.replace(/^\/\S+\s*/, '').trim() || '');
     { const vv = vget(chat); if (vv && vv.collect && !/^\//.test(t) && !LABELS[t]) { if (vv.collect === 'change') return vidGo(chat, uid, t.slice(0, 1500)); if (vv.busy) return send(chat, '⏳ ቪድዮዎ እየተሠራ ነው።'); vv.notes.push(t.slice(0, 1500)); return vidAck(chat, 'ሀሳብ'); } }

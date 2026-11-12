@@ -39,3 +39,7 @@ test('AI ጥያቄ፦ የመረዳት መመሪያ ወደ system ይገባል፤
 test('ትርጉም፦ የቴክኒክ ቃል በድምፅ ብቻ አይጻፍም — ትርጉሙ ይነገራል (TR + SYS)', () => {
   const AI = require('../server/ai'); assert.match(AI.TR, /ትራኪዮስቶሚ[\s\S]*ማለት በአንገት/); assert.match(AI.TR, /በድምፅ ብቻ አትጻፍ/); assert.match(AI.SYS, /ትራኪዮስቶሚ[\s\S]*ማለት/);
 });
+test('Google ፍለጋ፦ እውነታ-ጠያቂ ጥያቄ ይፈልጋል፤ ሰላምታ/ትርጉም/ገበያ/ኮድ አይፈልግም', () => {
+  const { needsWeb } = require('../server/ai'); for (const q of ['የኢትዮጵያ ዋና ከተማ ምንድን ነው?', 'who invented the telephone', 'ላሊበላ መቼ ተሠራ', 'yeabay wenz sint new?']) assert.ok(needsWeb(q), q);
+  for (const q of ['ሰላም እንዴት ነህ', 'ለዚህ ኢሜይል ጻፍልኝ ሥራ ማመልከቻ', 'translate this to amharic: hello', '/start', 'ሱቅ ምንድን ነው ዋጋ', 'hi']) assert.ok(!needsWeb(q), q);
+});

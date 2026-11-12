@@ -38,7 +38,8 @@ let botApi = null;                                  // Telegram bot (ሙሉ ድ�
 const DATABASE_URL = process.env.DATABASE_URL || '';
 let pool = null;
 if (DATABASE_URL) { const { Pool } = require('pg'); pool = new Pool({ connectionString: DATABASE_URL, ssl: /localhost|127\.0\.0\.1/.test(DATABASE_URL) ? false : { rejectUnauthorized: false }, max: 3 }); pool.on('error', e => console.error('pg', e.message)); }
-const pgUpsert = (p, id, data) => pool.query('INSERT INTO kv(path,id,data) VALUES($1,$2,$3) ON CONFLICT(path,id) DO UPDATE SET data=EXCLUDED.data', [p, id, JSON.stringify(data)]);
+let storageOk = true, storageErr = '', storageRetry = null;          // ዳታቤዝ ካልተጫነ (ገደብ/ግንኙነት) ባዶ ውሂብ በእውነተኛው ላይ እንዳይጻፍ ሁሉም ጽሑፎች ይታገዳሉ
+const pgUpsert = (p, id, data) => !storageOk ? Promise.reject(new Error('storage_unavailable')) : pool.query('INSERT INTO kv(path,id,data) VALUES($1,$2,$3) ON CONFLICT(path,id) DO UPDATE SET data=EXCLUDED.data', [p, id, JSON.stringify(data)]);
 const pgDelete = (p, id) => pool.query('DELETE FROM kv WHERE path=$1 AND id=$2', [p, id]);
 function saveDB() {
   if (pool) { clearTimeout(saveTimer); saveTimer = setTimeout(() => pgUpsert('_sys', 'otpdb', db).catch(e => console.error('otp save failed', e.message)), 300); return; }
@@ -74,8 +75,9 @@ function safeOtpMatch(input, expected) {
   return crypto.timingSafeEqual(Buffer.from(input), Buffer.from(expected));
 }
 
+app.use('/api', (req, res, next) => (storageOk || req.path === '/health' || req.path === '/telegram/webhook' ? next() : res.status(503).json({ ok: false, error: 'storage_unavailable', message: 'ውሂብ ማከማቻው ለጊዜው አይገኝም — ትንሽ ቆይተው ይሞክሩ' })));
 app.get('/api/health', (req,res)=>res.json({
-  ok:true, service:'etio-digital-market-telegram', domain:'ethiodigitalmarket.pro.et',
+  storage: storageOk ? 'ok' : 'down', storageError: storageOk ? undefined : storageErr, ok:true, service:'etio-digital-market-telegram', domain:'ethiodigitalmarket.pro.et',
   botConfigured:!!TOKEN, webhookConfigured:!!WEBHOOK_SECRET
 }));
 
@@ -85,6 +87,7 @@ app.post('/api/telegram/webhook', async (req,res) => {
     return res.sendStatus(403);
   }
   res.sendStatus(200); // acknowledge promptly; process the update below
+  if (!storageOk) { try { const m0 = (req.body || {}).message || ((req.body || {}).callback_query || {}).message, c0 = m0 && m0.chat && m0.chat.id; if (c0 && Date.now() - (global.__downMsg || 0) > 20000) { global.__downMsg = Date.now(); tg('sendMessage', { chat_id: c0, text: '🛠 አገልግሎቱ ለጊዜው በጥገና ላይ ነው (የውሂብ ማከማቻ አይገኝም) — ትንሽ ቆይተው እንደገና ይሞክሩ። 🙏' }).catch(() => { }); } } catch (e) { } return; }
   try {
     const upd = req.body || {}, msg = upd.message;
     if (msg && msg.chat && msg.contact) { if (!(await handleContact(msg)) && botApi) await botApi.handle(upd); }
@@ -452,6 +455,13 @@ app.use((err, req, res, next) => opsApi.errorMw(err, req, res, next));      // �
 
 async function initStorage() {
   if (!pool) return;
+  try { await loadStorage(); storageOk = true; storageErr = ''; }
+  catch (e) {
+    storageOk = false; storageErr = String(e && e.message || e).slice(0, 200); console.error('⚠️ ዳታቤዝ አልተጫነም — አገልግሎቱ በጥገና ሁነታ ይጀምራል (ጽሑፍ ታግዷል፤ በየ 5 ደቂቃ እንደገና ይሞክራል):', storageErr);
+    if (!storageRetry) storageRetry = setInterval(async () => { try { await loadStorage(); storageOk = true; storageErr = ''; clearInterval(storageRetry); storageRetry = null; console.log('✅ ዳታቤዝ ተመልሷል'); } catch (e2) { storageErr = String(e2 && e2.message || e2).slice(0, 200); console.error('ዳታቤዝ አሁንም አይገኝም:', storageErr); } }, 5 * 60e3);
+  }
+}
+async function loadStorage() {
   await pool.query('CREATE TABLE IF NOT EXISTS kv (path text NOT NULL, id text NOT NULL, data jsonb NOT NULL, PRIMARY KEY (path, id))');
   const r = await pool.query('SELECT path,id,data FROM kv');
   store = { docs: {}, rev: {}, idx: {} };

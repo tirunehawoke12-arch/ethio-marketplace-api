@@ -27,6 +27,9 @@ function nowInfo(t) {          // አሁን፦ ዓ.ም (ኢትዮጵያ) + ግ�
   return `${WD[d.getUTCDay()]} ${EM[mo]} ${dy} ቀን ${yr} ዓ.ም (ግሪጎሪያን ${d.toISOString().slice(0, 10)}) ሰዓት ${d.toISOString().slice(11, 16)} (የኢትዮጵያ ሰዓት)`;
 }
 const TIMELY = /ዛሬ|አሁን|መቼ|ሊግ|ተጫዋች|ተመረጠ|ተሾመ|ሞተ|ተቀጠረ|ተከፈተ|ጦርነት|ምርጫ|ማን አሸነፈ|ምን አዲስ|\b(when|who won|match|fixture|election|died|stock|bitcoin)\b|ዘንድሮ|ትናንት|ነገ|ወቅታዊ|ዜና|የአየር|ዋጋ|ምንዛሬ|ዶላር|ውጤት|ጨዋታ|አዲስ|ማን ነው|\b(today|tonight|now|current|currently|latest|recent|news|price|weather|score|rate|exchange|who is|202\d)\b/i;
+/* 🌐 እውነታ-ጠያቂ ጥያቄ (ማን፣ ምንድን፣ ስንት፣ የት፣ መቼ…) → Google ፍለጋ ይጠቀማል፤ ጽሑፍ ማዘጋጀት/ትርጉም/ሒሳብ/ሰላምታ/የገበያ ጉዳይ አይፈልግም። AI_WEB_FACTS=0 ያጠፋል */
+const WEBQ = /[?፧]|\b(what|who|whom|when|where|why|how|which|is it|are there|does|did|can|define|meaning|capital|population|history|price)\b|ማን\b|ማነው|ምንድን|ምንድነው|ምን ማለት|ስንት|ስንተኛ|የት\b|የትኛው|መቼ|እንዴት|ለምን|ማለት ነው|ይባላል|ታሪክ|ዋና ከተማ|የህዝብ ብዛት|ብዛት|ርቀት|ርዝመት|ቁመት|ዕድሜ|የተወለደ|ተመሠረተ/i, NOWEB = /ጻፍልኝ|ጽፈህ|ግጥም|ታሪክ ጻፍ|ተርጉም|ትርጉም ስጠኝ|አብራራልኝ ከፋይሉ|ሒሳብ|አስላ|ኮድ|code|translate|write me|essay|poem|ሰላም\b|እንዴት ነህ|አመሰግናለሁ|ሱቅ|ዕቃ|ትዕዛዝ|ክፍያ|ጋሪ|ቪድዮ|ሰነድ/i;
+const needsWeb = t => { t = String(t || '').trim(); return t.length >= 8 && t.length <= 500 && !/^\//.test(t) && WEBQ.test(t) && !NOWEB.test(t); };
 const dayKey = (t) => new Date(t + 3 * 3600e3).toISOString().slice(0, 10);
 
 function countPdfPages(buf) {          // ያልተጨመቀ የገጽ ዕቃዎችን ይቆጥራል፤ 0 = አልታወቀም
@@ -159,7 +162,7 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
     const h = hist.get(id) || { ts: now(), m: [] }; if (now() - h.ts > HIST_TTL) h.m = [];
     h.m.push({ role: 'user', content: String(text).slice(0, 6000) }); const msgs = h.m.slice(-HIST_TURNS * 2).map((x, i, a) => (i < a.length - 12 && x.content.length > 900 ? { ...x, content: x.content.slice(0, 900) + ' …' } : x));          // የቆዩ መልእክቶች ይጠረዛሉ (ወጪ)፤ የቅርብ 12 ሙሉ
     while (msgs.length && msgs[0].role !== 'user') msgs.shift();
-    const out = await ask({ system: (system || SYS) + (media ? ACC : '') + '\n\nአሁን፦ ' + nowInfo(now()), msgs, max: media ? 4000 : 1500, media, ground: !media && env.AI_GROUNDING !== '0' && (env.AI_GROUNDING === '1' || (opt && opt.ground) || TIMELY.test(String(text)))}); if (media) h.m[h.m.length - 1].content = '[📎 ' + (media.mime === 'application/pdf' ? 'PDF' : 'ፎቶ') + '] ' + h.m[h.m.length - 1].content; h.m.push({ role: 'assistant', content: String(out || '…').replace(/\n\n(?:⚠️ የድር ፍለጋ|🔎 ምንጮች|📰 ምንጮች|📚 ምንጮች)[\s\S]*$/, '') || '…' }); h.m = h.m.slice(-HIST_TURNS * 2); h.ts = now(); hist.set(id, h); return out;
+    const out = await ask({ system: (system || SYS) + (media ? ACC : '') + '\n\nአሁን፦ ' + nowInfo(now()), msgs, max: media ? 4000 : 1500, media, ground: !media && env.AI_GROUNDING !== '0' && (env.AI_GROUNDING === '1' || (opt && opt.ground) || TIMELY.test(String(text)) || (env.AI_WEB_FACTS !== '0' && needsWeb(text)))}); if (media) h.m[h.m.length - 1].content = '[📎 ' + (media.mime === 'application/pdf' ? 'PDF' : 'ፎቶ') + '] ' + h.m[h.m.length - 1].content; h.m.push({ role: 'assistant', content: String(out || '…').replace(/\n\n(?:⚠️ የድር ፍለጋ|🔎 ምንጮች|📰 ምንጮች|📚 ምንጮች)[\s\S]*$/, '') || '…' }); h.m = h.m.slice(-HIST_TURNS * 2); h.ts = now(); hist.set(id, h); return out;
   }
   const snap = id => { const h = hist.get(id); return h ? h.m.slice(-12).map(x => ({ role: x.role, content: String(x.content).slice(0, 500) })) : []; }, has = id => !!(hist.get(id) && hist.get(id).m.length), restore = (id, arr) => { if (!has(id) && Array.isArray(arr) && arr.length) hist.set(id, { ts: now(), m: arr.filter(x => x && (x.role === 'user' || x.role === 'assistant') && x.content).map(x => ({ role: x.role, content: String(x.content).slice(0, 700) })) }); }, note = (id, content) => { const h = hist.get(id) || { ts: now(), m: [] }; h.m.push({ role: 'assistant', content: String(content).slice(0, 700) }); h.ts = now(); hist.set(id, h); };
   const reset = id => hist.delete(id), usage = uid => { const u = used.get(uid); return u && u.d === dayKey(now()) ? { chat: u.chat, pages: u.pages } : { chat: 0, pages: 0 }; };
@@ -294,4 +297,4 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
   return { speakFree, ttsLast: () => lastTts, extras: extras.map(x => x.n), enabled: !!prov, provider: prov, model, lim, chat, reset, take, refund, usage, pdfPage, slideTr, domainBrief, boardPage, boardAsk, genDocSpec, videoPlan, selfPick, selfPatch, noteChunk, snap, has, restore, note, transcribe, speak };
 }
 let inst = null; const shared = () => inst || (inst = create());
-module.exports = { nowInfo, create, shared, countPdfPages, chunkText, slideText, SYS, TR };
+module.exports = { nowInfo, create, shared, countPdfPages, chunkText, slideText, needsWeb, SYS, TR };
