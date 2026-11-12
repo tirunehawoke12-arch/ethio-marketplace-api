@@ -411,3 +411,18 @@ npm start                # http://localhost:3000
 
 ### v39.3 — ቪድዮ ማቀናበር ~3× ፈጣን
 - ምስሎች/ንብርብሮች በየፍሬሙ ዳግም ሳይነበቡ (loop filter)፣ ጽሑፎች በ2 ንብርብር ብቻ፣ 15 fps፤ 48ሰ ቪድዮ 10.6ሰ → 3.3ሰ (2 ኮር)። እድገት በየ5 ሰከንድ ከደቂቃ ቆጣሪ ጋር ይታያል። ምስል ጥያቄ 28ሰ ገደብ።
+
+## v40 — 🛠 ራስ-ማሻሻል (በአድሚን ፈቃድ)
+አድሚኑ በቴሌግራም `/upgrade <ጥያቄ>` ሲል (ምሳሌ፦ `/upgrade በ /help ላይ የስልክ ቁጥር መስመር ጨምር`)፦
+1. ቦቱ የ GitHub ሪፖ ፋይሎችን ያነባል፤ AI የሚመለከታቸውን ፋይሎች ይመርጣል (`selfPick`) እና ትናንሽ «ቃል-በቃል ተካ» ለውጦችን ይጽፋል (`selfPatch`)።
+2. `server/selfdev.js` ይፈትሻል፦ የተፈቀደ መንገድ ብቻ፣ ≤8 ፋይል፣ ≤700 መስመር፣ `old` በትክክል አንድ ጊዜ፣ የአገባብ ፍተሻ፣ አደገኛ ምልክት ማስጠንቀቂያ። ስህተት ካለ AI አንድ ጊዜ ከስህተቱ ጋር እንደገና ይሞክራል።
+3. አዲስ ቅርንጫፍ `selfdev/…` + **Pull Request** ይከፈታል፤ አድሚኑ ማጠቃለያ + `.diff` ፋይል + አዝራሮች ያገኛል።
+4. ✅ ሲጫን፦ GitHub Actions ቴስት (`.github/workflows/test.yml`) አልፎ ከሆነ ብቻ squash-merge → Render ከ GitHub ራሱ ዲፕሎይ ያደርጋል። ቴስት እየሄደ → ይጠብቃል፤ ወድቋል → አይዋሃድም፤ ቴስት ከሌለ → በግልጽ ማረጋገጫ ይጠይቃል።
+5. ↩️ መልስ፦ ከተዋሀደ በኋላ ተቃራኒ ለውጥ ያለው አዲስ PR (እንደገና ማጽደቅ ያስፈልጋል)።
+
+**ቅንብር (Render → Environment፤ ቶከኑን በቻት አይላኩ)፦** `GITHUB_TOKEN` (fine-grained PAT፦ Contents RW, Pull requests RW, Checks/Commit statuses Read, Metadata Read — ለዚህ ሪፖ ብቻ)፣ `GITHUB_REPO` = `owner/name`፣ አማራጭ `GITHUB_BASE` (ነባሪ main)፣ `SELFDEV_DAILY_MAX` (ነባሪ 6)።
+**የተጠበቁ (AI መለወጥ አይችልም)፦** `server/selfdev.js`፣ `.github/`፣ `package*.json`፣ `render.yaml`፣ `.env*`፣ `next.config.js`፣ `tests/selfdev*`።
+ማስታወሻ፦ Render ነፃ ዲስክ ጊዜያዊ ነው፤ የሚቆየው በ GitHub የተዋሀደ ለውጥ ብቻ ነው። ቴስቶች፦ `tests/selfdev.test.js` (ሐሰተኛ GitHub)።
+
+## v41 — 📖 Wikipedia ማጣቀሻ
+AI ጥያቄ ሲመልስ (`aisvc.converse`) `server/wiki.js` ከ Wikipedia ማጠቃለያ ያመጣና ለ AI እንደ ማጣቀሻ ይሰጣል፤ AI ሲጠቀም «📖 ምንጭ፦ Wikipedia» + አገናኝ ይጠቅሳል። አማርኛ ጥያቄ → am.wikipedia፣ እንግሊዝኛ → en.wikipedia። ሰላምታ፣ `/ትዕዛዝ`፣ የገበያ ጥያቄ፣ ፋይል/ፎቶ ያለው መልእክት አይፈለግም። 3.5 ሰከንድ ገደብ፣ 6 ሰዓት ካሽ፣ ቢወድቅ ዝም ይላል። `AI_WIKI=0` ያጠፋዋል። (ቴስቶች፦ `tests/wiki.test.js`፤ በ `node --test` ሌሎች ቴስቶች ውስጥ ራሱ ጠፍቷል።)

@@ -213,6 +213,19 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
     const msg = `የቪድዮ አይነት፦ ${VID_KIND[kind] || VID_KIND.other}\nጠቅላላ ርዝማኔ፦ ~${sec} ሰከንድ\nድምፅ ማብራሪያ፦ ${voice === false ? 'የለም (ጽሑፍ ብቻ፤ narr ባዶ ይሁን)' : 'አለ'}\nፎቶዎች፦ ${photos && photos.length ? photos.length + ' (ቁጥር 0 እስከ ' + (photos.length - 1) + ')' + photos.map((c, i) => c ? ` [${i}] መግለጫ፦ ${c}` : '').join('') : 'የሉም'}\n\n[የተጠቃሚው ሀሳቦች]\n${String(notes || '').slice(0, 6000)}` + (prev ? `\n\n[ቀድሞ የሠራኸው እቅድ]\n${String(prev).slice(0, 12000)}\n\n[አሁን የሚፈልገው ለውጥ]\n${String(change || 'የተለየ አዲስ ስሪት ሥራ').slice(0, 1500)}` : '');
     let last; for (let tr = 0; tr < 2; tr++) { try { const out = await ask({ system: VID_SYS + ACC, max: 6000, msgs: [{ role: 'user', content: msg }] }), a = out.indexOf('{'), z = out.lastIndexOf('}'); if (a < 0 || z < a) throw new Error('gen_parse'); const j = JSON.parse(out.slice(a, z + 1)); if (!Array.isArray(j.scenes) || !j.scenes.length) throw new Error('gen_parse'); return j; } catch (e) { last = e; if (/^ai_(busy|timeout|network)$/.test(e.message)) await sleep(3000); } } throw last;
   }
+
+  /* 🛠 ራስ-ማሻሻል (v40)፦ ጥያቄ → የትኞቹ ፋይሎች (selfPick) → የኮድ ለውጥ እቅድ (selfPatch)። JSON ብቻ። */
+  const SELF_RULES = `ደንቦች፦ ለውጡ ትንሹ ብቻ ይሁን፤ ያለውን የኮድ ዘይቤ (ጥቅጥቅ ያሉ መስመሮች፣ የአማርኛ ጽሑፎች) ተከተል። አዲስ ጥገኛ (npm package) አትጨምር። ሚስጥር/ቶከን/ቁልፍ አትጻፍ ወይም አታንብብ። .github/፣ server/selfdev.js፣ package.json፣ render.yaml፣ .env አትንካ። ለአዲስ ባህሪ ቢያንስ አንድ node:test ፈተና በ tests/ ጨምር (ፋይል ስም tests/<ስም>.test.js፣ create)። ያለውን ፈተና አትሰብር።`;
+  const jsonOf = out => { const a = out.indexOf('{'), z = out.lastIndexOf('}'); if (a < 0 || z < a) throw new Error('self_parse'); return JSON.parse(out.slice(a, z + 1)); };
+  async function selfPick({ request, files, readme }) {
+    const out = await ask({ system: 'አንተ ልምድ ያለህ የ Node.js መሐንዲስ ነህ። የተጠየቀውን ለውጥ ለማድረግ የትኞቹን ፋይሎች ማንበብ/መቀየር እንደሚያስፈልግ ምረጥ። JSON ብቻ፦ {"files":["path",…(እስከ 6)],"keywords":["በትልልቅ ፋይሎች የምትፈልጋቸው ቃላት/ተግባር ስሞች"],"why":"አጭር አማርኛ"}። ከተሰጠው ዝርዝር ውስጥ ያሉ መንገዶች ብቻ። ' + ACC, max: 800, msgs: [{ role: 'user', content: `ጥያቄ፦ ${request}\n\n[ፋይሎች]\n${files.join('\n')}\n\n[README መጀመሪያ]\n${String(readme || '').slice(0, 2500)}` }] });
+    const j = jsonOf(out); return { files: (Array.isArray(j.files) ? j.files : []).filter(x => typeof x === 'string').slice(0, 6), keywords: (Array.isArray(j.keywords) ? j.keywords : []).map(String).slice(0, 12), why: String(j.why || '') };
+  }
+  async function selfPatch({ request, files, errors }) {
+    const body = Object.entries(files).map(([p, c]) => `=== ${p} ===\n${c}`).join('\n\n');
+    const out = await ask({ system: 'አንተ ልምድ ያለህ የ Node.js መሐንዲስ ነህ። የኢትዮ ዲጂታል ማርኬት ቦት ኮድ ላይ የተጠየቀውን ለውጥ አድርግ። JSON ብቻ (ያለ ``` ):\n{"summary":"ምን እንደተለወጠ በአማርኛ (2-4 መስመር)","files":[{"path":"…","edits":[{"old":"ከፋይሉ ላይ በትክክል አንድ ጊዜ ብቻ የሚገኝ ቃል-በቃል ቅንጣቢ","new":"መተኪያ"}]},{"path":"tests/x.test.js","create":"ሙሉ የአዲስ ፋይል ይዘት"}]}\n' + SELF_RULES + '\n«old» ከሰጠሁህ ጽሑፍ ላይ ቃል በቃል (ክፍተት ጭምር) መቅዳት አለበት እና በፋይሉ ውስጥ አንድ ጊዜ ብቻ መገኘት አለበት — በቂ አውድ ጨምር። ' + ACC, max: 12000, msgs: [{ role: 'user', content: `ጥያቄ፦ ${request}\n\n${errors && errors.length ? '[ያለፈው ሙከራ ስህተቶች — አርም]\n' + errors.join('\n') + '\n\n' : ''}[ፋይሎች]\n${body}` }] });
+    return jsonOf(out);
+  }
   /* 🧑‍🏫 ሰሌዳ፦ የአንድ ገጽ/ስላይድ ሙሉ ይዘት (ምንም ሳይዘለል) መስመር በመስመር + የእያንዳንዱ መስመር የመምህር ማብራሪያ — JSON */
   const BOARD_SYS = `አንተ ትዕግሥተኛ፣ ብቁ የኢትዮጵያ መምህር ነህ። ለተማሪዎች አንድን የፋይል ገጽ/ስላይድ በሰሌዳ ላይ ልትለጥፍና መስመር በመስመር ልታስረዳ ነው።
 ከገጹ ሙሉ ይዘት (ርዕስ፣ እያንዳንዱ ነጥብ/መስመር፣ ሠንጠረዥ ረድፍ፣ ቀመር፣ የሥዕል ጽሑፍ) ምንም ሳትዘልና ሳታሳጥር ሁሉንም አካትት።
@@ -268,7 +281,7 @@ function create(env = process.env, fetchImpl = (...a) => fetch(...a), now = () =
     }
     return null;
   }
-  return { speakFree, ttsLast: () => lastTts, extras: extras.map(x => x.n), enabled: !!prov, provider: prov, model, lim, chat, reset, take, refund, usage, pdfPage, slideTr, domainBrief, boardPage, boardAsk, genDocSpec, videoPlan, snap, has, restore, note, transcribe, speak };
+  return { speakFree, ttsLast: () => lastTts, extras: extras.map(x => x.n), enabled: !!prov, provider: prov, model, lim, chat, reset, take, refund, usage, pdfPage, slideTr, domainBrief, boardPage, boardAsk, genDocSpec, videoPlan, selfPick, selfPatch, snap, has, restore, note, transcribe, speak };
 }
 let inst = null; const shared = () => inst || (inst = create());
 module.exports = { nowInfo, create, shared, countPdfPages, chunkText, slideText, SYS, TR };

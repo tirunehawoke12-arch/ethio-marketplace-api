@@ -740,6 +740,7 @@ module.exports = function bot(c) {
     if (/^\/myid\b/.test(t)) return send(chat, `🆔 Chat ID፦ <code>${chat}</code>`);
     const ld = /^\/start\s+d_([\w-]{4,40})$/.exec(t); if (ld) return learnStart(chat, ld[1]);
     const dl = /^\/start\s+([sgpwej])_([\w-]{4,40})$/.exec(t); if (dl) s.deep = { t: dl[1], id: dl[2] };       // deep link — ከመግባት በኋላም ይከፈታል
+    if (/^\/(upgrade|አሻሽል)\b/i.test(t)) return sdStart(chat, t.replace(/^\/\S+\s*/, '').trim());
     if (/^\/(video|ቪድዮ)\b/i.test(t)) return vidStart(chat, uid, t.replace(/^\/\S+\s*/, '').trim() || '');
     { const vv = vget(chat); if (vv && vv.collect && !/^\//.test(t) && !LABELS[t]) { if (vv.collect === 'change') return vidGo(chat, uid, t.slice(0, 1500)); if (vv.busy) return send(chat, '⏳ ቪድዮዎ እየተሠራ ነው።'); vv.notes.push(t.slice(0, 1500)); return vidAck(chat, 'ሀሳብ'); } }
     if (!LABELS[t] && VIDINT.test(t) && VIDVERB.test(t) && t.length < 400 && !HOWQ.test(t) && !/(ፋይል|pdf|pptx|docx|xlsx)/i.test(t)) return vidStart(chat, uid, t);
@@ -767,6 +768,7 @@ module.exports = function bot(c) {
     if (isEdu(chat) && k === 'm') return eduHome(chat, uid);
     if (k === 'ed') return a === 'b' ? bookList(chat, 0, null) : a === 'f' ? eduFile(chat) : a === 's' ? (ses(chat).srch = true, save(), send(chat, '🔎 አሁን ጥያቄዎን ይጻፉ — ከድር ፍለጋ ጋር ተሳስሮ ከምንጭ ጋር እመልሳለሁ።')) : eduAI(chat, uid);
     if (k === 'vd') return vidRoute(chat, uid, a, x);
+    if (k === 'sd') return sdRoute(chat, a, x);
     if (k === 'login') return authStart(chat);
     if (k === 'ob') { const s0 = ses(chat); s0.mode = { e: 'edu', m: 'market', b: 'both' }[a] || 'both'; save(); if (uid) return s0.mode === 'both' ? home(chat, '✨ እንኳን ደህና መጡ — ከታች ይምረጡ።') : landing(chat, uid); return authAsk(chat, a === 'e'); }
     if (k === 'pw') return a === 'up' ? payMenu(chat, uid) : send(chat, '🌅 እሺ! ነገ ነጻ ድርሻዎ ይታደሳል፤ ተመልሰው ይቀጥሉ — በዚህ ጊዜ ትምህርቱን ወይም ገበያውን ያስሱ።', menuKb(chat));
@@ -1348,6 +1350,57 @@ module.exports = function bot(c) {
 ጥቅሙ፦ ሁሉም በአንድ ቦታ፣ በአማርኛ፣ ቀላል፣ በስልክ በቴሌግራም።` + (botUser ? `\nአገናኝ፦ https://t.me/${botUser}` : '');
   const VPROMO = /(ይህን|ይህ|የዚህ|ስለዚህ)\s*(ቦት|bot)|ኢትዮ ዲጂታል ማርኬት|(ቦቱን|ቦታችንን|መድረኩን)\s*(አስተዋውቅ|ያስተዋውቅ)/i;
   const withTimeout = (p, ms, msg = 'ai_timeout') => { let t; return Promise.race([p, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(msg)), ms); if (t.unref) t.unref(); })]).finally(() => clearTimeout(t)); };
+  /* 🛠 ራስ-ማሻሻል (v40, አድሚን ብቻ)፦ /upgrade <ጥያቄ> → AI ኮድ ይጽፋል → GitHub Pull Request → ቴስት → አድሚን ✅ ሲል ይዋሃዳል → Render ራሱ ዲፕሎይ ያደርጋል */
+  const SELFDEV = require('./selfdev'), SD = () => (S.__sd || (S.__sd = { prs: {}, day: '', n: 0 }));
+  const sdGh = () => SELFDEV.client({ token: process.env.GITHUB_TOKEN, repo: process.env.GITHUB_REPO, base: process.env.GITHUB_BASE || 'main' });
+  const sdErr = e => { let m = String((e && e.message) || e); for (const v of [process.env.GITHUB_TOKEN]) if (v) m = m.split(v).join('***'); return clip(m, 300); };
+  const sdKb = n => ik([[b('✅ አጽድቅ እና አዋህድ', 'sd:ok:' + n), b('❌ ተው', 'sd:no:' + n)]]);
+  async function sdStart(chat, req) {
+    if (!isAdmin(chat)) return send(chat, '⛔ አድሚን ብቻ'); const gh = sdGh();
+    if (!req || !gh.configured) return send(chat, '🛠 <b>ራስ-ማሻሻል</b>\n\nአጠቃቀም፦ <code>/upgrade ጥያቄዎ</code>\nምሳሌ፦ <code>/upgrade በ /help ውስጥ የስልክ ቁጥር መስመር ጨምር</code>\n\nቦቱ ኮዱን ይጽፋል → በ GitHub ላይ Pull Request ይከፍታል → ቴስት ካለፈ እርስዎ ✅ ሲሉ ብቻ ይዋሃዳል → Render ራሱ ይዘምናል።\n\nሁኔታ፦ ' + (gh.configured ? '✅ GitHub ተዋቅሯል (' + H(gh.repo) + ' ← ' + H(gh.base) + ')' : '⚠️ አልተዋቀረም — በ Render Environment ላይ <code>GITHUB_TOKEN</code> እና <code>GITHUB_REPO</code> (owner/name) ያስገቡ። ቶከኑን እዚህ ቻት ላይ አይላኩ።') + (aiReady() ? '' : '\n⚠️ AI አልነቃም።'));
+    if (!aiReady()) return send(chat, aiOff); const D = SD(), dk = dayKey(); if (D.day !== dk) { D.day = dk; D.n = 0; } if (D.n >= (Number(process.env.SELFDEV_DAILY_MAX) || 6)) return send(chat, '🌅 የዛሬ የማሻሻል ገደብ አልቋል።'); D.n++; save();
+    await send(chat, '🛠 እየሠራሁ ነው — ኮዱን አነብባለሁ፣ ለውጡን እጽፋለሁ፣ እፈትሻለሁ (1–3 ደቂቃ)…');
+    try {
+      const tr = await gh.tree(), paths = new Set(tr.files.map(f => f.path)), shaOf = Object.fromEntries(tr.files.map(f => [f.path, f.sha]));
+      const readme = paths.has('README.md') ? (await gh.read('README.md', tr.sha)).content : '';
+      const pick = await withTimeout(ai.selfPick({ request: req, files: tr.files.filter(f => f.size < 400000).map(f => f.path), readme }), 90000), want = pick.files.filter(x => paths.has(x));
+      if (!want.length) return send(chat, '⚠️ የሚመለከተውን ፋይል አላገኘሁም — ጥያቄውን በዝርዝር ይጻፉ።');
+      const orig = {}; for (const f of want) orig[f] = (await gh.read(f, tr.sha)).content; const view = Object.fromEntries(Object.entries(orig).map(([k, v]) => [k, SELFDEV.windowOf(v, pick.keywords)]));
+      let plan, ap, errs = []; for (let t = 0; t < 2; t++) { plan = await withTimeout(ai.selfPatch({ request: req, files: view, errors: errs }), 150000); ap = SELFDEV.applyPlan(orig, plan); if (ap.ok) break; errs = ap.errors.slice(0, 8); }
+      if (!ap.ok) return send(chat, '⚠️ AI ትክክለኛ ለውጥ ማዘጋጀት አልቻለም — ምንም አልተለወጠም።\n<code>' + H(ap.errors.slice(0, 4).join('\n')) + '</code>');
+      const rk = SELFDEV.risks(ap.results), br = 'selfdev/' + Date.now().toString(36), st = SELFDEV.stat(ap.results);
+      const body = `${plan.summary || req}\n\n**ጥያቄ፦** ${req}\n\n**ፋይሎች፦**\n${st.map(x => '- ' + x).join('\n')}` + (rk.length ? `\n\n**⚠️ ማስጠንቀቂያ፦**\n${rk.map(x => '- ' + x).join('\n')}` : '') + '\n\n_በቦቱ AI የተጻፈ — ከመዋሃዱ በፊት በአድሚን ይጸድቃል።_';
+      const pr = await gh.openPR({ branch: br, baseSha: tr.sha, title: 'selfdev: ' + String(req).replace(/\s+/g, ' ').slice(0, 80), body, results: ap.results, shas: shaOf });
+      D.prs[pr.number] = { branch: br, sha: pr.head, status: 'open', ts: Date.now(), req: clip(req, 200), files: ap.results.map(r => ({ path: r.path, isNew: r.isNew, edits: r.edits || [] })) }; save();
+      await send(chat, `✅ <b>Pull Request #${pr.number} ተከፍቷል</b>\n\n${H(clip(plan.summary || '', 600))}\n\n📁 ${st.map(H).join('\n📁 ')}` + (rk.length ? `\n\n⚠️ <b>ትኩረት፦</b>\n${rk.map(H).join('\n')}` : '') + `\n\n🔗 ${H(pr.url)}\n\nለውጡን ያንብቡ (ከታች ፋይል)፤ ቴስቱ (GitHub Actions) ካለፈ ✅ ይጫኑ።`, sdKb(pr.number));
+      await tgUpload('sendDocument', 'document', chat, Buffer.from(SELFDEV.diffText(ap.results), 'utf8'), `change-${pr.number}.diff`, 'text/plain', { caption: '📄 የለውጡ ዝርዝር' }).catch(() => { });
+    } catch (e) { await send(chat, '⚠️ ማሻሻል አልተሳካም — ምንም አልተዋሃደም።\n<code>' + H(/^ai_/.test(e && e.message) ? aiErr(e) : sdErr(e)) + '</code>'); }
+  }
+  async function sdMerge(chat, n, force) {
+    const rec = SD().prs[n]; if (!rec) return send(chat, '⌛ ይህ ጥያቄ አልተገኘም።'); if (rec.status !== 'open') return send(chat, 'ℹ️ ይህ PR ቀድሞ ' + (rec.status === 'merged' ? 'ተዋህዷል' : 'ተዘግቷል') + '።');
+    const gh = sdGh(); if (!gh.configured) return send(chat, '⚠️ GitHub አልተዋቀረም።');
+    try {
+      if (!force) { const c = await gh.checks(rec.sha); if (c === 'failure') return send(chat, `❌ የ PR #${n} ቴስት ወድቋል — አልተዋሃደም። «❌ ተው» ይጫኑ ወይም አዲስ /upgrade ያድርጉ።`, ik([[b('❌ ተው', 'sd:no:' + n)]])); if (c === 'pending') return send(chat, `⏳ የ PR #${n} ቴስት ገና እየሄደ ነው — ትንሽ ቆይተው ይጫኑ።`, ik([[b('🔄 እንደገና ፈትሽ', 'sd:ok:' + n), b('❌ ተው', 'sd:no:' + n)]])); if (c === 'none') return send(chat, `⚠️ ለ PR #${n} ምንም ቴስት አልተገኘም (GitHub Actions አልተዋቀረም)። ያለ ቴስት ማዋሃድ አደገኛ ነው — ለውጡን አንብበው እርግጠኛ ከሆኑ ብቻ።`, ik([[b('⚠️ ያለ ቴስት አዋህድ', 'sd:fm:' + n)], [b('❌ ተው', 'sd:no:' + n)]])); }
+      await gh.merge(n); rec.status = 'merged'; save();
+      return send(chat, `🎉 PR #${n} ተዋህዷል። Render ከ GitHub ራሱ በጥቂት ደቂቃ ውስጥ ይዘምናል (ዲፕሎይ ሲጨርስ አዲሱ ኮድ ይሠራል)።\n\nችግር ቢፈጠር፦`, ik([[b('↩️ መልስ (revert)', 'sd:rv:' + n)]]));
+    } catch (e) { return send(chat, '⚠️ ማዋሃድ አልተሳካም (ግጭት ወይም ፈቃድ ሊሆን ይችላል)።\n<code>' + H(sdErr(e)) + '</code>'); }
+  }
+  async function sdRevert(chat, n) {
+    const rec = SD().prs[n]; if (!rec || rec.status !== 'merged') return send(chat, 'ℹ️ የተዋህደ PR ብቻ ይመለሳል።'); const gh = sdGh(); if (!gh.configured) return send(chat, '⚠️ GitHub አልተዋቀረም።');
+    try {
+      const tr = await gh.tree(), shaOf = Object.fromEntries(tr.files.map(f => [f.path, f.sha])), results = [], errs = [];
+      for (const f of rec.files) { let cur; try { cur = (await gh.read(f.path, tr.sha)).content; } catch (e) { errs.push('ፋይሉ አልተነበበም፦ ' + f.path); continue; } if (f.isNew) { results.push({ path: f.path, before: cur, after: '', del: true, edits: [{ old: cur, new: '' }] }); continue; } const ap = SELFDEV.applyPlan({ [f.path]: cur }, { files: [{ path: f.path, edits: f.edits.map(e => ({ old: e.new, new: e.old })).reverse() }] }); if (!ap.ok) errs.push(...ap.errors); else results.push(...ap.results); }
+      if (errs.length || !results.length) return send(chat, '⚠️ በራስ-ሰር መመለስ አልተቻለም (ከዚያ በኋላ ኮዱ ተቀይሯል)። በ GitHub ላይ PR #' + n + ' ላይ «Revert» ይጫኑ።\n<code>' + H(errs.slice(0, 3).join('\n')) + '</code>');
+      const br = 'selfdev/rv-' + Date.now().toString(36), pr = await gh.openPR({ branch: br, baseSha: tr.sha, title: `selfdev: revert #${n}`, body: `የ #${n} (${rec.req}) መልስ።`, results, shas: shaOf });
+      SD().prs[pr.number] = { branch: br, sha: pr.head, status: 'open', ts: Date.now(), req: 'revert #' + n, rv: n, files: results.map(r => ({ path: r.path, isNew: false, edits: r.del ? [] : r.edits })) }; save();
+      await send(chat, `↩️ የመመለሻ PR #${pr.number} ተከፍቷል።\n🔗 ${H(pr.url)}`, sdKb(pr.number));
+    } catch (e) { await send(chat, '⚠️ መመለስ አልተሳካም።\n<code>' + H(sdErr(e)) + '</code>'); }
+  }
+  async function sdRoute(chat, a, x) {
+    if (!isAdmin(chat)) return send(chat, '⛔ አድሚን ብቻ'); const n = Number(x);
+    if (a === 'ok') return sdMerge(chat, n, false); if (a === 'fm') return sdMerge(chat, n, true); if (a === 'rv') return sdRevert(chat, n);
+    if (a === 'no') { const rec = SD().prs[n]; if (rec && rec.status === 'open') { await sdGh().close(n, rec.branch); rec.status = 'closed'; save(); } return send(chat, '🗑 PR #' + n + ' ተዘግቷል — ምንም አልተለወጠም።'); }
+  }
   async function vidStart(chat, uid, firstText) {
     if (!uid && !isAdmin(chat)) return authStart(chat); if (!aiReady()) return send(chat, aiOff);
     if (!(await vidAvail())) return send(chat, '🎬 ቪድዮ ሰሪው በዚህ አገልግሎት ላይ ገና አልነቃም (ffmpeg የለም)።' + (isAdmin(chat) ? '\n\n🛠 አድሚን፦ <code>npm i ffmpeg-static</code> ያድርጉ ወይም ስርዓቱ ላይ ffmpeg ይጫኑ (ወይም FFMPEG_PATH ይስጡ)።' : ' አድሚኑን ያሳውቁ።'));

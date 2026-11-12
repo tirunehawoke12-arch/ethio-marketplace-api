@@ -90,6 +90,7 @@ module.exports = function aisvc(ctx) {
     sys += '\n\n' + clockInfo() + await newsInfo(text);
       sys += SYS_GUARD + '\n\n[ከድረ-ገጹ የተገኘ ወቅታዊ መረጃ — ስለ ገበያው ሲጠየቅ ከዚህ ብቻ ተመርኩዘህ ንገር፤ የሌለውን አትፍጠር፤ ዕቃ ሲጠቅስ ዋጋ እና አገናኝ ስጥ]\n' + await siteInfo(text);
     }
+    if (!media) { try { sys += require('./wiki').asContext(await require('./wiki').lookup(text)); } catch (e) { } }          // 📖 Wikipedia (v41)
     let out; try { out = await ai.chat(String(key || uid), text, sys, media, ground ? { ground: true } : undefined); } catch (e) { if (!urgent) ai.refund(String(uid), 'chat', 1); throw e; }
     stats.chats++; const wants = /\[\[PAID\]\]/.test(out), clean = out.replace(MARK, ' ').trim();
     if (wants && !paid && !urgent && c.paywall) { stats.paywalls++; return { ok: true, text: clean, paywall: 'premium' }; }
