@@ -445,3 +445,10 @@ Render ሎግ ላይ `Startup failed: Your account or project has exceeded the q
 - **ቁጠባ**፦ የቦት ሁኔታ (`botdb`) ቁጠባ ከ 0.6 ሰከንድ → 5 ሰከንድ (`BOT_SAVE_MS`) ማዘግየት + ያልተቀየረ ከሆነ አይጻፍም፤ ከ1.5MB በላይ ከሆነ ማስጠንቀቂያ።
 - **`/dbsize`** (አድሚን)፦ ዳታቤዙ ጠቅላላ መጠን እና የትኛው ክፍል (path) ምን ያህል MB እንደሆነ ያሳያል።
 - ማስታወሻ፦ `tests/storage-degraded.test.js` express/pg ሲጫኑ ብቻ ይሠራል (በዚህ sandbox አልተሞከረም)።
+
+## v46 — 🗄 የዳታ ዝውውር መቀነስ (Neon Network transfer 5.54 GB > 5 GB ገደብ)
+Neon ማያ፦ Network transfer 5.54 GB (ነፃ ገደብ 5 GB)፣ Compute 68.6 CU-hrs (ገደብ 100)፣ Storage 0.18 GB → ፕሮጀክቱ «paused» (ገደቡ ከ Dec 1 ይታደሳል)። ምክንያት፦ ሰርቨር በጀመረ ቁጥር `SELECT * FROM kv` ~178 MB (አብዛኛው የምስል `_img` እና የ TTS ድምፅ ማስታወሻ `ai/tcache` base64) ያወርድ ነበር — ደጋግሞ መነሳት (crash loop) ደግሞ ያባዛዋል።
+- ጅማሮ ላይ የ `_img` እና `ai/tcache` ረድፎች `d` (ባይት) **አይወርድም** — `dl:true` ምልክት ብቻ፤ ሲጠየቁ አንድ ረድፍ ብቻ ይነበባል (`/api/market/img/:id`፣ TTS ማስታወሻ)። ጅማሮው ከ ~178 MB → ጥቂት ኪሎባይት።
+- የምስል ማዛወሪያ (S3) እና ስታቲስቲክስ ከ `dl` ጋር ይሠራሉ።
+- ⚠️ ማስታወሻ፦ Neon ኮምፒውት ሁልጊዜ ከነቃ (ትራፊክ/ጊዜ ቆጣሪ) ነፃው 100 CU-hrs በ ~17 ቀን ያልቃል፤ ትራፊክ ሲኖር ብቻ እንዲነቃ ቦት ቁጠባ ተዘግይቷል (v45)። ምስሎችን ወደ ነፃ R2/S3 ማዛወር (`S3_*`) ዳታ ዝውውርን በእጅጉ ይቀንሳል።
+- ቴስት፦ `tests/lazyimg46.test.js`። የጅማሮው SQL (`jsonb - 'd'`) በእውነተኛ Postgres አልተሞከረም።

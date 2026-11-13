@@ -107,10 +107,12 @@ module.exports = function market(ctx) {
     const s = col(P.shops)[req.params.id]; if (!s || s.status !== 'active') return bad(res, 404, 'not_found');
     res.json({ ok: true, shop: pubShop(s), products: live().filter(([, sh]) => sh.id === s.id).map(([p, sh]) => pubProd(p, sh)) });
   });
+  /* v46፦ በ Postgres ውስጥ ያሉ ምስሎች ጅማሮ ላይ አይጫኑም (ዳታ ዝውውር ይቆጥባል — `dl:true` ምልክት ብቻ)፤ ሲጠየቁ አንድ ረድፍ ብቻ ይነበባል */
+  const imgD = async (id, i) => { if (i.d) return i.d; if (!i.dl || !pool) return null; const r = await pool.query("SELECT data->>'d' AS d FROM kv WHERE path=$1 AND id=$2", [P.img, id]); return (r.rows[0] && r.rows[0].d) || null; };
   app.get('/api/market/img/:id', async (req, res) => {
     const i = col(P.img)[req.params.id]; if (!i) return res.sendStatus(404);
     const hdr = { 'Content-Type': i.m, 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' };
-    if (i.d) return res.set(hdr).send(Buffer.from(i.d, 'base64'));
+    if (i.d || i.dl) { let d = null; try { d = await imgD(req.params.id, i); } catch (e) { console.error('image read failed:', e.message); return res.sendStatus(503); } if (d) return res.set(hdr).send(Buffer.from(d, 'base64')); }
     if (i.k && imgs.enabled) {
       const pu = imgs.urlFor(i.k); if (pu) return res.set('Cache-Control', 'public, max-age=3600').redirect(302, pu);   // በቀጥታ ከ CDN/R2
       try { return res.set(hdr).send(await imgs.get(i.k)); } catch (e) { console.error('image read failed:', e.message); return res.sendStatus(502); }
@@ -231,7 +233,7 @@ module.exports = function market(ctx) {
 
   /* ---------- አድሚን ---------- */
   /* ---------- የምስል ማከማቻ (አድሚን) ---------- */
-  const imgStats = () => { const L = Object.values(col(P.img)); const db = L.filter(i => i.d), ex = L.filter(i => i.k && !i.d); return { driver: imgs.driver, enabled: imgs.enabled, publicUrl: !!imgs.publicUrl, total: L.length, inDb: db.length, external: ex.length, dbMB: Math.round(db.reduce((s, i) => s + i.d.length * 0.75, 0) / 1048576 * 10) / 10 }; };
+  const imgStats = () => { const L = Object.values(col(P.img)); const db = L.filter(i => i.d || i.dl), ex = L.filter(i => i.k && !i.d && !i.dl); return { driver: imgs.driver, enabled: imgs.enabled, publicUrl: !!imgs.publicUrl, total: L.length, inDb: db.length, external: ex.length, dbMB: Math.round(db.reduce((s, i) => s + (i.d ? i.d.length * 0.75 : i.sz || 0), 0) / 1048576 * 10) / 10 }; };
   app.get('/api/market/admin/images', (req, res) => { if (!adminOnly(req, res)) return; res.json({ ok: true, ...imgStats() }); });
   let migrating = false;
   app.post('/api/market/admin/images/migrate', async (req, res) => {
@@ -239,13 +241,14 @@ module.exports = function market(ctx) {
     migrating = true; const t0 = Date.now(), cap = Math.min(100, Math.max(1, parseInt(req.body && req.body.limit) || 25)); let moved = 0, failed = 0, firstErr = '';
     try {
       for (const [id, i] of Object.entries(col(P.img))) {
-        if (!i.d) continue;
+        if (!i.d && !i.dl) continue;
         if (moved + failed >= cap || Date.now() - t0 > 20000) break;
-        const k = imgs.keyFor(id, i.m), orig = Buffer.from(i.d, 'base64');
+        let orig; try { const d0 = await imgD(id, i); if (!d0) throw new Error('no_data'); orig = Buffer.from(d0, 'base64'); } catch (e) { failed++; firstErr = firstErr || e.message; continue; }
+        const k = imgs.keyFor(id, i.m), had = i.d;
         try {
           await imgs.put(k, orig, i.m);
           if (!(await imgs.get(k)).equals(orig)) throw new Error('verify_failed');
-          i.k = k; i.sz = orig.length; delete i.d;               // ከተጻፈ እና ከተረጋገጠ በኋላ ብቻ ከ DB ይወገዳል
+          i.k = k; i.sz = orig.length; delete i.d; delete i.dl;               // ከተጻፈ እና ከተረጋገጠ በኋላ ብቻ ከ DB ይወገዳል
           await saveMany([[P.img, id]]); moved++;
         } catch (e) { if (!i.d) { i.d = orig.toString('base64'); delete i.k; } failed++; firstErr = firstErr || e.message; }
       }

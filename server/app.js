@@ -439,7 +439,7 @@ require('./trust')({ app, col, limit, notifyUser, notifyAdmin, ...mkApi });
 require('./geo')({ app, col, limit, ...mkApi });
 require('./learn')({ app, col, limit, pool, persist, bump, notifyUser, notifyAdmin, token: TOKEN, botUsername: BOT_USERNAME, miniShort: (process.env.TELEGRAM_MINIAPP_SHORT || '').replace(/[^\w]/g, ''), baseUrl: PUBLIC_BASE_URL, ...mkApi });
 require('./paysms')({ app, col, saveMany: mkApi.saveMany, adminOnly: mkApi.adminOnly, pv: mkApi.pv, bad: mkApi.bad, S: mkApi.S, baseUrl: PUBLIC_BASE_URL, notifyAdmin });
-const aiSvc = require('./aisvc')({ app, col, limit, notifyUser, notifyAdmin, findUid, tg, adminChat: adminChatId, baseUrl: PUBLIC_BASE_URL, adminPhone: ADMIN_PHONE, siteSearch: async q => { const r = await fetch(`http://127.0.0.1:${PORT}/api/search?q=${encodeURIComponent(q)}`, { signal: AbortSignal.timeout(3000) }); const j = await r.json(); return (j && j.groups) || []; }, ...mkApi });          // AI — አድሚን ቁጥጥር፣ ነጻ ገደብ፣ ክፍያ
+const aiSvc = require('./aisvc')({ pool, app, col, limit, notifyUser, notifyAdmin, findUid, tg, adminChat: adminChatId, baseUrl: PUBLIC_BASE_URL, adminPhone: ADMIN_PHONE, siteSearch: async q => { const r = await fetch(`http://127.0.0.1:${PORT}/api/search?q=${encodeURIComponent(q)}`, { signal: AbortSignal.timeout(3000) }); const j = await r.json(); return (j && j.groups) || []; }, ...mkApi });          // AI — አድሚን ቁጥጥር፣ ነጻ ገደብ፣ ክፍያ
 const couponsApi = require('./coupons')({ app, col, limit, ...mkApi });
 require('./referral')({ app, col, limit, notifyUser, coupons: couponsApi, baseUrl: PUBLIC_BASE_URL, getStore: () => store, ...mkApi });
 opsApi = require('./ops')({ app, col, getStore: () => store, ...mkApi });
@@ -463,7 +463,7 @@ async function initStorage() {
 }
 async function loadStorage() {
   await pool.query('CREATE TABLE IF NOT EXISTS kv (path text NOT NULL, id text NOT NULL, data jsonb NOT NULL, PRIMARY KEY (path, id))');
-  const r = await pool.query('SELECT path,id,data FROM kv');
+  const r = await pool.query("SELECT path, id, CASE WHEN path IN ('_img', 'ai/tcache') AND data ? 'd' AND length(data->>'d') > 0 THEN (data - 'd') || '{\"dl\":true}'::jsonb ELSE data END AS data FROM kv");          // v46፦ የምስል ባይት አይወርድም
   store = { docs: {}, rev: {}, idx: {} };
   for (const row of r.rows) {
     if (row.path === '_sys') { if (row.id === 'idx') store.idx = row.data; if (row.id === 'botdb') botApi.restore(row.data); if (row.id === 'otpdb') db = { links: row.data.links || {}, pending: row.data.pending || {}, accounts: row.data.accounts || {}, admin: row.data.admin || null }; }

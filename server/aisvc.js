@@ -20,7 +20,7 @@ const STOP = new Set('ምንድን ነው ናቸው እና ወይም ለእኔ �
 const SYS_PAID = '\n\n[የአገልግሎት ደረጃ፦ የተከፈለ ተጠቃሚ]\nሙሉ እና ዝርዝር መልስ ስጥ፤ [[PAID]] በጭራሽ አትጻፍ። የሕክምና/ሕግ/ገንዘብ ጉዳይ ሲሆን ለመማሪያ መረጃ ብቻ መሆኑን እና ባለሙያ ማማከር እንደሚያስፈልግ በአንድ መስመር አስታውስ።';
 
 module.exports = function aisvc(ctx) {
-  const { app, col, who, adminOnly, saveMany, bad, S, N, nid, limit, notifyUser = () => { }, notifyAdmin = () => { }, findUid = () => null, ai = AIM.shared(), tg = null, adminChat = () => null, siteSearch = null, pv = null, payAccounts = () => [], baseUrl = '', adminPhone = '0946705941', now = () => Date.now(), newsFetch = (...a) => fetch(...a) } = ctx;
+  const { pool = null, app, col, who, adminOnly, saveMany, bad, S, N, nid, limit, notifyUser = () => { }, notifyAdmin = () => { }, findUid = () => null, ai = AIM.shared(), tg = null, adminChat = () => null, siteSearch = null, pv = null, payAccounts = () => [], baseUrl = '', adminPhone = '0946705941', now = () => Date.now(), newsFetch = (...a) => fetch(...a) } = ctx;
   const KB = (...r) => ({ rows: [r.map(([t, d]) => ({ text: t, callback_data: d }))] });
   const cfg = () => { const c = (col(CFG).main || {}); return { ...DEFAULTS, ...c, plans: Array.isArray(c.plans) && c.plans.length ? c.plans : DEFAULTS.plans }; };
   const acc = uid => { const a = col(ACC)[uid] || {}; return { until: a.until || 0, blocked: !!a.blocked, paid: (a.until || 0) > now() }; };
@@ -214,8 +214,8 @@ module.exports = function aisvc(ctx) {
   const groupsOf = pg => { const G = []; let cur = [], len = 0; (pg.lines || []).forEach((l, i) => { const n = (l.say || '').length; if (cur.length && (G.length === 0 || cur.length >= 3 || len + n > 700)) { G.push(cur); cur = []; len = 0; } cur.push(i); len += n; }); if (cur.length) G.push(cur); return G; };          // የመጀመሪያው ቡድን 1 መስመር (ፈጣን ጅምር)፤ ቀጥሎ እስከ 3 መስመር በአንድ ድምፅ — ጥያቄ ያነሰ፣ በመስመሮች መካከል ክፍተት የለም
   const groupSay = (pg, g) => g.map(i => pg.lines[i].say || '').filter(Boolean).join(' ');
   function ttsGet(key, text) {          // በአንድ ጊዜ የሚመጡ ጥያቄዎች አንድ ሥራ ይጋራሉ፤ ስኬት ብቻ ይሸጎጣል
-    let p = BTTS.get(key); if (p) return p; const tk = sha('tts|' + text), ch = col(TC)[tk]; if (ch && ch.d) { ch.ts = Date.now(); const b = Buffer.from(ch.d, 'base64'); if (ch.m) b.mime = ch.m; p = Promise.resolve(b); BTTS.set(key, p); return p; }
-    p = synth(text).catch(() => null); p.then(w => { if (w && w.length < 600e3) { col(TC)[tk] = { d: w.toString('base64'), m: w.mime || '', ts: Date.now() }; keep(TC, tk, TMAX, x => !!x.d); } }); BTTS.set(key, p); p.then(w => { if (!w) BTTS.delete(key); }); if (BTTS.size > 80) BTTS.delete(BTTS.keys().next().value); return p;
+    let p = BTTS.get(key); if (p) return p; const tk = sha('tts|' + text), ch = col(TC)[tk]; if (ch && (ch.d || ch.dl)) { if (ch.d) ch.ts = Date.now(); p = (async () => { let d = ch.d; if (!d && ch.dl && pool) { try { const r = await pool.query("SELECT data->>'d' AS d FROM kv WHERE path=$1 AND id=$2", [TC, tk]); d = r.rows[0] && r.rows[0].d; } catch (e) { } } if (d) { const b = Buffer.from(d, 'base64'); if (ch.m) b.mime = ch.m; return b; } return synth(text).catch(() => null); })(); BTTS.set(key, p); return p; }          // v46፦ ከዳታቤዝ በፍላጎት ብቻ ይነበባል
+    p = synth(text).catch(() => null); p.then(w => { if (w && w.length < 600e3) { col(TC)[tk] = { d: w.toString('base64'), m: w.mime || '', ts: Date.now() }; keep(TC, tk, TMAX, x => !!(x.d || x.dl)); } }); BTTS.set(key, p); p.then(w => { if (!w) BTTS.delete(key); }); if (BTTS.size > 80) BTTS.delete(BTTS.keys().next().value); return p;
   }
   function warm(bd, n, lv = 'm') {          // ገጹ እንደተዘጋጀ የቡድን ድምፆች ከበስተጀርባ (2 በአንድ ጊዜ) ይዘጋጃሉ
     if (!ai.speak || ai.provider !== 'gemini') return; const pg = bd.pl[lv][n]; if (!pg) return; const G = groupsOf(pg).map((g, gi) => [gi, groupSay(pg, g)]).filter(x => x[1]);
